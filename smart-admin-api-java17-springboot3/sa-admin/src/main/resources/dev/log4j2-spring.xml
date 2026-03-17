@@ -85,26 +85,9 @@
                 </Delete>
             </DefaultRolloverStrategy>
         </RollingFile>
-        <RollingFile name="druidSlowSqlLog" fileName="${log-directory}/slow-sql/slow-sql.log"
-                     filePattern="${log-directory}/slow-sql/slow-sql-%d{yyyy-MM-dd}-%i.log">
-            <PatternLayout pattern="[%d][%-5p][%t][%c{1.}:%L] %m %n"/>
-            <Policies>
-                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
-                <SizeBasedTriggeringPolicy size="50 MB"/>
-            </Policies>
-            <DefaultRolloverStrategy max="60">
-                <Delete basePath="${log-directory}/slow-sql" maxDepth="1">
-                    <IfFileName glob="slow-sql-*.log"/>
-                    <IfLastModified age="30d"/>
-                </Delete>
-            </DefaultRolloverStrategy>
-        </RollingFile>
     </Appenders>
 
     <Loggers>
-        <logger name="com.alibaba.druid.filter.stat.StatFilter" level="ERROR" additivity="false">
-            <AppenderRef ref="druidSlowSqlLog"/>
-        </logger>
         <Root level="debug">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="debug"/>
