@@ -1,7 +1,6 @@
 package net.lab1024.sa.admin.module.business.goods.service;
 
 import cn.idev.excel.FastExcel;
-import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +26,7 @@ import net.lab1024.sa.base.common.util.SmartPageUtil;
 import net.lab1024.sa.base.module.support.datatracer.constant.DataTracerTypeEnum;
 import net.lab1024.sa.base.module.support.datatracer.service.DataTracerService;
 import net.lab1024.sa.base.module.support.dict.service.DictService;
+import net.lab1024.sa.base.common.util.JsonUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -185,7 +185,7 @@ public class GoodsService {
             return ResponseDTO.userErrorParam("数据为空");
         }
 
-        return ResponseDTO.okMsg("成功导入" + dataList.size() + "条，具体数据为：" + JSON.toJSONString(dataList));
+        return ResponseDTO.okMsg("成功导入" + dataList.size() + "条，具体数据为：" + JsonUtils.toJson(dataList));
     }
 
     /**

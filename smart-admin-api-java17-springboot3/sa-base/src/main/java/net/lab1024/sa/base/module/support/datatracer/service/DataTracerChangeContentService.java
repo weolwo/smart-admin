@@ -3,7 +3,6 @@ package net.lab1024.sa.base.module.support.datatracer.service;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.json.JSONUtil;
-import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.google.common.base.CaseFormat;
@@ -18,6 +17,7 @@ import net.lab1024.sa.base.module.support.datatracer.constant.DataTracerConst;
 import net.lab1024.sa.base.module.support.datatracer.domain.bo.DataTracerContentBO;
 import net.lab1024.sa.base.module.support.dict.domain.vo.DictDataVO;
 import net.lab1024.sa.base.module.support.dict.service.DictService;
+import net.lab1024.sa.base.common.util.JsonUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.ApplicationContext;
@@ -330,7 +330,7 @@ public class DataTracerChangeContentService {
                 fieldContent = value.toString();
             }
         } else {
-            fieldContent = JSON.toJSONString(fieldValue);
+            fieldContent = JsonUtils.toJson(fieldValue);
         }
         DataTracerContentBO dataTracerContentBO = new DataTracerContentBO();
         dataTracerContentBO.setField(field);

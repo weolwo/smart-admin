@@ -1,7 +1,5 @@
 package net.lab1024.sa.base.module.support.codegenerator.service;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +18,7 @@ import net.lab1024.sa.base.module.support.codegenerator.domain.model.*;
 import net.lab1024.sa.base.module.support.codegenerator.domain.vo.TableColumnVO;
 import net.lab1024.sa.base.module.support.codegenerator.domain.vo.TableConfigVO;
 import net.lab1024.sa.base.module.support.codegenerator.domain.vo.TableVO;
+import net.lab1024.sa.base.common.util.JsonUtils;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Service;
 
@@ -101,32 +100,32 @@ public class CodeGeneratorService {
         }
 
         if (SmartStringUtil.isNotEmpty(codeGeneratorConfigEntity.getBasic())) {
-            CodeBasic basic = JSON.parseObject(codeGeneratorConfigEntity.getBasic(), CodeBasic.class);
+            CodeBasic basic = JsonUtils.parseObject(codeGeneratorConfigEntity.getBasic(), CodeBasic.class);
             config.setBasic(basic);
         }
 
         if (SmartStringUtil.isNotEmpty(codeGeneratorConfigEntity.getFields())) {
-            List<CodeField> fields = JSONArray.parseArray(codeGeneratorConfigEntity.getFields(), CodeField.class);
+            List<CodeField> fields = JsonUtils.parseList(codeGeneratorConfigEntity.getFields(), CodeField.class);
             config.setFields(fields);
         }
 
         if (SmartStringUtil.isNotEmpty(codeGeneratorConfigEntity.getInsertAndUpdate())) {
-            CodeInsertAndUpdate insertAndUpdate = JSON.parseObject(codeGeneratorConfigEntity.getInsertAndUpdate(), CodeInsertAndUpdate.class);
+            CodeInsertAndUpdate insertAndUpdate = JsonUtils.parseObject(codeGeneratorConfigEntity.getInsertAndUpdate(), CodeInsertAndUpdate.class);
             config.setInsertAndUpdate(insertAndUpdate);
         }
 
         if (SmartStringUtil.isNotEmpty(codeGeneratorConfigEntity.getDeleteInfo())) {
-            CodeDelete deleteInfo = JSON.parseObject(codeGeneratorConfigEntity.getDeleteInfo(), CodeDelete.class);
+            CodeDelete deleteInfo = JsonUtils.parseObject(codeGeneratorConfigEntity.getDeleteInfo(), CodeDelete.class);
             config.setDeleteInfo(deleteInfo);
         }
 
         if (SmartStringUtil.isNotEmpty(codeGeneratorConfigEntity.getQueryFields())) {
-            List<CodeQueryField> queryFields = JSONArray.parseArray(codeGeneratorConfigEntity.getQueryFields(), CodeQueryField.class);
+            List<CodeQueryField> queryFields = JsonUtils.parseList(codeGeneratorConfigEntity.getQueryFields(), CodeQueryField.class);
             config.setQueryFields(queryFields);
         }
 
         if (SmartStringUtil.isNotEmpty(codeGeneratorConfigEntity.getTableFields())) {
-            List<CodeTableField> tableFields = JSONArray.parseArray(codeGeneratorConfigEntity.getTableFields(), CodeTableField.class);
+            List<CodeTableField> tableFields = JsonUtils.parseList(codeGeneratorConfigEntity.getTableFields(), CodeTableField.class);
             config.setTableFields(tableFields);
         }
 
@@ -167,12 +166,12 @@ public class CodeGeneratorService {
         }
 
         codeGeneratorConfigEntity.setTableName(form.getTableName());
-        codeGeneratorConfigEntity.setBasic(JSON.toJSONString(form.getBasic()));
-        codeGeneratorConfigEntity.setFields(JSONArray.toJSONString(form.getFields()));
-        codeGeneratorConfigEntity.setInsertAndUpdate(JSON.toJSONString(form.getInsertAndUpdate()));
-        codeGeneratorConfigEntity.setDeleteInfo(JSON.toJSONString(form.getDeleteInfo()));
-        codeGeneratorConfigEntity.setQueryFields(JSONArray.toJSONString(form.getQueryFields()));
-        codeGeneratorConfigEntity.setTableFields(JSONArray.toJSONString(form.getTableFields()));
+        codeGeneratorConfigEntity.setBasic(JsonUtils.toJson(form.getBasic()));
+        codeGeneratorConfigEntity.setFields(JsonUtils.toJson(form.getFields()));
+        codeGeneratorConfigEntity.setInsertAndUpdate(JsonUtils.toJson(form.getInsertAndUpdate()));
+        codeGeneratorConfigEntity.setDeleteInfo(JsonUtils.toJson(form.getDeleteInfo()));
+        codeGeneratorConfigEntity.setQueryFields(JsonUtils.toJson(form.getQueryFields()));
+        codeGeneratorConfigEntity.setTableFields(JsonUtils.toJson(form.getTableFields()));
 
         if (updateFlag) {
             codeGeneratorConfigDao.updateById(codeGeneratorConfigEntity);

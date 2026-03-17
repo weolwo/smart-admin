@@ -1,7 +1,6 @@
 package net.lab1024.sa.base.module.support.operatelog.core;
 
 import cn.hutool.core.util.StrUtil;
-import com.alibaba.fastjson.JSON;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +16,7 @@ import net.lab1024.sa.base.common.util.SmartRequestUtil;
 import net.lab1024.sa.base.module.support.operatelog.OperateLogDao;
 import net.lab1024.sa.base.module.support.operatelog.annotation.OperateLog;
 import net.lab1024.sa.base.module.support.operatelog.domain.OperateLogEntity;
+import net.lab1024.sa.base.common.util.JsonUtils;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.Signature;
 import org.aspectj.lang.annotation.AfterReturning;
@@ -230,7 +230,7 @@ public abstract class OperateLogAspect {
                     null
             );
             logResponseDTO.setDataType(response.getDataType());
-            operateLogEntity.setResponse(JSON.toJSONString(logResponseDTO));
+            operateLogEntity.setResponse(JsonUtils.toJson(logResponseDTO));
         }
 
         taskExecutor.execute(() -> {
@@ -257,7 +257,7 @@ public abstract class OperateLogAspect {
             }
             filterArgs.add(arg);
         }
-        return JSON.toJSONString(filterArgs);
+        return JsonUtils.toJson(filterArgs);
     }
 
 

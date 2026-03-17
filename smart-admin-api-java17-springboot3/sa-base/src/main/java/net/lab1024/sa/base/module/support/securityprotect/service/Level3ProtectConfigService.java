@@ -2,7 +2,6 @@ package net.lab1024.sa.base.module.support.securityprotect.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.util.StrUtil;
-import com.alibaba.fastjson.JSON;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.Resource;
 import lombok.Getter;
@@ -11,6 +10,7 @@ import net.lab1024.sa.base.common.domain.ResponseDTO;
 import net.lab1024.sa.base.module.support.config.ConfigKeyEnum;
 import net.lab1024.sa.base.module.support.config.ConfigService;
 import net.lab1024.sa.base.module.support.securityprotect.domain.Level3ProtectConfigForm;
+import net.lab1024.sa.base.common.util.JsonUtils;
 import org.springframework.stereotype.Service;
 
 /**
@@ -121,7 +121,7 @@ public class Level3ProtectConfigService {
         if (StrUtil.isEmpty(configValue)) {
             throw new ExceptionInInitializerError("t_config 表 三级等保配置为空，请进行配置！");
         }
-        Level3ProtectConfigForm level3ProtectConfigForm = JSON.parseObject(configValue, Level3ProtectConfigForm.class);
+        Level3ProtectConfigForm level3ProtectConfigForm = JsonUtils.parseObject(configValue, Level3ProtectConfigForm.class);
         setProp(level3ProtectConfigForm);
     }
 
@@ -182,7 +182,7 @@ public class Level3ProtectConfigService {
         // 设置属性
         setProp(configForm);
         // 保存数据库
-        String configFormJsonString = JSON.toJSONString(configForm, true);
+        String configFormJsonString = JsonUtils.toJson(configForm);
         return configService.updateValueByKey(ConfigKeyEnum.LEVEL3_PROTECT_CONFIG, configFormJsonString);
     }
 }

@@ -1,6 +1,5 @@
 package net.lab1024.sa.base.common.util;
 
-import com.alibaba.fastjson.JSON;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import net.lab1024.sa.base.common.domain.ResponseDTO;
@@ -33,7 +32,7 @@ public class SmartResponseUtil {
         response.setCharacterEncoding(UTF_8);
 
         try {
-            response.getWriter().write(JSON.toJSONString(responseDTO));
+            response.getWriter().write(JsonUtils.toJson(responseDTO));
             response.flushBuffer();
         } catch (IOException ex) {
             log.error(ex.getMessage(), ex);

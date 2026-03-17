@@ -1,6 +1,7 @@
 package net.lab1024.sa.base.config;
 
-import com.alibaba.fastjson.support.spring.FastJsonHttpMessageConverter;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.hc.client5.http.classic.HttpClient;
 import org.apache.hc.client5.http.config.TlsConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
@@ -77,14 +79,28 @@ public class RestClientConfig {
 
     public List<HttpMessageConverter<?>> converters() {
         List<HttpMessageConverter<?>> converters = new ArrayList<>();
-        HttpMessageConverter<?> converter = new StringHttpMessageConverter(StandardCharsets.UTF_8);
-        FastJsonHttpMessageConverter fastConverter = new FastJsonHttpMessageConverter();
-        List<MediaType> fastMediaTypes = new ArrayList<>();
-        fastMediaTypes.add(MediaType.APPLICATION_FORM_URLENCODED);
-        fastMediaTypes.add(MediaType.APPLICATION_JSON);
-        fastConverter.setSupportedMediaTypes(fastMediaTypes);
-        converters.add(converter);
-        converters.add(fastConverter);
+
+        // 1. String 转换器保持原样
+        HttpMessageConverter<?> stringConverter = new StringHttpMessageConverter(StandardCharsets.UTF_8);
+        converters.add(stringConverter);
+
+        // 2. 核心替换：使用 Spring 官方亲儿子 Jackson 转换器
+        MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter();
+
+        // 配置支持的 MediaType
+        List<MediaType> mediaTypes = new ArrayList<>();
+        mediaTypes.add(MediaType.APPLICATION_JSON);
+        // ⚠️ 历史遗留坑：原代码强行用 Fastjson 解析 FORM_URLENCODED 表单，这里照搬以防报错
+        mediaTypes.add(MediaType.APPLICATION_FORM_URLENCODED);
+        jacksonConverter.setSupportedMediaTypes(mediaTypes);
+
+        // 🌟 核心保命配置：模仿 Fastjson 的“瞎子模式”（遇到不认识的字段不报错）
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        jacksonConverter.setObjectMapper(objectMapper);
+
+        converters.add(jacksonConverter);
+
         return converters;
     }
 

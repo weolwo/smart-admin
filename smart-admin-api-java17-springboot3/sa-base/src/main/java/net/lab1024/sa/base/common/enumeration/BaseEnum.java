@@ -1,12 +1,7 @@
 package net.lab1024.sa.base.common.enumeration;
 
-import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONAware;
-import com.alibaba.fastjson.JSONObject;
 import com.google.common.base.CaseFormat;
-import lombok.Data;
 
-import java.util.LinkedHashMap;
 import java.util.Objects;
 
 /**
@@ -60,40 +55,53 @@ public interface BaseEnum {
      * @param clazz 枚举类类对象
      * @return
      */
-    static String getInfo(Class<? extends BaseEnum> clazz) {
+
+    /**
+     * 返回枚举类的说明 (纯Java实现，移除Fastjson依赖)
+     */
+  public static String getInfo(Class<? extends BaseEnum> clazz) {
         BaseEnum[] enums = clazz.getEnumConstants();
-        LinkedHashMap<String, JSONObject> json = new LinkedHashMap<>(enums.length);
-        for (BaseEnum e : enums) {
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("value", new DeletedQuotationAware(e.getValue()));
-            jsonObject.put("desc", new DeletedQuotationAware(e.getDesc()));
-            json.put(e.toString(), jsonObject);
-        }
+        StringBuilder sb = new StringBuilder();
 
-        String enumJson = JSON.toJSONString(json, true);
-        enumJson = enumJson.replaceAll("\"", "");
-        enumJson = enumJson.replaceAll("\t", "&nbsp;&nbsp;");
-        enumJson = enumJson.replaceAll("\n", "<br>");
-        String prefix = "  <br>  export const " + CaseFormat.UPPER_CAMEL.to(CaseFormat.UPPER_UNDERSCORE, clazz.getSimpleName() + " = <br> ");
-        return prefix + enumJson + " <br>";
-    }
+        sb.append("{\n");
+        for (int i = 0; i < enums.length; i++) {
+            BaseEnum e = enums[i];
+            // 拼接外层的 Key (比如: NORMAL: { )
+            sb.append("\t").append(e.toString()).append(": {");
 
-    @Data
-    class DeletedQuotationAware implements JSONAware {
-
-        private String value;
-
-        public DeletedQuotationAware(Object value) {
-            if (value instanceof String) {
-                this.value = "'" + value + "'";
+            // 拼接 value (如果是字符串，包上单引号)
+            sb.append("value: ");
+            if (e.getValue() instanceof String) {
+                sb.append("'").append(e.getValue()).append("'");
             } else {
-                this.value = value.toString();
+                sb.append(e.getValue());
             }
-        }
+            sb.append(", ");
 
-        @Override
-        public String toJSONString() {
-            return value;
+            // 拼接 desc (描述通常都是字符串，包上单引号)
+            sb.append("desc: ");
+            if (e.getDesc() instanceof String) {
+                sb.append("'").append(e.getDesc()).append("'");
+            } else {
+                sb.append(e.getDesc());
+            }
+
+            sb.append("}");
+            // 如果不是最后一个，加个逗号
+            if (i < enums.length - 1) {
+                sb.append(",");
+            }
+            sb.append("\n");
         }
+        sb.append("}");
+
+        // 还原他原本的 HTML 替换逻辑
+        String enumStr = sb.toString();
+        enumStr = enumStr.replace("\t", "&nbsp;&nbsp;");
+        enumStr = enumStr.replace("\n", "<br>");
+
+        // 拼接 export const 开头
+        String prefix = "  <br>  export const " + CaseFormat.UPPER_CAMEL.to(CaseFormat.UPPER_UNDERSCORE, clazz.getSimpleName()) + " = <br> ";
+        return prefix + enumStr + " <br>";
     }
 }

@@ -1,11 +1,11 @@
 package net.lab1024.sa.base.module.support.redis;
 
-import com.alibaba.fastjson.JSON;
 import jakarta.annotation.Resource;
 import net.lab1024.sa.base.common.domain.SystemEnvironment;
 import net.lab1024.sa.base.common.enumeration.SystemEnvironmentEnum;
 import net.lab1024.sa.base.common.util.SmartStringUtil;
 import net.lab1024.sa.base.constant.RedisKeyConst;
+import net.lab1024.sa.base.common.util.JsonUtils;
 import org.slf4j.Logger;
 import org.springframework.data.redis.core.*;
 import org.springframework.stereotype.Service;
@@ -175,7 +175,7 @@ public class RedisService {
         if (json == null) {
             return null;
         }
-        T obj = JSON.parseObject(json.toString(), clazz);
+        T obj = JsonUtils.parseObject(json.toString(), clazz);
         return obj;
     }
 
@@ -187,7 +187,7 @@ public class RedisService {
         redisValueOperations.set(key, value);
     }
     public void set(Object key, Object value) {
-        String jsonString = JSON.toJSONString(value);
+        String jsonString = JsonUtils.toJson(value);
         redisValueOperations.set(key.toString(), jsonString);
     }
 
@@ -202,7 +202,7 @@ public class RedisService {
      * 普通缓存放入并设置时间
      */
     public void set(Object key, Object value, long second) {
-        String jsonString = JSON.toJSONString(value);
+        String jsonString = JsonUtils.toJson(value);
         if (second > 0) {
             redisValueOperations.set(key.toString(), jsonString, second, TimeUnit.SECONDS);
         } else {
