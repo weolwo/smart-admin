@@ -8,52 +8,42 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.ser.ContextualSerializer;
 import net.lab1024.sa.base.module.support.datamasking.DataMasking;
 import net.lab1024.sa.base.module.support.datamasking.DataMaskingTypeEnum;
-import net.lab1024.sa.base.module.support.datamasking.SmartDataMaskingUtil;
-import org.apache.commons.lang3.ObjectUtils;
+import net.lab1024.sa.base.module.support.datamasking.DataMaskingUtil;
 
 import java.io.IOException;
 
-/**
- * 脱敏序列化
- *
- * @author 罗伊
- * @description:
- * @date 2024/7/21 4:39 下午
- */
-public class DataMaskingSerializer extends JsonSerializer<Object> implements ContextualSerializer {
+public class DataMaskingSerializer extends JsonSerializer<String> implements ContextualSerializer {
 
-    private DataMaskingTypeEnum typeEnum;
+    private final DataMaskingTypeEnum type;
+
+    // 默认构造函数（Jackson 必须）
+    public DataMaskingSerializer() {
+        this.type = DataMaskingTypeEnum.COMMON;
+    }
+
+    public DataMaskingSerializer(DataMaskingTypeEnum dataMaskingSerializer) {
+        this.type = dataMaskingSerializer;
+    }
 
     @Override
-    public void serialize(Object value, JsonGenerator jsonGenerator, SerializerProvider serializers) throws IOException {
-
-        if (ObjectUtils.isEmpty(value)) {
-            jsonGenerator.writeObject(value);
+    public void serialize(String value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+        if (value == null) {
+            gen.writeNull();
             return;
         }
-
-        if (typeEnum == null) {
-            jsonGenerator.writeObject(SmartDataMaskingUtil.dataMasking(String.valueOf(value)));
-            return;
-        }
-
-        jsonGenerator.writeObject(SmartDataMaskingUtil.dataMasking(value, typeEnum));
+        // 直接调用脱敏逻辑，不涉及任何反射 set 操作
+        gen.writeString(DataMaskingUtil.apply(value, type));
     }
 
     @Override
     public JsonSerializer<?> createContextual(SerializerProvider prov, BeanProperty property) throws JsonMappingException {
-        // 判断beanProperty是不是空
-        if (null == property) {
-            return prov.findNullValueSerializer(property);
+        if (property != null) {
+            DataMasking annotation = property.getAnnotation(DataMasking.class);
+            if (annotation != null) {
+                // 重点：每次返回一个新实例，确保线程安全，且不同字段互不干扰
+                return new DataMaskingSerializer(annotation.value());
+            }
         }
-
-        DataMasking annotation = property.getAnnotation(DataMasking.class);
-        if (null == annotation) {
-            return prov.findValueSerializer(property.getType(), property);
-        }
-
-        typeEnum = annotation.value();
-        return this;
+        return prov.findValueSerializer(property.getType(), property);
     }
-
 }
