@@ -10,6 +10,10 @@ package net.lab1024.sa.base.constant;
  * @Copyright  <a href="https://1024lab.net">1024创新实验室</a>
  */
 public class RedisKeyConst {
+    /**
+     * 重复提交
+     */
+    public static final String REPEAT_SUBMIT = "repeat:submit";
 
     public static final String SEPARATOR = ":";
 
@@ -24,6 +28,5 @@ public class RedisKeyConst {
         public static final String CAPTCHA = "captcha:";
 
         public static final String LOGIN_VERIFICATION_CODE = "login:verification-code:";
-
     }
 }
