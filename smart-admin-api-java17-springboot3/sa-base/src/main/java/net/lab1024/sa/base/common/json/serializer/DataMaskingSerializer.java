@@ -55,7 +55,7 @@ import java.io.IOException;
 */
 //</editor-fold>
 
-public class DataMaskingSerializer extends JsonSerializer<String> implements ContextualSerializer {
+public class DataMaskingSerializer extends JsonSerializer<Object> implements ContextualSerializer {
 
     private final DataMaskingTypeEnum type;
 
@@ -69,7 +69,7 @@ public class DataMaskingSerializer extends JsonSerializer<String> implements Con
     }
 
     @Override
-    public void serialize(String value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
+    public void serialize(Object value, JsonGenerator gen, SerializerProvider serializers) throws IOException {
         if (value == null) {
             gen.writeNull();
             return;
