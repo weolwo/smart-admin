@@ -51,6 +51,7 @@
         <jsoup.version>1.21.1</jsoup.version>
         <tika.version>3.1.0</tika.version>
         <httpcomponents.version>5.5</httpcomponents.version>
+        <qlexpress.version>4.1.0</qlexpress.version>
     </properties>
 
     <dependencyManagement>
@@ -313,7 +314,11 @@
                 <artifactId>httpclient5</artifactId>
                 <version>${httpcomponents.version}</version>
             </dependency>
-
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>qlexpress4</artifactId>
+                <version>${qlexpress.version}</version>
+            </dependency>
         </dependencies>
 
     </dependencyManagement>

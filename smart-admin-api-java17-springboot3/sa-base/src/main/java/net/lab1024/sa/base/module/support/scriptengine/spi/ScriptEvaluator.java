@@ -1,0 +1,22 @@
+package net.lab1024.sa.base.module.support.scriptengine.spi;
+
+import net.lab1024.sa.base.module.support.scriptengine.domain.EngineFunctionMeta;
+import net.lab1024.sa.base.module.support.scriptengine.domain.ExecutableScript;
+
+import java.lang.reflect.Method;
+import java.util.Map;
+
+/**
+ * 脚本求值器 SPI (供底层各个引擎厂商实现)
+ */
+public interface ScriptEvaluator {
+
+    // 引擎标识
+    String name();
+
+    // 编译并执行脚本
+    Object evaluate(ExecutableScript executableScript, Map<String, Object> variables) throws Exception;
+
+    // 挂载自定义函数
+    void registerFunction(EngineFunctionMeta functionMeta) throws Exception;
+}
