@@ -134,7 +134,7 @@ access-control-allow-origin: '*'
 
 # 心跳配置
 heart-beat:
-  interval-seconds: 300
+  interval-seconds: 3000
 
 # 热加载配置
 reload:

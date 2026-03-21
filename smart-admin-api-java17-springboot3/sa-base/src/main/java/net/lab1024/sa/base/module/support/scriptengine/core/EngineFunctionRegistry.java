@@ -36,15 +36,17 @@ public class EngineFunctionRegistry {
     /**
      * 🌟 一键导出纯净的 API 文档（供 Controller 吐给前端 Monaco Editor）
      */
-    public Map<String, List<ScriptFunctionDocDTO>> exportDocs() {
+    public List<ScriptFunctionDocDTO> exportDocs() {
         return functionMap.values().stream().map(meta -> {
             ScriptFunctionDocDTO doc = new ScriptFunctionDocDTO();
             doc.setHandlerName(meta.getHandlerName());
             doc.setFunctionName(meta.getFunctionName());
             doc.setDescription(meta.getDescription());
             doc.setReturnType(meta.getReturnType());
+            doc.setClassName(meta.getTargetBean().getClass().getSimpleName());
+            doc.setMethodName(meta.getMethod().toGenericString());
             doc.setParams(meta.getParams());
             return doc;
-        }).collect(Collectors.groupingBy(e -> e.getHandlerName()));
+        }).collect(Collectors.toList());
     }
 }

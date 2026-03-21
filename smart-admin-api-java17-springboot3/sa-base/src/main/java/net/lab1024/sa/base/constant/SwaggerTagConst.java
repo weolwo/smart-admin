@@ -42,6 +42,7 @@ public class SwaggerTagConst {
         public static final String CHANGE_LOG = "业务支撑-更新日志";
 
         public static final String HELP_DOC = "业务支撑-帮助文档";
+        public static final String SCRIPT_DOC = "业务支撑-脚本方法文档";
 
         public static final String FEEDBACK = "业务支撑-意见反馈";
 
