@@ -2,6 +2,7 @@ package net.lab1024.sa.base.module.support.scriptengine.core;
 
 import lombok.extern.slf4j.Slf4j;
 import net.lab1024.sa.base.common.exception.BusinessException;
+import net.lab1024.sa.base.common.exception.EngineScriptException;
 import net.lab1024.sa.base.module.support.scriptengine.domain.EngineFunctionMeta;
 import net.lab1024.sa.base.module.support.scriptengine.domain.ExecutableScript;
 import net.lab1024.sa.base.module.support.scriptengine.spi.EngineContext;
@@ -27,15 +28,23 @@ public class DefaultScriptEngine implements ScriptEngine {
     public Object evaluate(ExecutableScript script, EngineContext context) {
         Assert.hasText(script.getContent(), "script must not be empty");
         Assert.notNull(context, "RuleContext must not be null");
-
+        Object result = null;
         try {
+            boolean checked = evaluator.checkScript(script);
+            if (checked) {
+                result = evaluator.evaluate(script, context);
+            }
             // 委托给底层 SPI 执行
-            return evaluator.evaluate(script, context.getVariables());
         } catch (Exception e) {
-            log.error(" script execution failed! Script: \n{}", script.getName(), e);
+            String message = e.getMessage();
+            if (e instanceof EngineScriptException eg) {
+                message = eg.getScriptErrorDetail();
+            }
+            log.error(" script execution failed! Script: \n{},{}", script.getName(), message);
             // 异常收敛：绝不把底层引擎的 ParseException 漏给上层
-            throw new BusinessException("规则执行异常，请检查语法或联系管理员！");
+            throw new BusinessException("脚本执行异常，请检查语法或联系管理员！");
         }
+        return result;
     }
 
     @Override

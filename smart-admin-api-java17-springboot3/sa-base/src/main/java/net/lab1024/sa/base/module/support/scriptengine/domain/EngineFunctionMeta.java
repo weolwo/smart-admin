@@ -2,6 +2,7 @@ package net.lab1024.sa.base.module.support.scriptengine.domain;
 
 import lombok.Builder;
 import lombok.Getter;
+import net.lab1024.sa.base.module.support.scriptengine.spi.ScriptEngineFunctionHandler;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -15,7 +16,7 @@ public class EngineFunctionMeta {
     // --- 运行期执行所需资源 ---
     private final String handlerName;        // 脚本中调用的函数名
     private final String functionName;        // 脚本中调用的函数名
-    private final Object targetBean;  // Spring Bean 实例
+    private final ScriptEngineFunctionHandler targetBean;  // Spring Bean 实例
     private final Method method;      // 物理反射方法
 
     // --- 前端展示与文档所需资源 ---

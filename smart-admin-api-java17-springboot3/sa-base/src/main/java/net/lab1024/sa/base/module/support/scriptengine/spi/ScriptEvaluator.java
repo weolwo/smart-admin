@@ -14,8 +14,11 @@ public interface ScriptEvaluator {
     // 引擎标识
     String name();
 
+    // 检查脚本语法
+    boolean checkScript(ExecutableScript executableScript) throws Exception;
+
     // 编译并执行脚本
-    Object evaluate(ExecutableScript executableScript, Map<String, Object> variables) throws Exception;
+    Object evaluate(ExecutableScript executableScript, EngineContext engineContext) throws Exception;
 
     // 挂载自定义函数
     void registerFunction(EngineFunctionMeta functionMeta) throws Exception;

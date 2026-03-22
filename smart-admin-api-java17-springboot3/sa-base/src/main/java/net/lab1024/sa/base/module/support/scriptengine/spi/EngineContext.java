@@ -23,6 +23,13 @@ public interface EngineContext {
     Map<String, Object> getVariables();
 
     /**
+     * 基于已有 Map 快速创建
+     */
+    public static StandardEngineContext create(Map<String, Object> initialVariables) {
+        return new StandardEngineContext(initialVariables);
+    }
+
+    /**
      * 获取默认实现的静态工厂
      */
     static EngineContext create() {

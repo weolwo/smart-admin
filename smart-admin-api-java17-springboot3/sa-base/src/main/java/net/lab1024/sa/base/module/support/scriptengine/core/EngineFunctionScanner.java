@@ -7,6 +7,7 @@ import net.lab1024.sa.base.module.support.scriptengine.annotation.ScriptFunction
 import net.lab1024.sa.base.module.support.scriptengine.annotation.ScriptFunctionGroup;
 import net.lab1024.sa.base.module.support.scriptengine.domain.EngineFunctionMeta;
 import net.lab1024.sa.base.module.support.scriptengine.spi.ScriptEngineFunctionHandler;
+import net.lab1024.sa.base.module.support.scriptengine.spi.ScriptEvaluator;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.AnnotationUtils;
@@ -26,12 +27,12 @@ public class EngineFunctionScanner implements SmartInitializingSingleton {
 
     private final ApplicationContext applicationContext;
     private final EngineFunctionRegistry registry; // 注入中央注册表
-
+    private final ScriptEvaluator scriptEvaluator;
     @Override
     public void afterSingletonsInstantiated() {
         String[] beanNames = applicationContext.getBeanNamesForType(ScriptEngineFunctionHandler.class);
         for (String beanName : beanNames) {
-            Object bean = applicationContext.getBean(beanName);
+            ScriptEngineFunctionHandler bean = (ScriptEngineFunctionHandler) applicationContext.getBean(beanName);
             ScriptFunctionGroup groupAnno = AnnotationUtils.findAnnotation(bean.getClass(), ScriptFunctionGroup.class);
             // 如果没写注解，给个兜底的分类名
             String handlerName = (groupAnno != null) ? groupAnno.value() : "默认通用工具";
@@ -58,6 +59,13 @@ public class EngineFunctionScanner implements SmartInitializingSingleton {
                 log.debug("✅ 规则函数扫描完毕: {}", annotation.name());
             });
         }
+        registry.getAllFunctions().forEach(e-> {
+            try {
+                scriptEvaluator.registerFunction(e);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
         if (log.isInfoEnabled()) {
             log.info("🚀 [Script Engine] 所有规则函数加载完毕:\n{}", JsonUtils.toJson(registry.exportDocs()));
         }

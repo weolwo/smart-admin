@@ -17,12 +17,13 @@ import java.time.temporal.ChronoUnit;
 @Component
 public class DateTimeScriptHandler implements ScriptEngineFunctionHandler {
 
-    @ScriptFunction(name = "获取当前时间", description = "获取系统当前精确时间，返回格式：yyyy-MM-dd HH:mm:ss")
-    public String now() {
+
+    @ScriptFunction(name = "getNow", description = "获取系统当前精确时间，返回格式：yyyy-MM-dd HH:mm:ss")
+    public String now(int x) {
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
     }
 
-    @ScriptFunction(name = "计算相差天数", description = "计算两个日期(yyyy-MM-dd)之间相差的天数")
+    @ScriptFunction(name = "_daysBetween", description = "计算两个日期(yyyy-MM-dd)之间相差的天数")
     public Long daysBetween(String date1, String date2) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         LocalDate start = LocalDate.parse(date1, formatter);

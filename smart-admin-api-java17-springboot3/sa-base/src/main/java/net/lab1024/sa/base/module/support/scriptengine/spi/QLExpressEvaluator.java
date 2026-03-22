@@ -4,9 +4,10 @@ import com.alibaba.qlexpress4.Express4Runner;
 import com.alibaba.qlexpress4.InitOptions;
 import com.alibaba.qlexpress4.QLOptions;
 import com.alibaba.qlexpress4.exception.QLException;
+import com.alibaba.qlexpress4.exception.QLSyntaxException;
+import com.alibaba.qlexpress4.runtime.function.QMethodFunction;
 import lombok.extern.slf4j.Slf4j;
 import net.lab1024.sa.base.common.exception.EngineScriptException;
-import net.lab1024.sa.base.module.support.scriptengine.core.QLExpressReflectionWrapper;
 import net.lab1024.sa.base.module.support.scriptengine.domain.EngineFunctionMeta;
 import net.lab1024.sa.base.module.support.scriptengine.domain.ExecutableScript;
 
@@ -32,9 +33,20 @@ public class QLExpressEvaluator implements ScriptEvaluator {
     }
 
     @Override
-    public Object evaluate(ExecutableScript script, Map<String, Object> variables) {
+    public boolean checkScript(ExecutableScript executableScript) throws Exception {
         try {
-            return runner.execute(script.getContent(), variables, QLOptions.DEFAULT_OPTIONS).getResult();
+            runner.parseToDefinitionWithCache(executableScript.getContent());
+        } catch (QLSyntaxException e) {
+            throw new EngineScriptException(e.getMessage(), e.toString());
+        }
+        return true;
+    }
+
+    @Override
+    public Object evaluate(ExecutableScript script, EngineContext engineContext) {
+        try {
+            EngineContextHolder.set(engineContext);
+            return runner.execute(script.getContent(), engineContext, QLOptions.DEFAULT_OPTIONS).getResult();
         } catch (Exception e) {
             // 🌟 核心魔法：异常翻译！
             // 如果是 QL 抛出的语法异常/运行异常，提取它精准的报错信息（比如：第2行缺少 ')'）
@@ -46,6 +58,8 @@ public class QLExpressEvaluator implements ScriptEvaluator {
             }
             // 其他未知异常，原样抛出让上层兜底
             throw e;
+        }finally {
+            EngineContextHolder.clear();
         }
     }
 
@@ -53,6 +67,6 @@ public class QLExpressEvaluator implements ScriptEvaluator {
     @Override
     public void registerFunction(EngineFunctionMeta meta) {
         // 完美的面向对象封装，将我们的 Meta 模型包装成 QL 4.x 认识的 CustomFunction
-        runner.addFunction(meta.getFunctionName(), new QLExpressReflectionWrapper(meta));
+        runner.addFunction(meta.getFunctionName(), new QMethodFunction(meta.getTargetBean(), meta.getMethod()));
     }
 }

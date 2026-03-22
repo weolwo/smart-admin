@@ -1,5 +1,6 @@
 package net.lab1024.sa.base.module.support.scriptengine.core;
 
+import lombok.RequiredArgsConstructor;
 import net.lab1024.sa.base.module.support.scriptengine.domain.EngineFunctionMeta;
 import net.lab1024.sa.base.module.support.scriptengine.domain.ScriptFunctionDocDTO;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 /**
  * 🚀 规则函数中央注册表 (Single Source of Truth)
  */
+@RequiredArgsConstructor
 @Component
 public class EngineFunctionRegistry {
 

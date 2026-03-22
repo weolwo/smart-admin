@@ -1,9 +1,11 @@
 package net.lab1024.sa.base.module.support.scriptengine.domain;
 
+import lombok.Builder;
 import lombok.Data;
 import org.springframework.util.Assert;
 
 @Data
+@Builder
 public class ExecutableScript {
 
     private final String name;    // 规则名称 (例如："双11美妆会场满减规则")

@@ -2,6 +2,7 @@ package net.lab1024.sa.base.module.support.scriptengine.core;
 
 import net.lab1024.sa.base.module.support.scriptengine.annotation.ScriptFunction;
 import net.lab1024.sa.base.module.support.scriptengine.annotation.ScriptFunctionGroup;
+import net.lab1024.sa.base.module.support.scriptengine.spi.EngineContext;
 import net.lab1024.sa.base.module.support.scriptengine.spi.ScriptEngineFunctionHandler;
 import org.springframework.stereotype.Component;
 
@@ -12,12 +13,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class StringScriptHandler implements ScriptEngineFunctionHandler {
 
-    @ScriptFunction(name = "是否为空", description = "判断文本是否为空或者只包含空格")
+    @ScriptFunction(name = "_isBlank", description = "判断文本是否为空或者只包含空格")
     public Boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }
 
-    @ScriptFunction(name = "截取文本", description = "安全截取字符串，超长不会报错")
+
+    @ScriptFunction(name = "_substring", description = "安全截取字符串，超长不会报错")
     public String substring(String str, Integer maxLength) {
         if (str == null) return "";
         if (str.length() <= maxLength) return str;
