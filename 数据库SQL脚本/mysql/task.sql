@@ -2,9 +2,10 @@
 -- 一、 核心配置域 (Config Domain)
 -- ==========================================
 
+DROP TABLE IF EXISTS `t_task_template`;
 CREATE TABLE `t_task_template`
 (
-    `id`            bigint       NOT NULL AUTO_INCREMENT,
+    `id`            bigint       NOT NULL AUTO_INCREMENT comment 'id',
     `template_code` varchar(64)  NOT NULL COMMENT '模板唯一标识，如 T_ORDER_001',
     `template_name` varchar(128) NOT NULL COMMENT '模板名称',
     `task_type`     varchar(32)  NOT NULL COMMENT '【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)',
@@ -18,9 +19,10 @@ CREATE TABLE `t_task_template`
     UNIQUE KEY `uk_task_tpl_code` (`template_code`)
 ) COMMENT ='系统级-任务模板表';
 
+DROP TABLE IF EXISTS `t_task_config`;
 CREATE TABLE `t_task_config`
 (
-    `id`              bigint       NOT NULL AUTO_INCREMENT,
+    `id`              bigint       NOT NULL AUTO_INCREMENT comment 'id',
     `task_name`       varchar(128) NOT NULL COMMENT '面向C端展示的任务名称',
     `template_code`   varchar(64)  NOT NULL COMMENT '关联模板Code',
     `trigger_event`   varchar(64)  NOT NULL COMMENT '【字典】触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)',
@@ -48,6 +50,7 @@ CREATE TABLE `t_task_config`
 -- 二、 奖品包与资产兜底域 (Reward & Asset Config)
 -- ==========================================
 
+DROP TABLE IF EXISTS `t_promotion_config`;
 CREATE TABLE `t_promotion_config`
 (
     `id`                varchar(64)    NOT NULL COMMENT '配置ID，业务主键如 PRM_1001',
@@ -85,6 +88,7 @@ CREATE TABLE `t_promotion_config`
     PRIMARY KEY (`id`)
 ) COMMENT ='资产域-优惠配置(预算与风控兜底)表';
 
+DROP TABLE IF EXISTS `t_prize_group`;
 CREATE TABLE `t_prize_group`
 (
     `id`          varchar(64)  NOT NULL COMMENT '奖励包ID，如 GRP_1001',
@@ -98,9 +102,10 @@ CREATE TABLE `t_prize_group`
     PRIMARY KEY (`id`)
 ) COMMENT ='业务级-奖励包(大礼包)外壳表';
 
+DROP TABLE IF EXISTS `t_prize_config`;
 CREATE TABLE `t_prize_config`
 (
-    `id`                  bigint         NOT NULL AUTO_INCREMENT,
+    `id`                  bigint         NOT NULL AUTO_INCREMENT comment 'id',
     `prize_group_id`      varchar(64)    NOT NULL COMMENT '关联的上层奖励包ID (t_prize_group.id)',
     `promotion_config_id` varchar(64)    NOT NULL COMMENT '绑定的底层优惠兜底配置ID (指向 t_promotion_config)',
 
@@ -123,9 +128,10 @@ CREATE TABLE `t_prize_config`
     KEY `idx_t_prz_cfg_grp` (`prize_group_id`)
 ) COMMENT ='业务级-发奖规则与奖品明细表';
 
+DROP TABLE IF EXISTS `t_task_prize_mapping`;
 CREATE TABLE `t_task_prize_mapping`
 (
-    `id`              bigint      NOT NULL AUTO_INCREMENT,
+    `id`              bigint      NOT NULL AUTO_INCREMENT comment 'id',
     `task_config_id`  bigint      NOT NULL COMMENT '关联的任务配置ID (t_task_config.id)',
 
     `stage_level`     int         NOT NULL DEFAULT '1' COMMENT '任务阶段：单次任务填1，阶梯任务填 1, 2, 3...',
@@ -145,10 +151,11 @@ CREATE TABLE `t_task_prize_mapping`
 -- 三、 任务运行与发奖调度域 (Task Runtime & Proposal)
 -- ==========================================
 
+DROP TABLE IF EXISTS `t_task_record`;
 CREATE TABLE `t_task_record`
 (
-    `id`               bigint         NOT NULL AUTO_INCREMENT,
-    `member_id`        varchar(64)    NOT NULL COMMENT '会员ID',
+    `id`               bigint         NOT NULL AUTO_INCREMENT comment 'id',
+    `member_name`        varchar(64)    NOT NULL COMMENT '会员名',
     `task_config_id`   bigint         NOT NULL COMMENT '关联的任务配置ID',
 
     `period_key`       varchar(32)    NOT NULL DEFAULT 'NONE' COMMENT '业务期数标识(防重用)：NONE, 日期(20260402)',
@@ -167,15 +174,16 @@ CREATE TABLE `t_task_record`
     `update_by`        varchar(64)             DEFAULT NULL COMMENT '更新人',
     `update_time`      datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_t_tsk_rec_mbr_cfg_prd` (`member_id`, `task_config_id`, `period_key`),
-    KEY `idx_t_tsk_rec_mbr_sts` (`member_id`, `status`),
+    UNIQUE KEY `uk_t_tsk_rec_mbr_cfg_prd` (`member_name`, `task_config_id`, `period_key`),
+    KEY `idx_t_tsk_rec_mbr_sts` (`member_name`, `status`),
     KEY `idx_t_tsk_rec_expire` (`status`, `valid_end_time`)
 ) COMMENT ='运行时-会员任务进度实例表';
 
+DROP TABLE IF EXISTS `t_promotion_proposal`;
 CREATE TABLE `t_promotion_proposal`
 (
-    `id`                  bigint      NOT NULL AUTO_INCREMENT,
-    `member_id`           varchar(64) NOT NULL,
+    `id`                  bigint      NOT NULL AUTO_INCREMENT comment 'id',
+    `member_name`           varchar(64) NOT NULL COMMENT '会员名',
     `task_record_id`      bigint      NOT NULL COMMENT '来源任务实例ID',
     `promotion_config_id` varchar(64) NOT NULL COMMENT '关联的优惠配置ID',
 
@@ -199,11 +207,12 @@ CREATE TABLE `t_promotion_proposal`
     KEY `idx_t_prm_prop_sts` (`status`)
 ) COMMENT ='资产域-统一发奖提案控制表';
 
+DROP TABLE IF EXISTS `t_prize_log`;
 CREATE TABLE `t_prize_log`
 (
-    `id`                  bigint       NOT NULL AUTO_INCREMENT,
+    `id`                  bigint       NOT NULL AUTO_INCREMENT comment 'id',
     `proposal_id`         bigint       NOT NULL COMMENT '关联的提案ID (t_promotion_proposal.id)',
-    `member_id`           varchar(64)  NOT NULL,
+    `member_name`           varchar(64)  NOT NULL COMMENT '会员名',
 
     `prize_group_id`      varchar(64)  NOT NULL COMMENT '关联的大礼包ID',
     `prize_config_id`     bigint       NOT NULL COMMENT '触发此发放的具体奖品明细项ID (t_prize_config.id)',
@@ -230,82 +239,10 @@ CREATE TABLE `t_prize_log`
 -- 四、 资产账务与实例域 (Ledger & Asset Instances)
 -- ==========================================
 
+DROP TABLE IF EXISTS `t_member_wallet`;
 CREATE TABLE `t_member_wallet`
 (
-    `id`            bigint         NOT NULL AUTO_INCREMENT,
-    `member_id`     varchar(64)    NOT NULL,
+    `id`            bigint         NOT NULL AUTO_INCREMENT comment 'id',
+    `member_name`     varchar(64)    NOT NULL COMMENT '会员名',
     `score_balance` decimal(18, 4) NOT NULL DEFAULT '0.0000' COMMENT '积分余额',
     `cash_balance`  decimal(18, 4) NOT NULL DEFAULT '0.0000' COMMENT '现金余额',
-    `status`        tinyint        NOT NULL DEFAULT '1' COMMENT '【字典】状态：0-冻结, 1-正常',
-    `version`       int            NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
-
-    `create_by`     varchar(64)             DEFAULT NULL COMMENT '创建人',
-    `create_time`   datetime                DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by`     varchar(64)             DEFAULT NULL COMMENT '更新人',
-    `update_time`   datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_t_biz_mbr_mbr` (`member_id`)
-) COMMENT ='账务域-会员资金/积分主账表';
-
-CREATE TABLE `t_member_asset_transaction`
-(
-    `id`               bigint         NOT NULL AUTO_INCREMENT,
-    `member_id`        varchar(64)    NOT NULL,
-    `asset_type`       varchar(32)    NOT NULL COMMENT '【字典】资产类型：SCORE, BALANCE',
-    `transaction_type` tinyint        NOT NULL COMMENT '【字典】资金流向：1-收入, 2-支出',
-    `change_amount`    decimal(18, 4) NOT NULL COMMENT '变动绝对值',
-    `balance_after`    decimal(18, 4) NOT NULL COMMENT '变动后最新余额',
-    `biz_type`         varchar(64)    NOT NULL COMMENT '【字典】业务类型：TASK_PRIZE, CONSUME, MANUAL_ADJUST',
-    `biz_ref_id`       varchar(128)   NOT NULL COMMENT '关联外部业务ID(如 prize_log_id)',
-    `remark`           varchar(255) DEFAULT NULL COMMENT 'C端展示摘要',
-
-    `create_by`        varchar(64)  DEFAULT NULL COMMENT '创建人',
-    `create_time`      datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by`        varchar(64)  DEFAULT NULL COMMENT '更新人',
-    `update_time`      datetime     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_t_biz_mbr_ast_txn_time` (`member_id`, `asset_type`, `create_time`),
-    UNIQUE KEY `uk_t_biz_mbr_ast_txn_ref` (`biz_ref_id`, `asset_type`)
-) COMMENT ='账务域-资产变动交易明细表';
-
-CREATE TABLE `t_member_coupon`
-(
-    `id`               bigint       NOT NULL AUTO_INCREMENT,
-    `member_id`        varchar(64)  NOT NULL,
-    `coupon_code`      varchar(64)  NOT NULL COMMENT '券模编码',
-    `coupon_name`      varchar(128) NOT NULL COMMENT '券名称',
-    `status`           tinyint      NOT NULL DEFAULT '0' COMMENT '【字典】状态：0-未使用, 1-已使用, 2-已过期, 3-已作废',
-    `source_type`      varchar(64)  NOT NULL COMMENT '【字典】获取来源：TASK_PRIZE, MANUAL_SEND',
-    `valid_start_time` datetime     NOT NULL COMMENT '有效期开始',
-    `valid_end_time`   datetime     NOT NULL COMMENT '有效期结束',
-    `used_time`        datetime              DEFAULT NULL COMMENT '核销时间',
-
-    `create_by`        varchar(64)           DEFAULT NULL COMMENT '创建人',
-    `create_time`      datetime              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by`        varchar(64)           DEFAULT NULL COMMENT '更新人',
-    `update_time`      datetime              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    KEY `idx_t_biz_mbr_cpn_sts` (`member_id`, `coupon_code`)
-) COMMENT ='资产域-会员优惠券实例表';
-
-CREATE TABLE `t_physical_delivery`
-(
-    `id`                bigint       NOT NULL AUTO_INCREMENT,
-    `member_id`         varchar(64)  NOT NULL,
-    `proposal_id`       bigint       NOT NULL COMMENT '来源发奖提案ID',
-    `prize_config_id`   bigint       NOT NULL COMMENT '触发此发货的奖品配置ID (t_prize_config.id)',
-
-    `receiver_name`     varchar(64)  NOT NULL COMMENT '收件人姓名',
-    `receiver_phone`    varchar(32)  NOT NULL COMMENT '收件人电话',
-    `receiver_address`  varchar(255) NOT NULL COMMENT '收件详细地址',
-    `logistics_company` varchar(64)           DEFAULT NULL COMMENT '【字典】物流公司：SF, JD, YTO',
-    `logistics_no`      varchar(128)          DEFAULT NULL COMMENT '物流单号',
-    `status`            tinyint      NOT NULL DEFAULT '0' COMMENT '【字典】状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回',
-
-    `create_by`         varchar(64)           DEFAULT NULL COMMENT '创建人',
-    `create_time`       datetime              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by`         varchar(64)           DEFAULT NULL COMMENT '更新人',
-    `update_time`       datetime              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_t_biz_phy_dlv_prop_pool` (`proposal_id`, `prize_config_id`)
-) COMMENT ='资产域-实物发货物流表';
