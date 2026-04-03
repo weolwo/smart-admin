@@ -246,3 +246,79 @@ CREATE TABLE `t_member_wallet`
     `member_name`     varchar(64)    NOT NULL COMMENT '会员名',
     `score_balance` decimal(18, 4) NOT NULL DEFAULT '0.0000' COMMENT '积分余额',
     `cash_balance`  decimal(18, 4) NOT NULL DEFAULT '0.0000' COMMENT '现金余额',
+    `status`        tinyint        NOT NULL DEFAULT '1' COMMENT '【字典】状态：0-冻结, 1-正常',
+    `version`       int            NOT NULL DEFAULT '0' COMMENT '乐观锁版本号',
+
+    `create_by`     varchar(64)             DEFAULT NULL COMMENT '创建人',
+    `create_time`   datetime                DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`     varchar(64)             DEFAULT NULL COMMENT '更新人',
+    `update_time`   datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_t_biz_mbr_mbr` (`member_name`)
+) COMMENT ='账务域-会员资金/积分主账表';
+
+DROP TABLE IF EXISTS `t_member_asset_transaction`;
+CREATE TABLE `t_member_asset_transaction`
+(
+    `id`               bigint         NOT NULL AUTO_INCREMENT comment 'id',
+    `member_name`        varchar(64)    NOT NULL COMMENT '会员名',
+    `asset_type`       varchar(32)    NOT NULL COMMENT '【字典】资产类型：SCORE, BALANCE',
+    `transaction_type` tinyint        NOT NULL COMMENT '【字典】资金流向：1-收入, 2-支出',
+    `change_amount`    decimal(18, 4) NOT NULL COMMENT '变动绝对值',
+    `balance_after`    decimal(18, 4) NOT NULL COMMENT '变动后最新余额',
+    `biz_type`         varchar(64)    NOT NULL COMMENT '【字典】业务类型：TASK_PRIZE, CONSUME, MANUAL_ADJUST',
+    `biz_ref_id`       varchar(128)   NOT NULL COMMENT '关联外部业务ID(如 prize_log_id)',
+    `remark`           varchar(255) DEFAULT NULL COMMENT 'C端展示摘要',
+
+    `create_by`        varchar(64)  DEFAULT NULL COMMENT '创建人',
+    `create_time`      datetime     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`        varchar(64)  DEFAULT NULL COMMENT '更新人',
+    `update_time`      datetime     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_t_biz_mbr_ast_txn_time` (`member_name`, `asset_type`, `create_time`),
+    UNIQUE KEY `uk_t_biz_mbr_ast_txn_ref` (`biz_ref_id`, `asset_type`)
+) COMMENT ='账务域-资产变动交易明细表';
+
+DROP TABLE IF EXISTS `t_member_coupon`;
+CREATE TABLE `t_member_coupon`
+(
+    `id`               bigint       NOT NULL AUTO_INCREMENT comment 'id',
+    `member_name`        varchar(64)  NOT NULL COMMENT '会员名',
+    `coupon_code`      varchar(64)  NOT NULL COMMENT '券模编码',
+    `coupon_name`      varchar(128) NOT NULL COMMENT '券名称',
+    `status`           tinyint      NOT NULL DEFAULT '0' COMMENT '【字典】状态：0-未使用, 1-已使用, 2-已过期, 3-已作废',
+    `source_type`      varchar(64)  NOT NULL COMMENT '【字典】获取来源：TASK_PRIZE, MANUAL_SEND',
+    `valid_start_time` datetime     NOT NULL COMMENT '有效期开始',
+    `valid_end_time`   datetime     NOT NULL COMMENT '有效期结束',
+    `used_time`        datetime              DEFAULT NULL COMMENT '核销时间',
+
+    `create_by`        varchar(64)           DEFAULT NULL COMMENT '创建人',
+    `create_time`      datetime              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`        varchar(64)           DEFAULT NULL COMMENT '更新人',
+    `update_time`      datetime              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_t_biz_mbr_cpn_sts` (`member_name`, `coupon_code`)
+) COMMENT ='资产域-会员优惠券实例表';
+
+DROP TABLE IF EXISTS `t_physical_delivery`;
+CREATE TABLE `t_physical_delivery`
+(
+    `id`                bigint       NOT NULL AUTO_INCREMENT comment 'id',
+    `member_name`         varchar(64)  NOT NULL COMMENT '会员名',
+    `proposal_id`       bigint       NOT NULL COMMENT '来源发奖提案ID',
+    `prize_config_id`   bigint       NOT NULL COMMENT '触发此发货的奖品配置ID (t_prize_config.id)',
+
+    `receiver_name`     varchar(64)  NOT NULL COMMENT '收件人姓名',
+    `receiver_phone`    varchar(32)  NOT NULL COMMENT '收件人电话',
+    `receiver_address`  varchar(255) NOT NULL COMMENT '收件详细地址',
+    `logistics_company` varchar(64)           DEFAULT NULL COMMENT '【字典】物流公司：SF, JD, YTO',
+    `logistics_no`      varchar(128)          DEFAULT NULL COMMENT '物流单号',
+    `status`            tinyint      NOT NULL DEFAULT '0' COMMENT '【字典】状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回',
+
+    `create_by`         varchar(64)           DEFAULT NULL COMMENT '创建人',
+    `create_time`       datetime              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`         varchar(64)           DEFAULT NULL COMMENT '更新人',
+    `update_time`       datetime              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_t_biz_phy_dlv_prop_pool` (`proposal_id`, `prize_config_id`)
+) COMMENT ='资产域-实物发货物流表';
