@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
  * @Date ${basic.backendDate}
  * @Copyright ${basic.copyright}
  */
+@RequiredArgsConstructor
 @Service
 public class ${name.upperCamel}Manager extends ServiceImpl<${name.upperCamel}Dao, ${name.upperCamel}Entity> {
 

@@ -20,12 +20,11 @@ import jakarta.annotation.Resource;
  * @Date ${basic.backendDate}
  * @Copyright ${basic.copyright}
  */
-
+@RequiredArgsConstructor
 @Service
 public class ${name.upperCamel}Service {
 
-    @Resource
-    private ${name.upperCamel}Dao ${name.lowerCamel}Dao;
+    private final ${name.upperCamel}Dao ${name.lowerCamel}Dao;
 
     /**
      * 分页查询
