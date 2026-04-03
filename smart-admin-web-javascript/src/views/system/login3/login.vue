@@ -18,7 +18,6 @@
       <img class="welcome-img" :src="loginGif" />
     </div>
     <div class="box-item login">
-      <img class="login-qr" :src="loginQR" />
       <div class="login-title">账号登录</div>
       <a-form ref="formRef" class="login-form" :model="loginForm" :rules="rules">
         <a-form-item name="loginName">
@@ -79,7 +78,6 @@
   import { SmartLoading } from '/@/components/framework/smart-loading';
   import { LOGIN_DEVICE_ENUM } from '/@/constants/system/login-device-const';
   import { useUserStore } from '/@/store/modules/system/user';
-  import loginQR from '/@/assets/images/login/login-qr.png';
   import loginGif from '/@/assets/images/login/login-min.gif';
   import wechatIcon from '/@/assets/images/login/wechat-icon.png';
   import aliIcon from '/@/assets/images/login/ali-icon.png';

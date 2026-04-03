@@ -17,7 +17,6 @@
       </div>
     </div>
     <div class="box-item login">
-      <img class="login-qr" :src="loginQR" />
       <div class="login-title">账号登录</div>
       <a-form ref="formRef" class="login-form" :model="loginForm" :rules="rules">
         <a-form-item name="loginName">

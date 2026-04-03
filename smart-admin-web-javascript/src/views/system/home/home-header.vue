@@ -14,24 +14,11 @@
       <template #subTitle>
         <a-typography-text type="secondary" style="margin-left: 20px">所属部门： {{ departmentName }}</a-typography-text>
       </template>
-      <template #extra>
-        <a-typography-text type="secondary">{{ dayInfo }}</a-typography-text>
-      </template>
       <a-row class="content">
         <span class="left-content">
           <p class="last-login-info"><AlertOutlined />{{ lastLoginInfo }}</p>
           <a class="sentence" href="#" target="_blank"> <smile-outlined spin /> {{ heartSentence }} </a>
         </span>
-        <div class="weather">
-          <iframe
-            width="100%"
-            scrolling="no"
-            height="50"
-            frameborder="0"
-            allowtransparency="true"
-            src="//i.tianqi.com/index.php?c=code&id=12&icon=1&num=3&site=12"
-          ></iframe>
-        </div>
       </a-row>
     </a-page-header>
   </a-card>
