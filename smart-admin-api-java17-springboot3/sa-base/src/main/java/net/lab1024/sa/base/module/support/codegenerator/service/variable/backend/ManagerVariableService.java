@@ -45,8 +45,8 @@ public class ManagerVariableService extends CodeGenerateBaseVariableService {
         HashSet<String> packageList = new HashSet<>();
 
         //1、javabean相关的包
-        packageList.addAll(getJavaBeanImportClass(form).stream().filter(e -> e.contains("Entity;")).collect(Collectors.toList()));
-
+        packageList.addAll(getJavaBeanImportClass(form));
+        packageList.removeIf(e -> e.endsWith("VO;") || e.endsWith("UpdateForm;") || e.endsWith("AddForm;") || e.endsWith("QueryForm;"));
         //2、dao
         packageList.add("import " + form.getBasic().getJavaPackageName() + ".dao."+ form.getBasic().getModuleName() + "Dao;" );
         return new ArrayList<>(packageList);

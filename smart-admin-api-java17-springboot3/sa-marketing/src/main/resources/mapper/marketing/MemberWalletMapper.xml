@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.marketing.ledger.wallet.dao.MemberWalletDao">
+
+    <resultMap id="MemberWalletVO" type="net.lab1024.sa.marketing.ledger.wallet.domain.vo.MemberWalletVO">
+            <result column="id" property="id" />
+            <result column="member_name" property="memberName" />
+            <result column="score_balance" property="scoreBalance" />
+            <result column="cash_balance" property="cashBalance" />
+            <result column="status" property="status" />
+            <result column="version" property="version" />
+            <result column="create_by" property="createBy" />
+            <result column="create_time" property="createTime" />
+            <result column="update_by" property="updateBy" />
+            <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                member_name, 
+                score_balance, 
+                cash_balance, 
+                status, 
+                version, 
+                create_by, 
+                create_time, 
+                update_by, 
+                update_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+                        <if test="queryForm.memberName != null">
+                            AND member_name = #{queryForm.memberName}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
+                        <if test="queryForm.createTimeBegin != null">
+                            AND create_time &gt;= #{queryForm.createTimeBegin}
+                        </if>
+                        <if test="queryForm.createTimeEnd != null">
+                            AND create_time &lt;= #{queryForm.createTimeEnd}
+                        </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="MemberWalletVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_member_wallet
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="MemberWalletVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_member_wallet
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+                <delete id="batchDelete">
+                    delete from t_member_wallet
+                    where id in
+                    <foreach collection="idList" open="(" close=")" separator="," item="item">
+                        #{item}
+                    </foreach>
+                </delete>
+                <delete id="deleteById">
+                    delete from t_member_wallet
+                        where id = #{id}
+                </delete>
+
+</mapper>

@@ -49,7 +49,7 @@ public class ControllerVariableService extends CodeGenerateBaseVariableService {
         HashSet<String> packageSet = new HashSet<>();
 
         //1、javabean相关的包
-        packageSet.addAll(getJavaBeanImportClass(form).stream().filter(e -> !e.contains("Entity;")).collect(Collectors.toList()));
+        packageSet.addAll(getJavaBeanImportClass(form).stream().collect(Collectors.toList()));
 
         //2、其他包
         if (form.getDeleteInfo().getIsSupportDelete()) {

@@ -149,7 +149,7 @@
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
   import { SmartLoading } from '/@/components/framework/smart-loading';
-  import { $!{name.lowerCamel}Api } from '/@/api/business/$!{name.lowerHyphenCamel}/$!{name.lowerHyphenCamel}-api';
+  import { $!{name.lowerCamel}Api } from '/@/api/business/marketing/$!{name.lowerHyphenCamel}/$!{name.lowerHyphenCamel}-api';
   import { smartSentry } from '/@/lib/smart-sentry';
   #foreach ($import in $frontImportList)
   $!{import}

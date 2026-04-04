@@ -22,7 +22,11 @@
             <artifactId>sa-base</artifactId>
             <version>3.0.0</version>
         </dependency>
-
+        <dependency>
+            <groupId>net.lab1024</groupId>
+            <artifactId>sa-marketing</artifactId>
+            <version>3.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>

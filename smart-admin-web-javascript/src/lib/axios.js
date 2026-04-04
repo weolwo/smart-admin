@@ -122,6 +122,7 @@ smartAxios.interceptors.response.use(
       message.destroy();
       message.error('网络发生错误');
     }
+    console.log("请求返回异常",error)
     return Promise.reject(error);
   }
 );

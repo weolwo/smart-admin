@@ -45,8 +45,8 @@ public class DaoVariableService extends CodeGenerateBaseVariableService {
         HashSet<String> packageSet = new HashSet<>();
 
         //1、javabean相关的包
-        packageSet.addAll(getJavaBeanImportClass(form).stream().filter( e-> e.contains("QueryForm;") || e.contains("VO;")|| e.contains("Entity;")).collect(Collectors.toList()));
-
+        packageSet.addAll(getJavaBeanImportClass(form).stream().collect(Collectors.toList()));
+        packageSet.removeIf(e-> e.contains("UpdateForm;") || e.contains("AddForm;"));
         //2、util
         packageSet.add("import java.util.List;");
 

@@ -5,15 +5,12 @@ $importClass
 #end
 import net.lab1024.sa.base.common.domain.ResponseDTO;
 import net.lab1024.sa.base.common.domain.PageResult;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
-
+import lombok.RequiredArgsConstructor;
 /**
  * ${basic.description} Controller
  *
@@ -24,49 +21,50 @@ import jakarta.validation.Valid;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "${basic.description}")
+@RequestMapping("/${name.lowerCamel}")
 public class ${name.upperCamel}Controller {
 
-    private final ${name.upperCamel}Service ${name.lowerCamel}Service;
+    private final ${name.upperCamel}Service Service;
 
     @Operation(summary = "分页查询")
-    @PostMapping("/${name.lowerCamel}/queryPage")
-    @SaCheckPermission("${name.lowerCamel}:query")
+    @PostMapping("/queryPage")
+    @SaCheckPermission(":query")
     public ResponseDTO<PageResult<${name.upperCamel}VO>> queryPage(@RequestBody @Valid ${name.upperCamel}QueryForm queryForm) {
-        return ResponseDTO.ok(${name.lowerCamel}Service.queryPage(queryForm));
+        return ResponseDTO.ok(Service.queryPage(queryForm));
     }
 
 #if($insertAndUpdate.isSupportInsertAndUpdate)
     @Operation(summary = "添加")
-    @PostMapping("/${name.lowerCamel}/add")
-    @SaCheckPermission("${name.lowerCamel}:add")
+    @PostMapping("/add")
+    @SaCheckPermission(":add")
     public ResponseDTO<String> add(@RequestBody @Valid ${name.upperCamel}AddForm addForm) {
-        return ${name.lowerCamel}Service.add(addForm);
+        return Service.add(addForm);
     }
 
     @Operation(summary = "更新")
-    @PostMapping("/${name.lowerCamel}/update")
-    @SaCheckPermission("${name.lowerCamel}:update")
+    @PostMapping("/update")
+    @SaCheckPermission(":update")
     public ResponseDTO<String> update(@RequestBody @Valid ${name.upperCamel}UpdateForm updateForm) {
-        return ${name.lowerCamel}Service.update(updateForm);
+        return Service.update(updateForm);
     }
 #end
 
 #if($deleteInfo.isSupportDelete)
     #if($deleteInfo.deleteEnum == "Batch" || $deleteInfo.deleteEnum == "SingleAndBatch")
     @Operation(summary = "批量删除")
-    @PostMapping("/${name.lowerCamel}/batchDelete")
-    @SaCheckPermission("${name.lowerCamel}:delete")
+    @PostMapping("/batchDelete")
+    @SaCheckPermission(":delete")
     public ResponseDTO<String> batchDelete(@RequestBody ValidateList<${primaryKeyJavaType}> idList) {
-        return ${name.lowerCamel}Service.batchDelete(idList);
+        return Service.batchDelete(idList);
     }
     #end
 
     #if($deleteInfo.deleteEnum == "Single" || $deleteInfo.deleteEnum == "SingleAndBatch")
     @Operation(summary = "单个删除")
-    @GetMapping("/${name.lowerCamel}/delete/{${primaryKeyFieldName}}")
-    @SaCheckPermission("${name.lowerCamel}:delete")
+    @GetMapping("/delete/{${primaryKeyFieldName}}")
+    @SaCheckPermission(":delete")
     public ResponseDTO<String> batchDelete(@PathVariable ${primaryKeyJavaType} ${primaryKeyFieldName}) {
-        return ${name.lowerCamel}Service.delete(${primaryKeyFieldName});
+        return Service.delete(${primaryKeyFieldName});
     }
     #end
 #end

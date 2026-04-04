@@ -98,7 +98,7 @@ public class CodeGeneratorTemplateService {
                 String upperCamel = new CodeGeneratorTool().lowerCamel2UpperCamel(moduleName);
                 String lowerHyphen = new CodeGeneratorTool().lowerCamel2LowerHyphen(moduleName);
                 String[] templateSplit = templateFile.split("/");
-                String fileName = templateFile.startsWith("java") ? upperCamel + templateSplit[templateSplit.length - 1] : lowerHyphen + "-" + templateSplit[templateSplit.length - 1];
+                String fileName = templateFile.startsWith("java") ? upperCamel + (templateSplit[templateSplit.length - 1].contains("Entity")?".java":templateSplit[templateSplit.length - 1]) : lowerHyphen + "-" + templateSplit[templateSplit.length - 1];
                 String fullPathFileName = templateFile.replaceAll(templateSplit[templateSplit.length - 1], fileName);
                 fullPathFileName = fullPathFileName.replaceAll("java/", "java/" + basic.getModuleName().toLowerCase() + "/");
                 fullPathFileName = fullPathFileName.replaceAll("js/", "js/" + lowerHyphen + "/");

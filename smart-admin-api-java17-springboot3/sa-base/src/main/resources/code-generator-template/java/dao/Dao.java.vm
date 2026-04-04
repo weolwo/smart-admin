@@ -1,13 +1,13 @@
 package ${packageName};
 
-#foreach ($importClass in $importPackageList)
-$importClass
-#end
+    #foreach ($importClass in $importPackageList)
+        $importClass
+    #end
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.springframework.stereotype.Component;
+import java.util.List;
 
 /**
  * ${basic.description} Dao
@@ -16,36 +16,57 @@ import org.springframework.stereotype.Component;
  * @Date ${basic.backendDate}
  * @Copyright ${basic.copyright}
  */
-
 @Mapper
-public interface ${name.upperCamel}Dao extends BaseMapper<${name.upperCamel}Entity> {
+public interface ${name.upperCamel}Dao extends BaseMapper<${name.upperCamel}> {
 
     /**
-     * 分页 查询
+     * 分页查询
      *
-     * @param page
-     * @param queryForm
-     * @return
+     * @param page 分页参数
+     * @param queryForm 查询表单
+     * @return 列表数据
      */
-    List<${name.upperCamel}VO> queryPage(Page page, @Param("queryForm") ${name.upperCamel}QueryForm queryForm);
+    List<${name.upperCamel}VO> queryPage(Page<?> page, @Param("queryForm") ${name.upperCamel}QueryForm queryForm);
 
-#if($deleteInfo.isSupportDelete)
-### 假删除
-#if(!${deleteInfo.isPhysicallyDeleted})
-#if($deleteInfo.deleteEnum == "Single" || $deleteInfo.deleteEnum == "SingleAndBatch")
     /**
-     * 更新删除状态
+     * 列表查询 (无分页)
+     *
+     * @param queryForm 查询表单
+     * @return 列表数据
      */
-    long updateDeleted(@Param("${primaryKeyFieldName}")${primaryKeyJavaType} ${primaryKeyFieldName},@Param("deletedFlag")boolean deletedFlag);
+    List<${name.upperCamel}VO> queryList(@Param("queryForm") ${name.upperCamel}QueryForm queryForm);
 
-#end
-#if($deleteInfo.deleteEnum == "Batch" || $deleteInfo.deleteEnum == "SingleAndBatch")
-    /**
-     * 批量更新删除状态
-     */
-    void batchUpdateDeleted(@Param("idList")List<${primaryKeyJavaType}> idList,@Param("deletedFlag")boolean deletedFlag);
+    #if($deleteInfo.isSupportDelete)
+        #if(!${deleteInfo.isPhysicallyDeleted})
+            // ----- 逻辑删除 -----
+            #if($deleteInfo.deleteEnum == "Single" || $deleteInfo.deleteEnum == "SingleAndBatch")
+                /**
+                 * 单个更新删除状态
+                 */
+                long updateDeleted(@Param("${primaryKeyFieldName}") ${primaryKeyJavaType} ${primaryKeyFieldName}, @Param("deletedFlag") boolean deletedFlag);
+            #end
 
-#end
-#end
-#end
+            #if($deleteInfo.deleteEnum == "Batch" || $deleteInfo.deleteEnum == "SingleAndBatch")
+                /**
+                 * 批量更新删除状态
+                 */
+                void batchUpdateDeleted(@Param("idList") List<${primaryKeyJavaType}> idList, @Param("deletedFlag") boolean deletedFlag);
+            #end
+        #else
+            // ----- 物理删除 -----
+            #if($deleteInfo.deleteEnum == "Single" || $deleteInfo.deleteEnum == "SingleAndBatch")
+                /**
+                 * 单个物理删除
+                 */
+                long deleteById(@Param("${primaryKeyFieldName}") ${primaryKeyJavaType} ${primaryKeyFieldName});
+            #end
+
+            #if($deleteInfo.deleteEnum == "Batch" || $deleteInfo.deleteEnum == "SingleAndBatch")
+                /**
+                 * 批量物理删除
+                 */
+                void batchDelete(@Param("idList") List<${primaryKeyJavaType}> idList);
+            #end
+        #end
+    #end
 }

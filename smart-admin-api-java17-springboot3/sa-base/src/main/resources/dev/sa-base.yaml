@@ -184,3 +184,5 @@ smart:
 script:
   # 核心引擎开关！(可选值: qlexpress, aviator, groovy)
   engine: qlexpress
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml

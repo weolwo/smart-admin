@@ -10,8 +10,7 @@ import net.lab1024.sa.base.common.domain.PageResult;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.stereotype.Service;
-
-import jakarta.annotation.Resource;
+import lombok.RequiredArgsConstructor;
 
 /**
  * ${basic.description} Service
@@ -40,8 +39,8 @@ public class ${name.upperCamel}Service {
      * 添加
      */
     public ResponseDTO<String> add(${name.upperCamel}AddForm addForm) {
-        ${name.upperCamel}Entity ${name.lowerCamel}Entity = SmartBeanUtil.copy(addForm, ${name.upperCamel}Entity.class);
-        ${name.lowerCamel}Dao.insert(${name.lowerCamel}Entity);
+        ${name.upperCamel} ${name.lowerCamel} = SmartBeanUtil.copy(addForm, ${name.upperCamel}.class);
+        ${name.lowerCamel}Dao.insert(${name.lowerCamel});
         return ResponseDTO.ok();
     }
 
@@ -50,8 +49,8 @@ public class ${name.upperCamel}Service {
      *
      */
     public ResponseDTO<String> update(${name.upperCamel}UpdateForm updateForm) {
-        ${name.upperCamel}Entity ${name.lowerCamel}Entity = SmartBeanUtil.copy(updateForm, ${name.upperCamel}Entity.class);
-        ${name.lowerCamel}Dao.updateById(${name.lowerCamel}Entity);
+        ${name.upperCamel} ${name.lowerCamel} = SmartBeanUtil.copy(updateForm, ${name.upperCamel}.class);
+        ${name.lowerCamel}Dao.updateById(${name.lowerCamel});
         return ResponseDTO.ok();
     }
 #end

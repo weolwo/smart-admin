@@ -13,6 +13,7 @@
 	<modules>
         <module>sa-base</module>
 		<module>sa-admin</module>
+        <module>sa-marketing</module>
     </modules>
 
     <properties>

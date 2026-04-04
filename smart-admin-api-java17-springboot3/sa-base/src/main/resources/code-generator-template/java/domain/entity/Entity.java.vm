@@ -14,7 +14,7 @@ $importClass
 
 @Data
 @TableName("${tableName}")
-public class ${name.upperCamel}Entity {
+public class ${name.upperCamel} {
 #foreach ($field in $fields)
 
     /**

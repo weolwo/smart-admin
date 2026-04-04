@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.marketing.prize.mapping.dao.TaskPrizeMappingDao">
+
+    <resultMap id="TaskPrizeMappingVO" type="net.lab1024.sa.marketing.prize.mapping.domain.vo.TaskPrizeMappingVO">
+            <result column="id" property="id" />
+            <result column="task_config_id" property="taskConfigId" />
+            <result column="stage_level" property="stageLevel" />
+            <result column="stage_threshold" property="stageThreshold" />
+            <result column="prize_group_id" property="prizeGroupId" />
+            <result column="create_by" property="createBy" />
+            <result column="create_time" property="createTime" />
+            <result column="update_by" property="updateBy" />
+            <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                task_config_id, 
+                stage_level, 
+                stage_threshold, 
+                prize_group_id, 
+                create_by, 
+                create_time, 
+                update_by, 
+                update_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="TaskPrizeMappingVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_task_prize_mapping
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="TaskPrizeMappingVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_task_prize_mapping
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+                <delete id="batchDelete">
+                    delete from t_task_prize_mapping
+                    where id in
+                    <foreach collection="idList" open="(" close=")" separator="," item="item">
+                        #{item}
+                    </foreach>
+                </delete>
+                <delete id="deleteById">
+                    delete from t_task_prize_mapping
+                        where id = #{id}
+                </delete>
+
+</mapper>

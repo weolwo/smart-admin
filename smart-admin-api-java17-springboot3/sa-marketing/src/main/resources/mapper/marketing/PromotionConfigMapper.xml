@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.marketing.riskmanager.config.dao.PromotionConfigDao">
+
+    <resultMap id="PromotionConfigVO" type="net.lab1024.sa.marketing.riskmanager.config.domain.vo.PromotionConfigVO">
+            <result column="id" property="id" />
+            <result column="promo_name" property="promoName" />
+            <result column="prize_type" property="prizeType" />
+            <result column="total_quota" property="totalQuota" />
+            <result column="used_quota" property="usedQuota" />
+            <result column="total_amount" property="totalAmount" />
+            <result column="used_amount" property="usedAmount" />
+            <result column="single_max_quota" property="singleMaxQuota" />
+            <result column="single_max_amount" property="singleMaxAmount" />
+            <result column="limit_period" property="limitPeriod" />
+            <result column="identify_limit" property="identifyLimit" />
+            <result column="phone_limit" property="phoneLimit" />
+            <result column="ip_limit" property="ipLimit" />
+            <result column="device_limit" property="deviceLimit" />
+            <result column="fingerprint_limit" property="fingerprintLimit" />
+            <result column="mutex_rule" property="mutexRule" />
+            <result column="review_type" property="reviewType" />
+            <result column="review_threshold" property="reviewThreshold" />
+            <result column="status" property="status" />
+            <result column="create_by" property="createBy" />
+            <result column="create_time" property="createTime" />
+            <result column="update_by" property="updateBy" />
+            <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                promo_name, 
+                prize_type, 
+                total_quota, 
+                used_quota, 
+                total_amount, 
+                used_amount, 
+                single_max_quota, 
+                single_max_amount, 
+                limit_period, 
+                identify_limit, 
+                phone_limit, 
+                ip_limit, 
+                device_limit, 
+                fingerprint_limit, 
+                mutex_rule, 
+                review_type, 
+                review_threshold, 
+                status, 
+                create_by, 
+                create_time, 
+                update_by, 
+                update_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+                        <if test="queryForm.promoName != null">
+                            AND promo_name = #{queryForm.promoName}
+                        </if>
+                        <if test="queryForm.prizeType != null">
+                            AND prize_type = #{queryForm.prizeType}
+                        </if>
+                        <if test="queryForm.createTimeBegin != null">
+                            AND create_time &gt;= #{queryForm.createTimeBegin}
+                        </if>
+                        <if test="queryForm.createTimeEnd != null">
+                            AND create_time &lt;= #{queryForm.createTimeEnd}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="PromotionConfigVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_promotion_config
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="PromotionConfigVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_promotion_config
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+                <delete id="batchDelete">
+                    delete from t_promotion_config
+                    where id in
+                    <foreach collection="idList" open="(" close=")" separator="," item="item">
+                        #{item}
+                    </foreach>
+                </delete>
+                <delete id="deleteById">
+                    delete from t_promotion_config
+                        where id = #{id}
+                </delete>
+
+</mapper>

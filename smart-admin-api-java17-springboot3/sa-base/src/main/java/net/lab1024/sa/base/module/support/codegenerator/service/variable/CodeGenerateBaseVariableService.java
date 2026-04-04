@@ -44,7 +44,7 @@ public abstract class CodeGenerateBaseVariableService {
         String upperCamelName = CaseFormat.UPPER_CAMEL.to(CaseFormat.UPPER_CAMEL, form.getBasic().getModuleName());
         ArrayList<String> list = new ArrayList<>();
 
-        list.add("import " + form.getBasic().getJavaPackageName() + ".domain.entity." + upperCamelName + "Entity;");
+        list.add("import " + form.getBasic().getJavaPackageName() + ".domain.entity." + upperCamelName + ";");
 
         list.add("import " + form.getBasic().getJavaPackageName() + ".domain.form." + upperCamelName + "AddForm;");
         list.add("import " + form.getBasic().getJavaPackageName() + ".domain.form." + upperCamelName + "UpdateForm;");

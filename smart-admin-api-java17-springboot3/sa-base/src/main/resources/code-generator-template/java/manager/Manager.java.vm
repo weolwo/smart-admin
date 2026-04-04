@@ -6,7 +6,7 @@ $importClass
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;
-
+import lombok.RequiredArgsConstructor;
 /**
  * ${basic.description}  Manager
  *
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
  */
 @RequiredArgsConstructor
 @Service
-public class ${name.upperCamel}Manager extends ServiceImpl<${name.upperCamel}Dao, ${name.upperCamel}Entity> {
+public class ${name.upperCamel}Manager extends ServiceImpl<${name.upperCamel}Dao, ${name.upperCamel}> {
 
 
 }
