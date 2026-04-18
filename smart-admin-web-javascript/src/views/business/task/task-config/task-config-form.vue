@@ -1,71 +1,77 @@
 <!--
-  * 业务级-任务规则配置表
+  * 任务配置表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 16:51:54
+  * @Date:      2026-04-18 20:55:10
   * @Copyright  weolwo
 -->
 <template>
-  <a-modal :title="form.id ? '编辑' : '添加'" :width="100" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
+  <a-modal :title="form.id ? '编辑' : '添加'" :width="800" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
     <a-form ref="formRef" :model="form" :rules="rules" :label-col="{ span: 5 }">
       <a-form-item label="id" name="id">
         <a-input-number style="width: 100%" v-model:value="form.id" placeholder="id" />
       </a-form-item>
+      <a-form-item label="活动编码" name="activityCode">
+        <a-input style="width: 100%" v-model:value="form.activityCode" placeholder="活动编码" />
+      </a-form-item>
       <a-form-item label="租户ID" name="tenantId">
         <a-input style="width: 100%" v-model:value="form.tenantId" placeholder="租户ID" />
       </a-form-item>
-      <a-form-item label="面向C端展示的任务名称" name="taskName">
-        <a-input style="width: 100%" v-model:value="form.taskName" placeholder="面向C端展示的任务名称" />
+      <a-form-item label="任务名称" name="taskName">
+        <a-input style="width: 100%" v-model:value="form.taskName" placeholder="任务名称" />
       </a-form-item>
-      <a-form-item label="关联模板Code" name="templateCode">
-        <a-input style="width: 100%" v-model:value="form.templateCode" placeholder="关联模板Code" />
+      <a-form-item label="模板Code" name="templateCode">
+        <a-input style="width: 100%" v-model:value="form.templateCode" placeholder="模板Code" />
       </a-form-item>
-      <a-form-item
-        label="【字典】触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)"
-        name="triggerEvent"
-      >
+      <a-form-item label="触发事件" name="triggerEvent">
         <a-input
           style="width: 100%"
           v-model:value="form.triggerEvent"
-          placeholder="【字典】触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)"
+          placeholder="触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)"
         />
       </a-form-item>
-      <a-form-item label="【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)" name="taskGroup">
-        <a-input
-          style="width: 100%"
-          v-model:value="form.taskGroup"
-          placeholder="【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)"
-        />
+      <a-form-item label="任务分组" name="taskGroup">
+        <a-input style="width: 100%" v-model:value="form.taskGroup" placeholder="任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)" />
       </a-form-item>
-      <a-form-item label="【字典】目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)" name="targetAudience">
-        <a-input
-          style="width: 100%"
-          v-model:value="form.targetAudience"
-          placeholder="【字典】目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)"
-        />
+      <a-form-item label="目标人群" name="targetAudience">
+        <a-input style="width: 100%" v-model:value="form.targetAudience" placeholder="目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)" />
       </a-form-item>
-      <a-form-item label="【字典】参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)" name="limitType">
+      <a-form-item label="参与频次" name="limitType">
         <a-input
           style="width: 100%"
           v-model:value="form.limitType"
-          placeholder="【字典】参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)"
+          placeholder="参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)"
         />
       </a-form-item>
-      <a-form-item label="配合频次类型，限制次数" name="limitCount">
+      <a-form-item label="限制次数" name="limitCount">
         <a-input-number style="width: 100%" v-model:value="form.limitCount" placeholder="配合频次类型，限制次数" />
       </a-form-item>
-      <a-form-item label="业务规则参数 JSON" name="ruleConfig">
-        <a-textarea style="width: 100%" v-model:value="form.ruleConfig" placeholder="业务规则参数 JSON" />
+      <a-form-item label="排序权重" name="sortWeight">
+        <a-input-number style="width: 100%" v-model:value="form.sortWeight" placeholder="排序权重，越大越靠前" />
       </a-form-item>
-      <a-form-item label="前端排序权重，越大越靠前" name="sortWeight">
-        <a-input-number style="width: 100%" v-model:value="form.sortWeight" placeholder="前端排序权重，越大越靠前" />
+      <a-form-item label="跳转地址" name="actionUrl">
+        <a-input style="width: 100%" v-model:value="form.actionUrl" placeholder="跳转地址" />
       </a-form-item>
-      <a-form-item label="【字典】任务状态：0-草稿, 1-待生效(未到时间), 2-生效中, 3-已下线" name="status">
-        <a-input-number
-          style="width: 100%"
-          v-model:value="form.status"
-          placeholder="【字典】任务状态：0-草稿, 1-待生效(未到时间), 2-生效中, 3-已下线"
-        />
+      <a-form-item label="任务状态" name="status">
+        <a-input-number style="width: 100%" v-model:value="form.status" placeholder="任务状态 1-待生效, 2-生效中, 3-已下线" />
+      </a-form-item>
+      <a-form-item label="开始时间" name="startTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.startTime" style="width: 100%" placeholder="开始时间" />
+      </a-form-item>
+      <a-form-item label="结束时间" name="endTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.endTime" style="width: 100%" placeholder="结束时间" />
+      </a-form-item>
+      <a-form-item label="创建人" name="createBy">
+        <a-input style="width: 100%" v-model:value="form.createBy" placeholder="创建人" />
+      </a-form-item>
+      <a-form-item label="创建时间" name="createTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.createTime" style="width: 100%" placeholder="创建时间" />
+      </a-form-item>
+      <a-form-item label="更新人" name="updateBy">
+        <a-input style="width: 100%" v-model:value="form.updateBy" placeholder="更新人" />
+      </a-form-item>
+      <a-form-item label="更新时间" name="updateTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.updateTime" style="width: 100%" placeholder="更新时间" />
       </a-form-item>
     </a-form>
 
@@ -81,9 +87,9 @@
   import { reactive, ref, nextTick } from 'vue';
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskConfigApi } from '/src/api/business/task/task-config/task-config-api';
-  import { smartSentry } from '/src/lib/smart-sentry';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskConfigApi } from '/@/api/business/task/task-config/task-config-api';
+  import { smartSentry } from '/@/lib/smart-sentry';
 
   // ------------------------ 事件 ------------------------
 
@@ -120,37 +126,42 @@
 
   const formDefault = {
     id: undefined, //id
+    activityCode: undefined, //活动编码
     tenantId: undefined, //租户ID
-    taskName: undefined, //面向C端展示的任务名称
-    templateCode: undefined, //关联模板Code
-    triggerEvent: undefined, //【字典】触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)
-    taskGroup: undefined, //【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)
-    targetAudience: undefined, //【字典】目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)
-    limitType: undefined, //【字典】参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)
+    taskName: undefined, //任务名称
+    templateCode: undefined, //模板Code
+    triggerEvent: undefined, //触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)
+    taskGroup: undefined, //任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)
+    targetAudience: undefined, //目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)
+    limitType: undefined, //参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)
     limitCount: undefined, //配合频次类型，限制次数
-    ruleConfig: undefined, //业务规则参数 JSON
-    sortWeight: undefined, //前端排序权重，越大越靠前
-    status: undefined, //【字典】任务状态：0-草稿, 1-待生效(未到时间), 2-生效中, 3-已下线
+    ruleConfig: undefined, //规则配置
+    sortWeight: undefined, //排序权重，越大越靠前
+    actionUrl: undefined, //跳转地址
+    uiConfig: undefined, //展示UI(图标/角标等)
+    status: undefined, //任务状态 1-待生效, 2-生效中, 3-已下线
+    startTime: undefined, //开始时间
+    endTime: undefined, //结束时间
+    createBy: undefined, //创建人
+    createTime: undefined, //创建时间
+    updateBy: undefined, //更新人
+    updateTime: undefined, //更新时间
   };
 
   let form = reactive({ ...formDefault });
 
   const rules = {
     id: [{ required: true, message: 'id 必填' }],
+    activityCode: [{ required: true, message: '活动编码 必填' }],
     tenantId: [{ required: true, message: '租户ID 必填' }],
-    taskName: [{ required: true, message: '面向C端展示的任务名称 必填' }],
-    templateCode: [{ required: true, message: '关联模板Code 必填' }],
+    taskName: [{ required: true, message: '任务名称 必填' }],
+    templateCode: [{ required: true, message: '模板Code 必填' }],
     triggerEvent: [
-      {
-        required: true,
-        message: '【字典】触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义) 必填',
-      },
+      { required: true, message: '触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义) 必填' },
     ],
-    limitType: [{ required: true, message: '【字典】参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制) 必填' }],
+    limitType: [{ required: true, message: '参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制) 必填' }],
     limitCount: [{ required: true, message: '配合频次类型，限制次数 必填' }],
-    ruleConfig: [{ required: true, message: '业务规则参数 JSON 必填' }],
-    sortWeight: [{ required: true, message: '前端排序权重，越大越靠前 必填' }],
-    status: [{ required: true, message: '【字典】任务状态：0-草稿, 1-待生效(未到时间), 2-生效中, 3-已下线 必填' }],
+    ruleConfig: [{ required: true, message: '规则配置 必填' }],
   };
 
   // 点击确定，验证表单

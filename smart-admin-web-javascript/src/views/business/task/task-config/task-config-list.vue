@@ -1,36 +1,35 @@
 <!--
-  * 业务级-任务规则配置表
+  * 任务配置表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 16:51:54
+  * @Date:      2026-04-18 20:55:10
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
-      <a-form-item label="面向C端展示的任务名称" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.taskName" placeholder="面向C端展示的任务名称" />
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
       </a-form-item>
-      <a-form-item label="关联模板Code" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.templateCode" placeholder="关联模板Code" />
+      <a-form-item label="任务名称" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.taskName" placeholder="任务名称" />
       </a-form-item>
-      <a-form-item label="【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)" class="smart-query-form-item">
+      <a-form-item label="模板Code" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.templateCode" placeholder="模板Code" />
+      </a-form-item>
+      <a-form-item label="活动编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.activityCode" placeholder="活动编码" />
+      </a-form-item>
+      <a-form-item label="开始时间" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.startTime" placeholder="开始时间" />
+      </a-form-item>
+      <a-form-item label="触发事件" class="smart-query-form-item">
         <a-input
           style="width: 200px"
-          v-model:value="queryForm.taskGroup"
-          placeholder="【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)"
+          v-model:value="queryForm.triggerEvent"
+          placeholder="触发事件：ORDERPAID(支付), MEMBERREGISTER(注册), DAILYSIGN(签到), PAGEVIEW(浏览), CUSTOM(自定义)"
         />
-      </a-form-item>
-      <a-form-item label="【字典】目标人群：ALL(全部), NEWMEMBER(新会员), OLDMEMBER(老会员)" class="smart-query-form-item">
-        <a-input
-          style="width: 200px"
-          v-model:value="queryForm.targetAudience"
-          placeholder="【字典】目标人群：ALL(全部), NEWMEMBER(新会员), OLDMEMBER(老会员)"
-        />
-      </a-form-item>
-      <a-form-item label="任务开始时间" class="smart-query-form-item">
-        <a-range-picker v-model:value="queryForm.startTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeStartTime" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -118,12 +117,11 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskConfigApi } from '/src/api/business/task/task-config/task-config-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskConfigApi } from '/@/api/business/task/task-config/task-config-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import TaskConfigForm from './task-config-form.vue';
 
   // ---------------------------- 表格列 ----------------------------
@@ -135,37 +133,42 @@
       ellipsis: true,
     },
     {
+      title: '活动编码',
+      dataIndex: 'activityCode',
+      ellipsis: true,
+    },
+    {
       title: '租户ID',
       dataIndex: 'tenantId',
       ellipsis: true,
     },
     {
-      title: '面向C端展示的任务名称',
+      title: '任务名称',
       dataIndex: 'taskName',
       ellipsis: true,
     },
     {
-      title: '关联模板Code',
+      title: '模板Code',
       dataIndex: 'templateCode',
       ellipsis: true,
     },
     {
-      title: '【字典】触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)',
+      title: '触发事件：ORDER_PAID(支付), MEMBER_REGISTER(注册), DAILY_SIGN(签到), PAGE_VIEW(浏览), CUSTOM(自定义)',
       dataIndex: 'triggerEvent',
       ellipsis: true,
     },
     {
-      title: '【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)',
+      title: '任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)',
       dataIndex: 'taskGroup',
       ellipsis: true,
     },
     {
-      title: '【字典】目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)',
+      title: '目标人群：ALL(全部), NEW_MEMBER(新会员), OLD_MEMBER(老会员)',
       dataIndex: 'targetAudience',
       ellipsis: true,
     },
     {
-      title: '【字典】参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)',
+      title: '参与频次：ONCE(终身一次), DAILY(每日重复), WEEKLY(每周重复), UNLIMITED(无限制)',
       dataIndex: 'limitType',
       ellipsis: true,
     },
@@ -175,37 +178,37 @@
       ellipsis: true,
     },
     {
-      title: '业务规则参数 JSON',
+      title: '规则配置',
       dataIndex: 'ruleConfig',
       ellipsis: true,
     },
     {
-      title: '前端排序权重，越大越靠前',
+      title: '排序权重，越大越靠前',
       dataIndex: 'sortWeight',
       ellipsis: true,
     },
     {
-      title: '前端【去完成】跳转路由',
+      title: '跳转地址',
       dataIndex: 'actionUrl',
       ellipsis: true,
     },
     {
-      title: '前端展示UI补充(图标/角标等)',
+      title: '展示UI(图标/角标等)',
       dataIndex: 'uiConfig',
       ellipsis: true,
     },
     {
-      title: '【字典】任务状态：0-草稿, 1-待生效(未到时间), 2-生效中, 3-已下线',
+      title: '任务状态 1-待生效, 2-生效中, 3-已下线',
       dataIndex: 'status',
       ellipsis: true,
     },
     {
-      title: '任务开始时间',
+      title: '开始时间',
       dataIndex: 'startTime',
       ellipsis: true,
     },
     {
-      title: '任务结束时间',
+      title: '结束时间',
       dataIndex: 'endTime',
       ellipsis: true,
     },
@@ -240,13 +243,12 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
-    taskName: undefined, //面向C端展示的任务名称
-    templateCode: undefined, //关联模板Code
-    taskGroup: undefined, //【字典】任务分组：NEWBIE(新手), DAILY(日常), PROMO(大促), VIP(会员专属)
-    targetAudience: undefined, //【字典】目标人群：ALL(全部), NEWMEMBER(新会员), OLDMEMBER(老会员)
-    startTime: [], //任务开始时间
-    startTimeBegin: undefined, //任务开始时间 开始
-    startTimeEnd: undefined, //任务开始时间 结束
+    tenantId: undefined, //租户ID
+    taskName: undefined, //任务名称
+    templateCode: undefined, //模板Code
+    activityCode: undefined, //活动编码
+    startTime: undefined, //开始时间
+    triggerEvent: undefined, //触发事件：ORDERPAID(支付), MEMBERREGISTER(注册), DAILYSIGN(签到), PAGEVIEW(浏览), CUSTOM(自定义)
     pageNum: 1,
     pageSize: 10,
   };
@@ -285,11 +287,6 @@
     } finally {
       tableLoading.value = false;
     }
-  }
-
-  function onChangeStartTime(dates, dateStrings) {
-    queryForm.startTimeBegin = dateStrings[0];
-    queryForm.startTimeEnd = dateStrings[1];
   }
 
   onMounted(queryData);
