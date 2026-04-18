@@ -1,0 +1,21 @@
+package net.lab1024.sa.task.prizemapping.manager;
+
+import net.lab1024.sa.task.prizemapping.dao.TaskPrizeMappingDao;
+import net.lab1024.sa.task.prizemapping.domain.entity.TaskPrizeMapping;
+
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+/**
+ * 任务阶段与奖励映射表  Manager
+ *
+ * @Author weolwo
+ * @Date 2026-04-18 20:41:02
+ * @Copyright weolwo
+ */
+@RequiredArgsConstructor
+@Service
+public class TaskPrizeMappingManager extends ServiceImpl<TaskPrizeMappingDao, TaskPrizeMapping> {
+
+
+}

@@ -1,14 +1,23 @@
 <!--
-  * 业务级-任务阶段与奖励包映射表
+  * 任务阶段与奖励映射表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:01:05
+  * @Date:      2026-04-18 20:41:02
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="任务配置ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.taskConfigId" placeholder="任务配置ID" />
+      </a-form-item>
+      <a-form-item label="奖励编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.prizeCode" placeholder="奖励编码" />
+      </a-form-item>
+      <a-form-item label="创建时间" class="smart-query-form-item">
+        <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
+      </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
           <template #icon>
@@ -95,12 +104,13 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskPrizeMappingApi } from '/@/api/business/marketing/task-prize-mapping/task-prize-mapping-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskPrizeMappingApi } from '/@/api/business/prize/task-prize-mapping/task-prize-mapping-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import TaskPrizeMappingForm from './task-prize-mapping-form.vue';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -116,8 +126,13 @@
       ellipsis: true,
     },
     {
-      title: '关联的任务配置ID (t_task_config.id)',
+      title: '任务配置ID',
       dataIndex: 'taskConfigId',
+      ellipsis: true,
+    },
+    {
+      title: '阶段达标条件：如 {"min": 10, "max": 99} 或 {"action": "share"}',
+      dataIndex: 'stageCondition',
       ellipsis: true,
     },
     {
@@ -126,13 +141,18 @@
       ellipsis: true,
     },
     {
-      title: '达标阈值快照：如 "100.00" 或 "3"',
-      dataIndex: 'stageThreshold',
+      title: '奖励编码',
+      dataIndex: 'prizeCode',
       ellipsis: true,
     },
     {
-      title: '触发的奖励包ID (t_prize_group.id)',
-      dataIndex: 'prizeGroupId',
+      title: '计算类型：FIXED(固定), RATIO(比例), FORMULA(公式)',
+      dataIndex: 'prizeMode',
+      ellipsis: true,
+    },
+    {
+      title: '动态发奖策略JSON：如 {"amount": 20} 或 {"ratio": 0.05}',
+      dataIndex: 'prizeStrategy',
       ellipsis: true,
     },
     {
@@ -166,6 +186,11 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    taskConfigId: undefined, //任务配置ID
+    prizeCode: undefined, //奖励编码
+    createTime: [], //创建时间
+    createTimeBegin: undefined, //创建时间 开始
+    createTimeEnd: undefined, //创建时间 结束
     pageNum: 1,
     pageSize: 10,
   };
@@ -204,6 +229,11 @@
     } finally {
       tableLoading.value = false;
     }
+  }
+
+  function onChangeCreateTime(dates, dateStrings) {
+    queryForm.createTimeBegin = dateStrings[0];
+    queryForm.createTimeEnd = dateStrings[1];
   }
 
   onMounted(queryData);
