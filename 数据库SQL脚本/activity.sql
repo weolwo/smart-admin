@@ -1,0 +1,102 @@
+-- 1. 活动主表 (大促容器)
+DROP TABLE IF EXISTS `t_activity_config`;
+CREATE TABLE `t_activity_config`
+(
+    `id`            bigint      NOT NULL AUTO_INCREMENT,
+    `tenant_id`     varchar(16) NOT NULL DEFAULT '0',
+    `activity_code` varchar(32) NOT NULL COMMENT '活动唯一编码 (如: 2026_MAY_DAY)',
+    `activity_name` varchar(64) NOT NULL COMMENT '活动名称',
+    `activity_type` varchar(32) NOT NULL COMMENT '【字典】活动类型：WHEEL(大转盘), GRID(九宫格), BLIND_BOX(盲盒)',
+    `status`        tinyint     NOT NULL DEFAULT 0 COMMENT '【字典】状态：0-草稿, 1-上线, 2-下线',
+    `start_time`    datetime    NOT NULL COMMENT '活动开始时间',
+    `end_time`      datetime    NOT NULL COMMENT '活动结束时间',
+    `script_id`     varchar(32)          DEFAULT NULL COMMENT '准入规则脚本(关联QLExpress，控制整体门槛)',
+    `create_by`     varchar(32)          DEFAULT NULL,
+    `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP,
+    `update_by`     varchar(32)          DEFAULT NULL,
+    `update_time`   datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_act_code` (`activity_code`)
+) COMMENT ='活动配置';
+
+-- 2. 活动全局奖项库 (全局风控与白名单)
+DROP TABLE IF EXISTS `t_prize_pool_item`;
+CREATE TABLE `t_prize_pool_item`
+(
+    `id`             bigint         NOT NULL AUTO_INCREMENT,
+    `tenant_id`      varchar(16)    NOT NULL DEFAULT '0',
+    `activity_code`  varchar(32)    NOT NULL COMMENT '归属活动编码',
+    `item_name`      varchar(128)   NOT NULL COMMENT '奖项展示名称(如: 豪华茅台)',
+    `item_value`     decimal(10, 4) NULL     default 0.0000 COMMENT '奖项价值',
+    `item_image`     varchar(255)            DEFAULT NULL COMMENT '奖项UI图标URL',
+    `prize_code`     varchar(64)    NOT NULL COMMENT '关联(t_prize_config)',
+    `user_max_count` int            NOT NULL DEFAULT '-1' COMMENT '单人限领次数: -1不限, 1表示每人最多中一次',
+    `total_stock`    int            NOT NULL DEFAULT '-1' COMMENT '本次活动总共出几个？-1不限',
+    `used_stock`     int            NOT NULL DEFAULT '0' COMMENT '跨奖池累计已出数量',
+    `white_list`     json                    DEFAULT NULL COMMENT '活动级白名单：指定用户必中',
+
+    `create_time`    datetime                DEFAULT CURRENT_TIMESTAMP,
+    `update_time`    datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_activity` (`activity_code`)
+) COMMENT ='奖池奖项库';
+
+-- 3. 奖池配置表 (多池支持与抽奖门票)
+DROP TABLE IF EXISTS `t_prize_pool_config`;
+CREATE TABLE `t_prize_pool_config`
+(
+    `id`              bigint         NOT NULL AUTO_INCREMENT,
+    `tenant_id`       varchar(16)    NOT NULL DEFAULT '0',
+    `activity_code`   varchar(32)    NOT NULL COMMENT '活动编码',
+    `pool_code`       varchar(32)    NOT NULL COMMENT '奖池唯一编码 (如: VIP_POOL)',
+    `pool_name`       varchar(128)   NOT NULL COMMENT '奖池名称',
+    -- 建议改名如下，看起来会更有“门票”和“资产”的感觉
+    `cost_asset_type` varchar(32)    NOT NULL DEFAULT 'CREDIT' COMMENT '消耗资产类型: CREDIT(积分), TICKET(抽奖券), NONE(无消耗)',
+    `cost_value`      decimal(18, 4) NOT NULL DEFAULT 0.0000 COMMENT '消耗数值(单价)',
+    `reset_period`    varchar(32)    NOT NULL DEFAULT 'DAY' COMMENT '重置周期，天，周，月，活动期间',
+    `draw_mode`       tinyint        NULL     DEFAULT 1 COMMENT '抽奖算法: 1-按概率(probability), 2-按库存比例(stock_ratio)',
+    `script_id`       varchar(64)             DEFAULT NULL COMMENT '进入该奖池的前置脚本',
+    `status`          tinyint        NOT NULL DEFAULT 1 comment '0关闭，1开启',
+    `create_time`     datetime                DEFAULT CURRENT_TIMESTAMP,
+    `update_time`     datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_pool_code` (`pool_code`)
+) COMMENT ='奖池配置';
+
+-- 4. 奖池转盘格子映射表 (纯概率配置)
+DROP TABLE IF EXISTS `t_pool_prize_mapping`;
+CREATE TABLE `t_pool_prize_mapping`
+(
+    `id`            bigint        NOT NULL AUTO_INCREMENT,
+    `tenant_id`     varchar(16)   NOT NULL DEFAULT '0',
+    `pool_code`     varchar(32)   NOT NULL COMMENT '归属奖池',
+    `prize_item_id` bigint        NOT NULL COMMENT '关联 t_prize_pool_item',
+    `probability`   decimal(8, 4) NOT NULL DEFAULT 0.0000 COMMENT '本奖池内中奖概率(万分位)',
+    `sort_weight`   int           NOT NULL DEFAULT 0 COMMENT '转盘排布序号',
+
+    `create_time`   datetime               DEFAULT CURRENT_TIMESTAMP,
+    `update_time`   datetime               DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_pool_prize` (`pool_code`, `prize_item_id`)
+) COMMENT ='奖池奖项映射';
+
+-- 5. 抽奖流水记录表
+DROP TABLE IF EXISTS `t_draw_prize_log`;
+CREATE TABLE `t_draw_prize_log`
+(
+    `id`            bigint      NOT NULL AUTO_INCREMENT,
+    `tenant_id`     varchar(16) NOT NULL DEFAULT '0',
+    `trace_id`      varchar(64) NOT NULL COMMENT '请求链路防重ID',
+    `activity_code` varchar(32) NOT NULL COMMENT '活动编码',
+    `pool_code`     varchar(32) NOT NULL COMMENT '实际抽奖的奖池编码',
+    `member_name`   varchar(64) NOT NULL COMMENT '抽奖人',
+
+    `prize_item_id` bigint      NOT NULL COMMENT '抽中的奖项ID',
+    `prize_code`    varchar(32) NOT NULL COMMENT '最终发奖的奖品code',
+    `issue_status`  tinyint     NULL     DEFAULT '0' COMMENT '履约状态: 0-请求底层中, 1-发奖成功, 2-底层风控拦截/库存不足, 3-异常',
+    `remark`        varchar(64) NULL COMMENT '备注',
+
+    `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_mem_act` (`member_name`, `activity_code`)
+) COMMENT ='抽奖记录';
