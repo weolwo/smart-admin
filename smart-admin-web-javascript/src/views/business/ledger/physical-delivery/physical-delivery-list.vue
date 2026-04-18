@@ -1,28 +1,34 @@
 <!--
-  * 资产域-实物发货物流表
+  * 发货物流表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-04 16:12:19
+  * @Date:      2026-04-19 00:03:01
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="来源发奖提案ID" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.proposalId" placeholder="来源发奖提案ID" />
+      <a-form-item label="发奖提案ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.proposalId" placeholder="发奖提案ID" />
       </a-form-item>
-      <a-form-item label="【字典】状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="【字典】状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回" />
-      </a-form-item>
-      <a-form-item label="创建时间" class="smart-query-form-item">
-        <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
+      <a-form-item label="来源类型" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.sourceType" placeholder="来源类型" />
       </a-form-item>
       <a-form-item label="物流单号" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.logisticsNo" placeholder="物流单号" />
+      </a-form-item>
+      <a-form-item label="状态" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回" />
+      </a-form-item>
+      <a-form-item label="创建时间" class="smart-query-form-item">
+        <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -110,13 +116,13 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { physicalDeliveryApi } from '/src/api/business/ledger/physical-delivery/physical-delivery-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { physicalDeliveryApi } from '/@/api/business/ledger/physical-delivery/physical-delivery-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import PhysicalDeliveryForm from './physical-delivery-form.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -137,13 +143,13 @@
       ellipsis: true,
     },
     {
-      title: '来源发奖提案ID',
+      title: '发奖提案ID',
       dataIndex: 'proposalId',
       ellipsis: true,
     },
     {
-      title: '触发此发货的奖品配置ID (t_prize_config.id)',
-      dataIndex: 'prizeConfigId',
+      title: '来源类型',
+      dataIndex: 'sourceType',
       ellipsis: true,
     },
     {
@@ -162,7 +168,7 @@
       ellipsis: true,
     },
     {
-      title: '【字典】物流公司：SF, JD, YTO',
+      title: '物流公司',
       dataIndex: 'logisticsCompany',
       ellipsis: true,
     },
@@ -172,7 +178,7 @@
       ellipsis: true,
     },
     {
-      title: '【字典】状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回',
+      title: '状态',
       dataIndex: 'status',
       ellipsis: true,
     },
@@ -207,13 +213,15 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    proposalId: undefined, //来源发奖提案ID
-    status: undefined, //【字典】状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回
+    proposalId: undefined, //发奖提案ID
+    sourceType: undefined, //来源类型
+    logisticsNo: undefined, //物流单号
+    status: undefined, //状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回
     createTime: [], //创建时间
     createTimeBegin: undefined, //创建时间 开始
     createTimeEnd: undefined, //创建时间 结束
-    logisticsNo: undefined, //物流单号
     pageNum: 1,
     pageSize: 10,
   };
