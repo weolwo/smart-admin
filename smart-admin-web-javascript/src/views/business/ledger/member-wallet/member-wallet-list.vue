@@ -1,19 +1,22 @@
 <!--
-  * 账务域-会员资金/积分主账表
+  * 会员钱包表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:17:33
+  * @Date:      2026-04-18 23:56:48
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="【字典】状态：0-冻结, 1-正常" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="【字典】状态：0-冻结, 1-正常" />
+      <a-form-item label="状态" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="状态：0-冻结, 1-正常" />
       </a-form-item>
       <a-form-item label="创建时间" class="smart-query-form-item">
         <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
@@ -104,12 +107,12 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { memberWalletApi } from '/src/api/business/ledger/member-wallet/member-wallet-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { memberWalletApi } from '/@/api/business/ledger/member-wallet/member-wallet-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
   import MemberWalletForm from './member-wallet-form.vue';
 
   // ---------------------------- 表格列 ----------------------------
@@ -141,13 +144,8 @@
       ellipsis: true,
     },
     {
-      title: '【字典】状态：0-冻结, 1-正常',
+      title: '状态',
       dataIndex: 'status',
-      ellipsis: true,
-    },
-    {
-      title: '乐观锁版本号',
-      dataIndex: 'version',
       ellipsis: true,
     },
     {
@@ -181,8 +179,9 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    status: undefined, //【字典】状态：0-冻结, 1-正常
+    status: undefined, //状态：0-冻结, 1-正常
     createTime: [], //创建时间
     createTimeBegin: undefined, //创建时间 开始
     createTimeEnd: undefined, //创建时间 结束

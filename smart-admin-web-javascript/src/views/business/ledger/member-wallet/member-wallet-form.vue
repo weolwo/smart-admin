@@ -1,18 +1,18 @@
 <!--
-  * 账务域-会员资金/积分主账表
+  * 会员钱包表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:17:33
+  * @Date:      2026-04-18 23:56:48
   * @Copyright  weolwo
 -->
 <template>
-  <a-modal :title="form.id ? '编辑' : '添加'" :width="100" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
+  <a-modal :title="form.id ? '编辑' : '添加'" :width="800" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
     <a-form ref="formRef" :model="form" :rules="rules" :label-col="{ span: 5 }">
-      <a-form-item label="if" name="id">
-        <a-input-number style="width: 100%" v-model:value="form.id" placeholder="if" />
+      <a-form-item label="id" name="id">
+        <a-input-number style="width: 100%" v-model:value="form.id" placeholder="id" />
       </a-form-item>
       <a-form-item label="租户ID" name="tenantId">
-        <a-input style="width: 100%" v-model:value="form.tenantId" placeholder="租户ID" />
+        <SmartEnumSelect width="100%" v-model:value="form.tenantId" enum-name="" placeholder="租户ID" />
       </a-form-item>
       <a-form-item label="会员名" name="memberName">
         <a-input style="width: 100%" v-model:value="form.memberName" placeholder="会员名" />
@@ -22,12 +22,6 @@
       </a-form-item>
       <a-form-item label="现金余额" name="cashBalance">
         <a-input-number style="width: 100%" v-model:value="form.cashBalance" placeholder="现金余额" />
-      </a-form-item>
-      <a-form-item label="【字典】状态：0-冻结, 1-正常" name="status">
-        <a-input-number style="width: 100%" v-model:value="form.status" placeholder="【字典】状态：0-冻结, 1-正常" />
-      </a-form-item>
-      <a-form-item label="乐观锁版本号" name="version">
-        <a-input-number style="width: 100%" v-model:value="form.version" placeholder="乐观锁版本号" />
       </a-form-item>
     </a-form>
 
@@ -43,9 +37,10 @@
   import { reactive, ref, nextTick } from 'vue';
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { memberWalletApi } from '/src/api/business/ledger/member-wallet/member-wallet-api';
-  import { smartSentry } from '/src/lib/smart-sentry';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { memberWalletApi } from '/@/api/business/ledger/member-wallet/member-wallet-api';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import SmartEnumSelect from '/@/components/framework/smart-enum-select/index.vue';
 
   // ------------------------ 事件 ------------------------
 
@@ -81,25 +76,19 @@
   const formRef = ref();
 
   const formDefault = {
-    id: undefined, //if
+    id: undefined, //id
     tenantId: undefined, //租户ID
     memberName: undefined, //会员名
     scoreBalance: undefined, //积分余额
     cashBalance: undefined, //现金余额
-    status: undefined, //【字典】状态：0-冻结, 1-正常
-    version: undefined, //乐观锁版本号
   };
 
   let form = reactive({ ...formDefault });
 
   const rules = {
-    id: [{ required: true, message: 'if 必填' }],
+    id: [{ required: true, message: 'id 必填' }],
     tenantId: [{ required: true, message: '租户ID 必填' }],
     memberName: [{ required: true, message: '会员名 必填' }],
-    scoreBalance: [{ required: true, message: '积分余额 必填' }],
-    cashBalance: [{ required: true, message: '现金余额 必填' }],
-    status: [{ required: true, message: '【字典】状态：0-冻结, 1-正常 必填' }],
-    version: [{ required: true, message: '乐观锁版本号 必填' }],
   };
 
   // 点击确定，验证表单
