@@ -1,31 +1,25 @@
 <!--
-  * 业务级-发奖规则与奖品明细表
+  * 奖品配置表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 18:39:36
+  * @Date:      2026-04-18 20:20:44
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
-      <a-form-item label="关联的上层奖励包ID (tPrizeGroup.id)" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.prizeGroupId" placeholder="关联的上层奖励包ID (tPrizeGroup.id)" />
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
       </a-form-item>
-      <a-form-item label="【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.prizeType" placeholder="【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL" />
+      <a-form-item label="活动编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.activityCode" placeholder="活动编码" />
       </a-form-item>
-      <a-form-item label="奖品展示名称：如“双11特等奖”或“100积分”" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.prizeName" placeholder="奖品展示名称：如“双11特等奖”或“100积分”" />
+      <a-form-item label="奖品编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.prizeCode" placeholder="奖品编码" />
       </a-form-item>
-      <a-form-item label="绑定的底层优惠兜底配置ID (指向 tPromotionConfig)" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.promotionConfigId" placeholder="绑定的底层优惠兜底配置ID (指向 tPromotionConfig)" />
-      </a-form-item>
-      <a-form-item label="奖品级别：1(一等奖), 2(二等奖), 0(普通奖品)" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.prizeLevel" placeholder="奖品级别：1(一等奖), 2(二等奖), 0(普通奖品)" />
-      </a-form-item>
-      <a-form-item label="【字典】状态：0-停用, 1-启用" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="【字典】状态：0-停用, 1-启用" />
+      <a-form-item label="奖品级别" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.prizeLevel" placeholder="奖品级别" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -113,11 +107,11 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { prizeConfigApi } from '/src/api/business/prize/prize-config/prize-config-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { prizeConfigApi } from '/@/api/business/prize/prize-config/prize-config-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import PrizeConfigForm from './prize-config-form.vue';
 
   // ---------------------------- 表格列 ----------------------------
@@ -134,57 +128,52 @@
       ellipsis: true,
     },
     {
-      title: '关联的上层奖励包ID (t_prize_group.id)',
-      dataIndex: 'prizeGroupId',
+      title: '活动编码',
+      dataIndex: 'activityCode',
       ellipsis: true,
     },
     {
-      title: '绑定的底层优惠兜底配置ID (指向 t_promotion_config)',
+      title: '优惠配置ID',
       dataIndex: 'promotionConfigId',
       ellipsis: true,
     },
     {
-      title: '【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL',
+      title: '资产类型：SCORE, BALANCE, COUPON, PHYSICAL, LOTTERY, CUSTOM',
       dataIndex: 'prizeType',
       ellipsis: true,
     },
     {
-      title: '奖品展示名称：如“双11特等奖”或“100积分”',
+      title: '奖品名称',
       dataIndex: 'prizeName',
       ellipsis: true,
     },
     {
-      title: '【字典】发奖机制：FIXED, RANDOM, PROBABILITY',
-      dataIndex: 'grantMode',
+      title: '奖品编码',
+      dataIndex: 'prizeCode',
       ellipsis: true,
     },
     {
-      title: '奖品级别：1(一等奖), 2(二等奖), 0(普通奖品)',
+      title: '奖品级别',
       dataIndex: 'prizeLevel',
       ellipsis: true,
     },
     {
-      title: '发放数量下限(固定发放时与上限一致)',
-      dataIndex: 'prizeAmountMin',
+      title: '奖励价值',
+      dataIndex: 'prizeValue',
       ellipsis: true,
     },
     {
-      title: '发放数量上限',
-      dataIndex: 'prizeAmountMax',
-      ellipsis: true,
-    },
-    {
-      title: '中奖概率(万分位)',
-      dataIndex: 'probability',
-      ellipsis: true,
-    },
-    {
-      title: '前端展示排序权重',
+      title: '排序权重',
       dataIndex: 'sortWeight',
       ellipsis: true,
     },
     {
-      title: '【字典】状态：0-停用, 1-启用',
+      title: '扩展信息：如奖品图片URL、跳转链接等',
+      dataIndex: 'ext',
+      ellipsis: true,
+    },
+    {
+      title: '状态：0-停用, 1-启用',
       dataIndex: 'status',
       ellipsis: true,
     },
@@ -219,12 +208,10 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
-    prizeGroupId: undefined, //关联的上层奖励包ID (tPrizeGroup.id)
-    prizeType: undefined, //【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL
-    prizeName: undefined, //奖品展示名称：如“双11特等奖”或“100积分”
-    promotionConfigId: undefined, //绑定的底层优惠兜底配置ID (指向 tPromotionConfig)
-    prizeLevel: undefined, //奖品级别：1(一等奖), 2(二等奖), 0(普通奖品)
-    status: undefined, //【字典】状态：0-停用, 1-启用
+    tenantId: undefined, //租户ID
+    activityCode: undefined, //活动编码
+    prizeCode: undefined, //奖品编码
+    prizeLevel: undefined, //奖品级别
     pageNum: 1,
     pageSize: 10,
   };
