@@ -1,22 +1,25 @@
 <!--
-  * 资产域-奖励发放执行明细与快照表
+  * 奖励记录表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 18:42:42
+  * @Date:      2026-04-18 20:27:03
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
-      <a-form-item label="关联的提案ID (tPromotionProposal.id)" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.proposalId" placeholder="关联的提案ID (tPromotionProposal.id)" />
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
       </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="奖品级别：1(一等奖), 0(无级别)" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.prizeLevel" placeholder="奖品级别：1(一等奖), 0(无级别)" />
+      <a-form-item label="奖品编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.prizeCode" placeholder="奖品编码" />
+      </a-form-item>
+      <a-form-item label="活动编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.activityCode" placeholder="活动编码" />
       </a-form-item>
       <a-form-item label="创建时间" class="smart-query-form-item">
         <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
@@ -108,7 +111,7 @@
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
   import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { prizeLogApi } from '/src/api/business/prize/prize-log/prize-log-api';
+  import { prizeLogApi } from '/@/api/business/prize/prize-log/prize-log-api';
   import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
   import { smartSentry } from '/src/lib/smart-sentry';
   import TableOperator from '/src/components/support/table-operator/index.vue';
@@ -129,57 +132,57 @@
       ellipsis: true,
     },
     {
-      title: '关联的提案ID (t_promotion_proposal.id)',
-      dataIndex: 'proposalId',
-      ellipsis: true,
-    },
-    {
       title: '会员名',
       dataIndex: 'memberName',
       ellipsis: true,
     },
     {
-      title: '关联的大礼包ID',
-      dataIndex: 'prizeGroupId',
+      title: '奖品编码',
+      dataIndex: 'prizeCode',
       ellipsis: true,
     },
     {
-      title: '触发此发放的具体奖品明细项ID (t_prize_config.id)',
-      dataIndex: 'prizeConfigId',
-      ellipsis: true,
-    },
-    {
-      title: '实际扣减的兜底优惠池ID',
+      title: '优惠配置ID',
       dataIndex: 'promotionConfigId',
       ellipsis: true,
     },
     {
-      title: '奖品级别：1(一等奖), 0(无级别)',
+      title: '活动编码',
+      dataIndex: 'activityCode',
+      ellipsis: true,
+    },
+    {
+      title: '奖品级别',
       dataIndex: 'prizeLevel',
       ellipsis: true,
     },
     {
-      title: '奖品名称快照',
+      title: '奖品名称',
       dataIndex: 'prizeName',
       ellipsis: true,
     },
     {
-      title: '【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL',
+      title: '奖励类型：SCORE, BALANCE, COUPON, PHYSICAL',
       dataIndex: 'prizeType',
       ellipsis: true,
     },
     {
-      title: '发放的具体值(积分数/券ID)',
+      title: '奖励体值(积分数/券ID)',
       dataIndex: 'prizeValue',
       ellipsis: true,
     },
     {
-      title: '【字典】执行状态：0-发放中, 1-成功, 2-失败',
+      title: '异常原因',
+      dataIndex: 'failReason',
+      ellipsis: true,
+    },
+    {
+      title: '执行状态：0-等待, 1-成功, 2-失败',
       dataIndex: 'status',
       ellipsis: true,
     },
     {
-      title: '下游外部单号',
+      title: '外部单号',
       dataIndex: 'externalBizNo',
       ellipsis: true,
     },
@@ -219,9 +222,10 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
-    proposalId: undefined, //关联的提案ID (tPromotionProposal.id)
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    prizeLevel: undefined, //奖品级别：1(一等奖), 0(无级别)
+    prizeCode: undefined, //奖品编码
+    activityCode: undefined, //活动编码
     createTime: [], //创建时间
     createTimeBegin: undefined, //创建时间 开始
     createTimeEnd: undefined, //创建时间 结束

@@ -1,8 +1,8 @@
 <!--
-  * 资产域-奖励发放执行明细与快照表
+  * 奖励记录表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 18:42:42
+  * @Date:      2026-04-18 20:27:03
   * @Copyright  weolwo
 -->
 <template>
@@ -12,40 +12,40 @@
         <a-input-number style="width: 100%" v-model:value="form.id" placeholder="id" />
       </a-form-item>
       <a-form-item label="租户ID" name="tenantId">
-        <a-input style="width: 100%" v-model:value="form.tenantId" placeholder="租户ID" />
-      </a-form-item>
-      <a-form-item label="关联的提案ID (t_promotion_proposal.id)" name="proposalId">
-        <a-input-number style="width: 100%" v-model:value="form.proposalId" placeholder="关联的提案ID (t_promotion_proposal.id)" />
+        <SmartEnumSelect width="100%" v-model:value="form.tenantId" enum-name="" placeholder="租户ID" />
       </a-form-item>
       <a-form-item label="会员名" name="memberName">
         <a-input style="width: 100%" v-model:value="form.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="关联的大礼包ID" name="prizeGroupId">
-        <a-input style="width: 100%" v-model:value="form.prizeGroupId" placeholder="关联的大礼包ID" />
+      <a-form-item label="奖品编码" name="prizeCode">
+        <a-input style="width: 100%" v-model:value="form.prizeCode" placeholder="奖品编码" />
       </a-form-item>
-      <a-form-item label="触发此发放的具体奖品明细项ID (t_prize_config.id)" name="prizeConfigId">
-        <a-input-number style="width: 100%" v-model:value="form.prizeConfigId" placeholder="触发此发放的具体奖品明细项ID (t_prize_config.id)" />
+      <a-form-item label="优惠配置ID" name="promotionConfigId">
+        <a-input-number style="width: 100%" v-model:value="form.promotionConfigId" placeholder="优惠配置ID" />
       </a-form-item>
-      <a-form-item label="实际扣减的兜底优惠池ID" name="promotionConfigId">
-        <a-input style="width: 100%" v-model:value="form.promotionConfigId" placeholder="实际扣减的兜底优惠池ID" />
+      <a-form-item label="活动编码" name="activityCode">
+        <a-input style="width: 100%" v-model:value="form.activityCode" placeholder="活动编码" />
       </a-form-item>
-      <a-form-item label="奖品级别：1(一等奖), 0(无级别)" name="prizeLevel">
-        <a-input-number style="width: 100%" v-model:value="form.prizeLevel" placeholder="奖品级别：1(一等奖), 0(无级别)" />
+      <a-form-item label="奖品级别" name="prizeLevel">
+        <a-input-number style="width: 100%" v-model:value="form.prizeLevel" placeholder="奖品级别" />
       </a-form-item>
-      <a-form-item label="奖品名称快照" name="prizeName">
-        <a-input style="width: 100%" v-model:value="form.prizeName" placeholder="奖品名称快照" />
+      <a-form-item label="奖品名称" name="prizeName">
+        <a-input style="width: 100%" v-model:value="form.prizeName" placeholder="奖品名称" />
       </a-form-item>
-      <a-form-item label="【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL" name="prizeType">
-        <a-input style="width: 100%" v-model:value="form.prizeType" placeholder="【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL" />
+      <a-form-item label="奖励类型：SCORE, BALANCE, COUPON, PHYSICAL" name="prizeType">
+        <a-input style="width: 100%" v-model:value="form.prizeType" placeholder="奖励类型：SCORE, BALANCE, COUPON, PHYSICAL" />
       </a-form-item>
-      <a-form-item label="发放的具体值(积分数/券ID)" name="prizeValue">
-        <a-input style="width: 100%" v-model:value="form.prizeValue" placeholder="发放的具体值(积分数/券ID)" />
+      <a-form-item label="奖励体值(积分数/券ID)" name="prizeValue">
+        <a-input style="width: 100%" v-model:value="form.prizeValue" placeholder="奖励体值(积分数/券ID)" />
       </a-form-item>
-      <a-form-item label="【字典】执行状态：0-发放中, 1-成功, 2-失败" name="status">
-        <a-input-number style="width: 100%" v-model:value="form.status" placeholder="【字典】执行状态：0-发放中, 1-成功, 2-失败" />
+      <a-form-item label="异常原因" name="failReason">
+        <a-input style="width: 100%" v-model:value="form.failReason" placeholder="异常原因" />
       </a-form-item>
-      <a-form-item label="下游外部单号" name="externalBizNo">
-        <a-input style="width: 100%" v-model:value="form.externalBizNo" placeholder="下游外部单号" />
+      <a-form-item label="执行状态：0-等待, 1-成功, 2-失败" name="status">
+        <a-input-number style="width: 100%" v-model:value="form.status" placeholder="执行状态：0-等待, 1-成功, 2-失败" />
+      </a-form-item>
+      <a-form-item label="外部单号" name="externalBizNo">
+        <a-input style="width: 100%" v-model:value="form.externalBizNo" placeholder="外部单号" />
       </a-form-item>
       <a-form-item label="异常原因" name="remark">
         <a-input style="width: 100%" v-model:value="form.remark" placeholder="异常原因" />
@@ -65,8 +65,9 @@
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
   import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { prizeLogApi } from '/src/api/business/prize/prize-log/prize-log-api';
+  import { prizeLogApi } from '/@/api/business/prize/prize-log/prize-log-api';
   import { smartSentry } from '/src/lib/smart-sentry';
+  import SmartEnumSelect from '/src/components/framework/smart-enum-select/index.vue';
 
   // ------------------------ 事件 ------------------------
 
@@ -104,34 +105,31 @@
   const formDefault = {
     id: undefined, //id
     tenantId: undefined, //租户ID
-    proposalId: undefined, //关联的提案ID (t_promotion_proposal.id)
     memberName: undefined, //会员名
-    prizeGroupId: undefined, //关联的大礼包ID
-    prizeConfigId: undefined, //触发此发放的具体奖品明细项ID (t_prize_config.id)
-    promotionConfigId: undefined, //实际扣减的兜底优惠池ID
-    prizeLevel: undefined, //奖品级别：1(一等奖), 0(无级别)
-    prizeName: undefined, //奖品名称快照
-    prizeType: undefined, //【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL
-    prizeValue: undefined, //发放的具体值(积分数/券ID)
-    status: undefined, //【字典】执行状态：0-发放中, 1-成功, 2-失败
-    externalBizNo: undefined, //下游外部单号
+    prizeCode: undefined, //奖品编码
+    promotionConfigId: undefined, //优惠配置ID
+    activityCode: undefined, //活动编码
+    prizeLevel: undefined, //奖品级别
+    prizeName: undefined, //奖品名称
+    prizeType: undefined, //奖励类型：SCORE, BALANCE, COUPON, PHYSICAL
+    prizeValue: undefined, //奖励体值(积分数/券ID)
+    failReason: undefined, //异常原因
+    status: undefined, //执行状态：0-等待, 1-成功, 2-失败
+    externalBizNo: undefined, //外部单号
     remark: undefined, //异常原因
   };
 
   let form = reactive({ ...formDefault });
 
   const rules = {
-    id: [{ required: true, message: 'id 必填' }],
     tenantId: [{ required: true, message: '租户ID 必填' }],
-    proposalId: [{ required: true, message: '关联的提案ID (t_promotion_proposal.id) 必填' }],
     memberName: [{ required: true, message: '会员名 必填' }],
-    prizeGroupId: [{ required: true, message: '关联的大礼包ID 必填' }],
-    prizeConfigId: [{ required: true, message: '触发此发放的具体奖品明细项ID (t_prize_config.id) 必填' }],
-    promotionConfigId: [{ required: true, message: '实际扣减的兜底优惠池ID 必填' }],
-    prizeLevel: [{ required: true, message: '奖品级别：1(一等奖), 0(无级别) 必填' }],
-    prizeName: [{ required: true, message: '奖品名称快照 必填' }],
-    prizeType: [{ required: true, message: '【字典】资产类型：SCORE, BALANCE, COUPON, PHYSICAL 必填' }],
-    prizeValue: [{ required: true, message: '发放的具体值(积分数/券ID) 必填' }],
+    prizeCode: [{ required: true, message: '奖品编码 必填' }],
+    promotionConfigId: [{ required: true, message: '优惠配置ID 必填' }],
+    activityCode: [{ required: true, message: '活动编码 必填' }],
+    prizeName: [{ required: true, message: '奖品名称 必填' }],
+    prizeType: [{ required: true, message: '奖励类型：SCORE, BALANCE, COUPON, PHYSICAL 必填' }],
+    prizeValue: [{ required: true, message: '奖励体值(积分数/券ID) 必填' }],
   };
 
   // 点击确定，验证表单
