@@ -1,22 +1,31 @@
 <!--
-  * 运行时-会员任务进度实例表
+  * 任务记录表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:03:33
+  * @Date:      2026-04-18 21:02:56
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="该实例生效开始时间" class="smart-query-form-item">
+      <a-form-item label="活动编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.activityCode" placeholder="活动编码" />
+      </a-form-item>
+      <a-form-item label="开始时间" class="smart-query-form-item">
         <a-range-picker v-model:value="queryForm.validStartTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeValidStartTime" />
       </a-form-item>
-      <a-form-item label="【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期" />
+      <a-form-item label="状态" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="状态：0-进行中, 1-已完成, 2-已发奖, 3-已过期" />
+      </a-form-item>
+      <a-form-item label="达标时间" class="smart-query-form-item">
+        <a-range-picker v-model:value="queryForm.completeTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCompleteTime" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -104,13 +113,13 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskRecordApi } from '/src/api/business/task/task-record/task-record-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskRecordApi } from '/@/api/business/task/task-record/task-record-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import TaskRecordForm from './task-record-form.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -131,8 +140,13 @@
       ellipsis: true,
     },
     {
-      title: '关联的任务配置ID',
+      title: '任务配置ID',
       dataIndex: 'taskConfigId',
+      ellipsis: true,
+    },
+    {
+      title: '活动编码',
+      dataIndex: 'activityCode',
       ellipsis: true,
     },
     {
@@ -141,12 +155,12 @@
       ellipsis: true,
     },
     {
-      title: '该实例生效开始时间',
+      title: '开始时间',
       dataIndex: 'validStartTime',
       ellipsis: true,
     },
     {
-      title: '该实例失效过期时间',
+      title: '过期时间',
       dataIndex: 'validEndTime',
       ellipsis: true,
     },
@@ -156,12 +170,12 @@
       ellipsis: true,
     },
     {
-      title: '【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期',
+      title: '状态：0-进行中, 1-已完成, 2-已发奖, 3-已过期',
       dataIndex: 'status',
       ellipsis: true,
     },
     {
-      title: '进度详情快照',
+      title: '进度详情',
       dataIndex: 'progressData',
       ellipsis: true,
     },
@@ -176,7 +190,7 @@
       ellipsis: true,
     },
     {
-      title: '真正达标的时间',
+      title: '达标时间',
       dataIndex: 'completeTime',
       ellipsis: true,
     },
@@ -211,11 +225,16 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    validStartTime: [], //该实例生效开始时间
-    validStartTimeBegin: undefined, //该实例生效开始时间 开始
-    validStartTimeEnd: undefined, //该实例生效开始时间 结束
-    status: undefined, //【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期
+    activityCode: undefined, //活动编码
+    validStartTime: [], //开始时间
+    validStartTimeBegin: undefined, //开始时间 开始
+    validStartTimeEnd: undefined, //开始时间 结束
+    status: undefined, //状态：0-进行中, 1-已完成, 2-已发奖, 3-已过期
+    completeTime: [], //达标时间
+    completeTimeBegin: undefined, //达标时间 开始
+    completeTimeEnd: undefined, //达标时间 结束
     pageNum: 1,
     pageSize: 10,
   };
@@ -259,6 +278,11 @@
   function onChangeValidStartTime(dates, dateStrings) {
     queryForm.validStartTimeBegin = dateStrings[0];
     queryForm.validStartTimeEnd = dateStrings[1];
+  }
+
+  function onChangeCompleteTime(dates, dateStrings) {
+    queryForm.completeTimeBegin = dateStrings[0];
+    queryForm.completeTimeEnd = dateStrings[1];
   }
 
   onMounted(queryData);

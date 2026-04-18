@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.task.record.dao.TaskRecordDao">
+
+    <resultMap id="TaskRecordVO" type="net.lab1024.sa.task.record.domain.vo.TaskRecordVO">
+            <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
+            <result column="member_name" property="memberName" />
+            <result column="task_config_id" property="taskConfigId" />
+            <result column="activity_code" property="activityCode" />
+            <result column="period_key" property="periodKey" />
+            <result column="valid_start_time" property="validStartTime" />
+            <result column="valid_end_time" property="validEndTime" />
+            <result column="current_metric" property="currentMetric" />
+            <result column="status" property="status" />
+            <result column="progress_data" property="progressData" />
+            <result column="rule_snapshot" property="ruleSnapshot" />
+            <result column="prize_snapshot" property="prizeSnapshot" />
+            <result column="complete_time" property="completeTime" />
+            <result column="create_by" property="createBy" />
+            <result column="create_time" property="createTime" />
+            <result column="update_by" property="updateBy" />
+            <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                tenant_id, 
+                member_name, 
+                task_config_id, 
+                activity_code, 
+                period_key, 
+                valid_start_time, 
+                valid_end_time, 
+                current_metric, 
+                status, 
+                progress_data, 
+                rule_snapshot, 
+                prize_snapshot, 
+                complete_time, 
+                create_by, 
+                create_time, 
+                update_by, 
+                update_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+                        <if test="queryForm.tenantId != null">
+                            AND tenant_id = #{queryForm.tenantId}
+                        </if>
+                        <if test="queryForm.memberName != null">
+                            AND member_name = #{queryForm.memberName}
+                        </if>
+                        <if test="queryForm.activityCode != null">
+                            AND activity_code = #{queryForm.activityCode}
+                        </if>
+                        <if test="queryForm.validStartTimeBegin != null">
+                            AND valid_start_time &gt;= #{queryForm.validStartTimeBegin}
+                        </if>
+                        <if test="queryForm.validStartTimeEnd != null">
+                            AND valid_start_time &lt;= #{queryForm.validStartTimeEnd}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
+                        <if test="queryForm.completeTimeBegin != null">
+                            AND complete_time &gt;= #{queryForm.completeTimeBegin}
+                        </if>
+                        <if test="queryForm.completeTimeEnd != null">
+                            AND complete_time &lt;= #{queryForm.completeTimeEnd}
+                        </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="TaskRecordVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_task_record
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="TaskRecordVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_task_record
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+                <delete id="batchDelete">
+                    delete from t_task_record
+                    where id in
+                    <foreach collection="idList" open="(" close=")" separator="," item="item">
+                        #{item}
+                    </foreach>
+                </delete>
+                <delete id="deleteById">
+                    delete from t_task_record
+                        where id = #{id}
+                </delete>
+
+</mapper>

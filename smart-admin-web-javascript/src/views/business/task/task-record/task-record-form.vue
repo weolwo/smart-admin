@@ -1,57 +1,57 @@
 <!--
-  * 运行时-会员任务进度实例表
+  * 任务记录表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:03:33
+  * @Date:      2026-04-18 21:02:56
   * @Copyright  weolwo
 -->
 <template>
-  <a-modal :title="form.id ? '编辑' : '添加'" :width="100" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
+  <a-modal :title="form.id ? '编辑' : '添加'" :width="800" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
     <a-form ref="formRef" :model="form" :rules="rules" :label-col="{ span: 5 }">
       <a-form-item label="id" name="id">
         <a-input-number style="width: 100%" v-model:value="form.id" placeholder="id" />
       </a-form-item>
       <a-form-item label="租户ID" name="tenantId">
-        <a-input style="width: 100%" v-model:value="form.tenantId" placeholder="租户ID" />
+        <SmartEnumSelect width="100%" v-model:value="form.tenantId" enum-name="" placeholder="租户ID" />
       </a-form-item>
       <a-form-item label="会员名" name="memberName">
         <a-input style="width: 100%" v-model:value="form.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="关联的任务配置ID" name="taskConfigId">
-        <a-input-number style="width: 100%" v-model:value="form.taskConfigId" placeholder="关联的任务配置ID" />
+      <a-form-item label="任务配置ID" name="taskConfigId">
+        <a-input-number style="width: 100%" v-model:value="form.taskConfigId" placeholder="任务配置ID" />
+      </a-form-item>
+      <a-form-item label="活动编码" name="activityCode">
+        <a-input style="width: 100%" v-model:value="form.activityCode" placeholder="活动编码" />
       </a-form-item>
       <a-form-item label="业务期数标识(防重用)：NONE, 日期(20260402)" name="periodKey">
         <a-input style="width: 100%" v-model:value="form.periodKey" placeholder="业务期数标识(防重用)：NONE, 日期(20260402)" />
       </a-form-item>
-      <a-form-item label="该实例生效开始时间" name="validStartTime">
-        <a-date-picker
-          show-time
-          valueFormat="YYYY-MM-DD HH:mm:ss"
-          v-model:value="form.validStartTime"
-          style="width: 100%"
-          placeholder="该实例生效开始时间"
-        />
+      <a-form-item label="开始时间" name="validStartTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.validStartTime" style="width: 100%" placeholder="开始时间" />
       </a-form-item>
-      <a-form-item label="该实例失效过期时间" name="validEndTime">
-        <a-date-picker
-          show-time
-          valueFormat="YYYY-MM-DD HH:mm:ss"
-          v-model:value="form.validEndTime"
-          style="width: 100%"
-          placeholder="该实例失效过期时间"
-        />
+      <a-form-item label="过期时间" name="validEndTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.validEndTime" style="width: 100%" placeholder="过期时间" />
       </a-form-item>
       <a-form-item label="当前进度值：如已签到 3.0000 天" name="currentMetric">
         <a-input-number style="width: 100%" v-model:value="form.currentMetric" placeholder="当前进度值：如已签到 3.0000 天" />
       </a-form-item>
-      <a-form-item label="【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期" name="status">
-        <a-input-number style="width: 100%" v-model:value="form.status" placeholder="【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期" />
+      <a-form-item label="状态：0-进行中, 1-已完成, 2-已发奖, 3-已过期" name="status">
+        <a-input-number style="width: 100%" v-model:value="form.status" placeholder="状态：0-进行中, 1-已完成, 2-已发奖, 3-已过期" />
       </a-form-item>
-      <a-form-item label="接取任务时的规则快照" name="ruleSnapshot">
-        <a-textarea style="width: 100%" v-model:value="form.ruleSnapshot" placeholder="接取任务时的规则快照" />
+      <a-form-item label="达标时间" name="completeTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.completeTime" style="width: 100%" placeholder="达标时间" />
       </a-form-item>
-      <a-form-item label="接取任务时的奖励快照" name="prizeSnapshot">
-        <a-textarea style="width: 100%" v-model:value="form.prizeSnapshot" placeholder="接取任务时的奖励快照" />
+      <a-form-item label="创建人" name="createBy">
+        <a-input style="width: 100%" v-model:value="form.createBy" placeholder="创建人" />
+      </a-form-item>
+      <a-form-item label="创建时间" name="createTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.createTime" style="width: 100%" placeholder="创建时间" />
+      </a-form-item>
+      <a-form-item label="更新人" name="updateBy">
+        <a-input style="width: 100%" v-model:value="form.updateBy" placeholder="更新人" />
+      </a-form-item>
+      <a-form-item label="更新时间" name="updateTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.updateTime" style="width: 100%" placeholder="更新时间" />
       </a-form-item>
     </a-form>
 
@@ -67,9 +67,10 @@
   import { reactive, ref, nextTick } from 'vue';
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskRecordApi } from '/src/api/business/task/task-record/task-record-api';
-  import { smartSentry } from '/src/lib/smart-sentry';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskRecordApi } from '/@/api/business/task/task-record/task-record-api';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import SmartEnumSelect from '/@/components/framework/smart-enum-select/index.vue';
 
   // ------------------------ 事件 ------------------------
 
@@ -108,14 +109,21 @@
     id: undefined, //id
     tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    taskConfigId: undefined, //关联的任务配置ID
+    taskConfigId: undefined, //任务配置ID
+    activityCode: undefined, //活动编码
     periodKey: undefined, //业务期数标识(防重用)：NONE, 日期(20260402)
-    validStartTime: undefined, //该实例生效开始时间
-    validEndTime: undefined, //该实例失效过期时间
+    validStartTime: undefined, //开始时间
+    validEndTime: undefined, //过期时间
     currentMetric: undefined, //当前进度值：如已签到 3.0000 天
-    status: undefined, //【字典】任务流转状态：0-进行中, 1-待发奖, 2-已发奖, 3-已过期
+    status: undefined, //状态：0-进行中, 1-已完成, 2-已发奖, 3-已过期
+    progressData: undefined, //进度详情
     ruleSnapshot: undefined, //接取任务时的规则快照
     prizeSnapshot: undefined, //接取任务时的奖励快照
+    completeTime: undefined, //达标时间
+    createBy: undefined, //创建人
+    createTime: undefined, //创建时间
+    updateBy: undefined, //更新人
+    updateTime: undefined, //更新时间
   };
 
   let form = reactive({ ...formDefault });
@@ -124,12 +132,12 @@
     id: [{ required: true, message: 'id 必填' }],
     tenantId: [{ required: true, message: '租户ID 必填' }],
     memberName: [{ required: true, message: '会员名 必填' }],
-    taskConfigId: [{ required: true, message: '关联的任务配置ID 必填' }],
+    taskConfigId: [{ required: true, message: '任务配置ID 必填' }],
+    activityCode: [{ required: true, message: '活动编码 必填' }],
     periodKey: [{ required: true, message: '业务期数标识(防重用)：NONE, 日期(20260402) 必填' }],
-    validStartTime: [{ required: true, message: '该实例生效开始时间 必填' }],
-    validEndTime: [{ required: true, message: '该实例失效过期时间 必填' }],
-    ruleSnapshot: [{ required: true, message: '接取任务时的规则快照 必填' }],
-    prizeSnapshot: [{ required: true, message: '接取任务时的奖励快照 必填' }],
+    validStartTime: [{ required: true, message: '开始时间 必填' }],
+    validEndTime: [{ required: true, message: '过期时间 必填' }],
+    currentMetric: [{ required: true, message: '当前进度值：如已签到 3.0000 天 必填' }],
   };
 
   // 点击确定，验证表单
