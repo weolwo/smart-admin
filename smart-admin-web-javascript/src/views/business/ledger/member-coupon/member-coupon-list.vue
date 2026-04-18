@@ -1,28 +1,34 @@
 <!--
-  * 资产域-会员优惠券实例表
+  * 会员优惠券
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:15:39
+  * @Date:      2026-04-18 23:42:44
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
       </a-form-item>
       <a-form-item label="券模编码" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.couponCode" placeholder="券模编码" />
       </a-form-item>
-      <a-form-item label="券名称" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.couponName" placeholder="券名称" />
-      </a-form-item>
       <a-form-item label="有效期开始" class="smart-query-form-item">
         <a-range-picker v-model:value="queryForm.validStartTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeValidStartTime" />
       </a-form-item>
-      <a-form-item label="【字典】状态：0-未使用, 1-已使用, 2-已过期, 3-已作废" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="【字典】状态：0-未使用, 1-已使用, 2-已过期, 3-已作废" />
+      <a-form-item label="券名称" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.couponName" placeholder="券名称" />
+      </a-form-item>
+      <a-form-item label="券类型" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.couponType" placeholder="券类型" />
+      </a-form-item>
+      <a-form-item label="状态" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.status" placeholder="状态：0-未使用, 1-已使用, 2-已过期, 3-已作废" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -110,13 +116,13 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { memberCouponApi } from '/src/api/business/ledger/member-coupon/member-coupon-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { memberCouponApi } from '/@/api/business/ledger/member-coupon/member-coupon-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import MemberCouponForm from './member-coupon-form.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -142,18 +148,28 @@
       ellipsis: true,
     },
     {
+      title: '券类型',
+      dataIndex: 'couponType',
+      ellipsis: true,
+    },
+    {
       title: '券名称',
       dataIndex: 'couponName',
       ellipsis: true,
     },
     {
-      title: '【字典】状态：0-未使用, 1-已使用, 2-已过期, 3-已作废',
+      title: '状态',
       dataIndex: 'status',
       ellipsis: true,
     },
     {
-      title: '【字典】获取来源：TASK_PRIZE, MANUAL_SEND',
+      title: '来源',
       dataIndex: 'sourceType',
+      ellipsis: true,
+    },
+    {
+      title: '关联单号',
+      dataIndex: 'sourceBizId',
       ellipsis: true,
     },
     {
@@ -202,13 +218,15 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
     couponCode: undefined, //券模编码
-    couponName: undefined, //券名称
     validStartTime: [], //有效期开始
     validStartTimeBegin: undefined, //有效期开始 开始
     validStartTimeEnd: undefined, //有效期开始 结束
-    status: undefined, //【字典】状态：0-未使用, 1-已使用, 2-已过期, 3-已作废
+    couponName: undefined, //券名称
+    couponType: undefined, //券类型
+    status: undefined, //状态：0-未使用, 1-已使用, 2-已过期, 3-已作废
     pageNum: 1,
     pageSize: 10,
   };
