@@ -4,6 +4,7 @@
 
     <resultMap id="TaskTemplateVO" type="net.lab1024.sa.marketing.task.template.domain.vo.TaskTemplateVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="template_code" property="templateCode" />
             <result column="template_name" property="templateName" />
             <result column="task_type" property="taskType" />
@@ -17,6 +18,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 template_code, 
                 template_name, 
                 task_type, 

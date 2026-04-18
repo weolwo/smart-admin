@@ -4,6 +4,7 @@
 
     <resultMap id="MemberWalletVO" type="net.lab1024.sa.marketing.ledger.wallet.domain.vo.MemberWalletVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="member_name" property="memberName" />
             <result column="score_balance" property="scoreBalance" />
             <result column="cash_balance" property="cashBalance" />
@@ -17,6 +18,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 member_name, 
                 score_balance, 
                 cash_balance, 

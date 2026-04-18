@@ -4,6 +4,8 @@
 
     <resultMap id="PrizeGroupVO" type="net.lab1024.sa.marketing.prize.group.domain.vo.PrizeGroupVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
+            <result column="group_code" property="groupCode" />
             <result column="group_name" property="groupName" />
             <result column="description" property="description" />
             <result column="status" property="status" />
@@ -15,6 +17,8 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
+                group_code, 
                 group_name, 
                 description, 
                 status, 
@@ -28,6 +32,12 @@
         <where>
                         <if test="queryForm.groupName != null">
                             AND group_name = #{queryForm.groupName}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
+                        <if test="queryForm.groupCode != null">
+                            AND group_code = #{queryForm.groupCode}
                         </if>
         </where>
     </sql>

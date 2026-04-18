@@ -4,6 +4,7 @@
 
     <resultMap id="TaskPrizeMappingVO" type="net.lab1024.sa.marketing.prize.mapping.domain.vo.TaskPrizeMappingVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="task_config_id" property="taskConfigId" />
             <result column="stage_level" property="stageLevel" />
             <result column="stage_threshold" property="stageThreshold" />
@@ -16,6 +17,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 task_config_id, 
                 stage_level, 
                 stage_threshold, 

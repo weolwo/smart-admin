@@ -4,6 +4,7 @@
 
     <resultMap id="TaskConfigVO" type="net.lab1024.sa.marketing.task.config.domain.vo.TaskConfigVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="task_name" property="taskName" />
             <result column="template_code" property="templateCode" />
             <result column="trigger_event" property="triggerEvent" />
@@ -26,6 +27,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 task_name, 
                 template_code, 
                 trigger_event, 

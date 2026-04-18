@@ -4,6 +4,7 @@
 
     <resultMap id="PhysicalDeliveryVO" type="net.lab1024.sa.marketing.ledger.physical.domain.vo.PhysicalDeliveryVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="member_name" property="memberName" />
             <result column="proposal_id" property="proposalId" />
             <result column="prize_config_id" property="prizeConfigId" />
@@ -21,6 +22,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 member_name, 
                 proposal_id, 
                 prize_config_id, 

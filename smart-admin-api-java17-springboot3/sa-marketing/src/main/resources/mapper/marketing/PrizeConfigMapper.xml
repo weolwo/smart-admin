@@ -4,6 +4,7 @@
 
     <resultMap id="PrizeConfigVO" type="net.lab1024.sa.marketing.prize.config.domain.vo.PrizeConfigVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="prize_group_id" property="prizeGroupId" />
             <result column="promotion_config_id" property="promotionConfigId" />
             <result column="prize_type" property="prizeType" />
@@ -23,6 +24,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 prize_group_id, 
                 promotion_config_id, 
                 prize_type, 

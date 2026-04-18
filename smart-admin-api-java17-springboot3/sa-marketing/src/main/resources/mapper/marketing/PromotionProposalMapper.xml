@@ -4,6 +4,7 @@
 
     <resultMap id="PromotionProposalVO" type="net.lab1024.sa.marketing.riskmanager.proposal.domain.vo.PromotionProposalVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="member_name" property="memberName" />
             <result column="task_record_id" property="taskRecordId" />
             <result column="promotion_config_id" property="promotionConfigId" />
@@ -23,6 +24,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 member_name, 
                 task_record_id, 
                 promotion_config_id, 

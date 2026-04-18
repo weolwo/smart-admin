@@ -4,6 +4,7 @@
 
     <resultMap id="MemberCouponVO" type="net.lab1024.sa.marketing.ledger.coupon.domain.vo.MemberCouponVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="member_name" property="memberName" />
             <result column="coupon_code" property="couponCode" />
             <result column="coupon_name" property="couponName" />
@@ -20,6 +21,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 member_name, 
                 coupon_code, 
                 coupon_name, 
@@ -36,24 +38,24 @@
 
     <sql id="query_conditions">
         <where>
-                <if test="queryForm.memberName != null">
-                    AND member_name = #{queryForm.memberName}
-                </if>
-                <if test="queryForm.couponCode != null">
-                    AND coupon_code = #{queryForm.couponCode}
-                </if>
-                <if test="queryForm.couponName != null and queryForm.couponName != ''">
-                    AND ${queryField.columnName} AND INSTR(t_member_coupon.coupon_name,#{queryForm.couponName})
-                </if>
-                <if test="queryForm.validStartTimeBegin != null">
-                    AND valid_start_time &gt;= #{queryForm.validStartTimeBegin}
-                </if>
-                <if test="queryForm.validStartTimeEnd != null">
-                    AND valid_start_time &lt;= #{queryForm.validStartTimeEnd}
-                </if>
-                <if test="queryForm.status != null">
-                    AND status = #{queryForm.status}
-                </if>
+                        <if test="queryForm.memberName != null">
+                            AND member_name = #{queryForm.memberName}
+                        </if>
+                        <if test="queryForm.couponCode != null">
+                            AND coupon_code = #{queryForm.couponCode}
+                        </if>
+                        <if test="queryForm.couponName != null and queryForm.couponName != ''">
+                            AND ${queryField.columnName} LIKE CONCAT('%', #{queryForm.couponName}, '%')
+                        </if>
+                        <if test="queryForm.validStartTimeBegin != null">
+                            AND valid_start_time &gt;= #{queryForm.validStartTimeBegin}
+                        </if>
+                        <if test="queryForm.validStartTimeEnd != null">
+                            AND valid_start_time &lt;= #{queryForm.validStartTimeEnd}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
         </where>
     </sql>
 

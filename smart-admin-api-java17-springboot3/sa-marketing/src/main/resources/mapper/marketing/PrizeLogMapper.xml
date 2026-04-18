@@ -4,6 +4,7 @@
 
     <resultMap id="PrizeLogVO" type="net.lab1024.sa.marketing.prize.log.domain.vo.PrizeLogVO">
             <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
             <result column="proposal_id" property="proposalId" />
             <result column="member_name" property="memberName" />
             <result column="prize_group_id" property="prizeGroupId" />
@@ -24,6 +25,7 @@
 
     <sql id="base_columns">
                 id, 
+                tenant_id, 
                 proposal_id, 
                 member_name, 
                 prize_group_id, 
