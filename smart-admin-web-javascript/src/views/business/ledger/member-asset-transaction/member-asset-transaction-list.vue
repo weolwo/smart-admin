@@ -1,25 +1,28 @@
 <!--
-  * 账务域-资产变动交易明细表
+  * 交易明细表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:11:19
+  * @Date:      2026-04-18 23:49:03
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="【字典】资产类型：SCORE, BALANCE" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.assetType" placeholder="【字典】资产类型：SCORE, BALANCE" />
+      <a-form-item label="资产类型" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.assetType" placeholder="资产类型：SCORE, BALANCE" />
       </a-form-item>
-      <a-form-item label="【字典】业务类型：TASKPRIZE, CONSUME, MANUALADJUST" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.bizType" placeholder="【字典】业务类型：TASKPRIZE, CONSUME, MANUALADJUST" />
+      <a-form-item label="资金流向" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.transactionType" placeholder="资金流向：1-收入, 2-支出" />
       </a-form-item>
-      <a-form-item label="关联外部业务ID(如 prizeLogId)" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.bizRefId" placeholder="关联外部业务ID(如 prizeLogId)" />
+      <a-form-item label="关联务外ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.bizRefId" placeholder="关联外部业务ID(如 prizeCode)" />
       </a-form-item>
       <a-form-item label="创建时间" class="smart-query-form-item">
         <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
@@ -110,13 +113,13 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { memberAssetTransactionApi } from '/src/api/business/ledger/member-asset-transaction/member-asset-transaction-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { memberAssetTransactionApi } from '/@/api/business/ledger/member-asset-transaction/member-asset-transaction-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import MemberAssetTransactionForm from './member-asset-transaction-form.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -137,12 +140,12 @@
       ellipsis: true,
     },
     {
-      title: '【字典】资产类型：SCORE, BALANCE',
+      title: '资产类型',
       dataIndex: 'assetType',
       ellipsis: true,
     },
     {
-      title: '【字典】资金流向：1-收入, 2-支出',
+      title: '资金流向',
       dataIndex: 'transactionType',
       ellipsis: true,
     },
@@ -157,17 +160,17 @@
       ellipsis: true,
     },
     {
-      title: '【字典】业务类型：TASK_PRIZE, CONSUME, MANUAL_ADJUST',
+      title: '业务类型',
       dataIndex: 'bizType',
       ellipsis: true,
     },
     {
-      title: '关联外部业务ID(如 prize_log_id)',
+      title: '关联业务ID',
       dataIndex: 'bizRefId',
       ellipsis: true,
     },
     {
-      title: 'C端展示摘要',
+      title: '备注',
       dataIndex: 'remark',
       ellipsis: true,
     },
@@ -202,10 +205,11 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    assetType: undefined, //【字典】资产类型：SCORE, BALANCE
-    bizType: undefined, //【字典】业务类型：TASKPRIZE, CONSUME, MANUALADJUST
-    bizRefId: undefined, //关联外部业务ID(如 prizeLogId)
+    assetType: undefined, //资产类型：SCORE, BALANCE
+    transactionType: undefined, //资金流向：1-收入, 2-支出
+    bizRefId: undefined, //关联外部业务ID(如 prizeCode)
     createTime: [], //创建时间
     createTimeBegin: undefined, //创建时间 开始
     createTimeEnd: undefined, //创建时间 结束
