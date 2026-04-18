@@ -1,26 +1,28 @@
 <!--
-  * 系统级-任务模板表
+  * 任务模板表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:07:43
+  * @Date:      2026-04-18 21:12:49
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
-      <a-form-item label="模板唯一标识，如 TORDER001" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.templateCode" placeholder="模板唯一标识，如 TORDER001" />
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
+      <a-form-item label="模板编码" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.templateCode" placeholder="模板编码" />
       </a-form-item>
       <a-form-item label="模板名称" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.templateName" placeholder="模板名称" />
       </a-form-item>
-      <a-form-item label="【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)" class="smart-query-form-item">
-        <a-input
-          style="width: 200px"
-          v-model:value="queryForm.taskType"
-          placeholder="【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)"
-        />
+      <a-form-item label="流转类型" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.taskType" placeholder="流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)" />
+      </a-form-item>
+      <a-form-item label="创建时间" class="smart-query-form-item">
+        <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -108,12 +110,13 @@
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskTemplateApi } from '/src/api/business/task/task-template/task-template-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskTemplateApi } from '/@/api/business/task/task-template/task-template-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
   import TaskTemplateForm from './task-template-form.vue';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -129,7 +132,7 @@
       ellipsis: true,
     },
     {
-      title: '模板唯一标识，如 T_ORDER_001',
+      title: '模板编码',
       dataIndex: 'templateCode',
       ellipsis: true,
     },
@@ -139,17 +142,17 @@
       ellipsis: true,
     },
     {
-      title: '【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)',
+      title: '流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)',
       dataIndex: 'taskType',
       ellipsis: true,
     },
     {
-      title: '前端表单动态渲染规则 JSON',
+      title: '前端渲染规则',
       dataIndex: 'uiSchema',
       ellipsis: true,
     },
     {
-      title: '底层的 QLExpress 校验脚本',
+      title: 'QLExpress脚本',
       dataIndex: 'ruleScript',
       ellipsis: true,
     },
@@ -184,9 +187,13 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
-    templateCode: undefined, //模板唯一标识，如 TORDER001
+    tenantId: undefined, //租户ID
+    templateCode: undefined, //模板编码
     templateName: undefined, //模板名称
-    taskType: undefined, //【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)
+    taskType: undefined, //流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)
+    createTime: [], //创建时间
+    createTimeBegin: undefined, //创建时间 开始
+    createTimeEnd: undefined, //创建时间 结束
     pageNum: 1,
     pageSize: 10,
   };
@@ -225,6 +232,11 @@
     } finally {
       tableLoading.value = false;
     }
+  }
+
+  function onChangeCreateTime(dates, dateStrings) {
+    queryForm.createTimeBegin = dateStrings[0];
+    queryForm.createTimeEnd = dateStrings[1];
   }
 
   onMounted(queryData);

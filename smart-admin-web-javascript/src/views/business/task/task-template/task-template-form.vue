@@ -1,12 +1,12 @@
 <!--
-  * 系统级-任务模板表
+  * 任务模板表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 17:07:43
+  * @Date:      2026-04-18 21:12:49
   * @Copyright  weolwo
 -->
 <template>
-  <a-modal :title="form.id ? '编辑' : '添加'" :width="100" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
+  <a-modal :title="form.id ? '编辑' : '添加'" :width="800" :open="visibleFlag" @cancel="onClose" :maskClosable="false" :destroyOnClose="true">
     <a-form ref="formRef" :model="form" :rules="rules" :label-col="{ span: 5 }">
       <a-form-item label="id" name="id">
         <a-input-number style="width: 100%" v-model:value="form.id" placeholder="id" />
@@ -14,24 +14,23 @@
       <a-form-item label="租户ID" name="tenantId">
         <a-input style="width: 100%" v-model:value="form.tenantId" placeholder="租户ID" />
       </a-form-item>
-      <a-form-item label="模板唯一标识，如 T_ORDER_001" name="templateCode">
-        <a-input style="width: 100%" v-model:value="form.templateCode" placeholder="模板唯一标识，如 T_ORDER_001" />
+      <a-form-item label="模板编码" name="templateCode">
+        <a-input style="width: 100%" v-model:value="form.templateCode" placeholder="模板编码" />
       </a-form-item>
       <a-form-item label="模板名称" name="templateName">
         <a-input style="width: 100%" v-model:value="form.templateName" placeholder="模板名称" />
       </a-form-item>
-      <a-form-item label="【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)" name="taskType">
-        <a-input
-          style="width: 100%"
-          v-model:value="form.taskType"
-          placeholder="【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)"
-        />
+      <a-form-item label="流转类型" name="taskType">
+        <a-input style="width: 100%" v-model:value="form.taskType" placeholder="流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)" />
       </a-form-item>
-      <a-form-item label="前端表单动态渲染规则 JSON" name="uiSchema">
-        <a-textarea style="width: 100%" v-model:value="form.uiSchema" placeholder="前端表单动态渲染规则 JSON" />
+      <a-form-item label="QLExpress脚本" name="ruleScript">
+        <a-textarea style="width: 100%" v-model:value="form.ruleScript" placeholder="QLExpress脚本" />
       </a-form-item>
-      <a-form-item label="底层的 QLExpress 校验脚本" name="ruleScript">
-        <a-textarea style="width: 100%" v-model:value="form.ruleScript" placeholder="底层的 QLExpress 校验脚本" />
+      <a-form-item label="更新人" name="updateBy">
+        <a-input style="width: 100%" v-model:value="form.updateBy" placeholder="更新人" />
+      </a-form-item>
+      <a-form-item label="更新时间" name="updateTime">
+        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.updateTime" style="width: 100%" placeholder="更新时间" />
       </a-form-item>
     </a-form>
 
@@ -47,9 +46,9 @@
   import { reactive, ref, nextTick } from 'vue';
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { taskTemplateApi } from '/src/api/business/task/task-template/task-template-api';
-  import { smartSentry } from '/src/lib/smart-sentry';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { taskTemplateApi } from '/@/api/business/task/task-template/task-template-api';
+  import { smartSentry } from '/@/lib/smart-sentry';
 
   // ------------------------ 事件 ------------------------
 
@@ -87,11 +86,13 @@
   const formDefault = {
     id: undefined, //id
     tenantId: undefined, //租户ID
-    templateCode: undefined, //模板唯一标识，如 T_ORDER_001
+    templateCode: undefined, //模板编码
     templateName: undefined, //模板名称
-    taskType: undefined, //【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)
-    uiSchema: undefined, //前端表单动态渲染规则 JSON
-    ruleScript: undefined, //底层的 QLExpress 校验脚本
+    taskType: undefined, //流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型)
+    uiSchema: undefined, //前端渲染规则
+    ruleScript: undefined, //QLExpress脚本
+    updateBy: undefined, //更新人
+    updateTime: undefined, //更新时间
   };
 
   let form = reactive({ ...formDefault });
@@ -99,11 +100,11 @@
   const rules = {
     id: [{ required: true, message: 'id 必填' }],
     tenantId: [{ required: true, message: '租户ID 必填' }],
-    templateCode: [{ required: true, message: '模板唯一标识，如 T_ORDER_001 必填' }],
+    templateCode: [{ required: true, message: '模板编码 必填' }],
     templateName: [{ required: true, message: '模板名称 必填' }],
-    taskType: [{ required: true, message: '【字典】流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型) 必填' }],
-    uiSchema: [{ required: true, message: '前端表单动态渲染规则 JSON 必填' }],
-    ruleScript: [{ required: true, message: '底层的 QLExpress 校验脚本 必填' }],
+    taskType: [{ required: true, message: '流转类型：SIMPLE(单次节点型), COUNT(计次型), AMOUNT(计额型) 必填' }],
+    uiSchema: [{ required: true, message: '前端渲染规则 必填' }],
+    ruleScript: [{ required: true, message: 'QLExpress脚本 必填' }],
   };
 
   // 点击确定，验证表单
