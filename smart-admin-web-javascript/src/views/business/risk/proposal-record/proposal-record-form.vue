@@ -1,8 +1,8 @@
 <!--
-  * 资产域-统一发奖提案控制表
+  * 提案表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 18:46:32
+  * @Date:      2026-04-18 23:13:50
   * @Copyright  weolwo
 -->
 <template>
@@ -17,42 +17,20 @@
       <a-form-item label="会员名" name="memberName">
         <a-input style="width: 100%" v-model:value="form.memberName" placeholder="会员名" />
       </a-form-item>
-      <a-form-item label="来源任务实例ID" name="taskRecordId">
-        <a-input-number style="width: 100%" v-model:value="form.taskRecordId" placeholder="来源任务实例ID" />
+      <a-form-item label="来源" name="sourceType">
+        <a-input style="width: 100%" v-model:value="form.sourceType" placeholder="来源：TASK(任务), DRAW(抽奖), MANUAL(人工)" />
       </a-form-item>
-      <a-form-item label="关联的优惠配置ID" name="promotionConfigId">
-        <a-input style="width: 100%" v-model:value="form.promotionConfigId" placeholder="关联的优惠配置ID" />
+      <a-form-item label="来源单号" name="sourceBizId">
+        <a-input style="width: 100%" v-model:value="form.sourceBizId" placeholder="来源单号(task_record_id 或 draw_log_trace_id)" />
       </a-form-item>
-      <a-form-item
-        label="【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截"
-        name="status"
-      >
-        <a-input-number
-          style="width: 100%"
-          v-model:value="form.status"
-          placeholder="【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截"
-        />
+      <a-form-item label="优惠配置ID" name="promotionConfigId">
+        <a-input-number style="width: 100%" v-model:value="form.promotionConfigId" placeholder="优惠配置ID" />
       </a-form-item>
-      <a-form-item label="对应任务的哪个阶段" name="stageLevel">
-        <a-input-number style="width: 100%" v-model:value="form.stageLevel" placeholder="对应任务的哪个阶段" />
+      <a-form-item label="优惠金额" name="promotionValue">
+        <a-input-number style="width: 100%" v-model:value="form.promotionValue" placeholder="优惠金额" />
       </a-form-item>
       <a-form-item label="执行失败/风控拦截原因" name="remark">
         <a-input style="width: 100%" v-model:value="form.remark" placeholder="执行失败/风控拦截原因" />
-      </a-form-item>
-      <a-form-item label="一审人" name="firstReviewer">
-        <a-input style="width: 100%" v-model:value="form.firstReviewer" placeholder="一审人" />
-      </a-form-item>
-      <a-form-item label="一审时间" name="firstReviewTime">
-        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.firstReviewTime" style="width: 100%" placeholder="一审时间" />
-      </a-form-item>
-      <a-form-item label="二审人" name="secondReviewer">
-        <a-input style="width: 100%" v-model:value="form.secondReviewer" placeholder="二审人" />
-      </a-form-item>
-      <a-form-item label="二审时间" name="secondReviewTime">
-        <a-date-picker show-time valueFormat="YYYY-MM-DD HH:mm:ss" v-model:value="form.secondReviewTime" style="width: 100%" placeholder="二审时间" />
-      </a-form-item>
-      <a-form-item label="审核意见/驳回理由" name="reviewComment">
-        <a-input style="width: 100%" v-model:value="form.reviewComment" placeholder="审核意见/驳回理由" />
       </a-form-item>
     </a-form>
 
@@ -68,9 +46,9 @@
   import { reactive, ref, nextTick } from 'vue';
   import _ from 'lodash';
   import { message } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { promotionProposalApi } from '/src/api/business/risk/promotion-proposal/promotion-proposal-api';
-  import { smartSentry } from '/src/lib/smart-sentry';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { proposalRecordApi } from '/@/api/business/risk/proposal-record/proposal-record-api';
+  import { smartSentry } from '/@/lib/smart-sentry';
 
   // ------------------------ 事件 ------------------------
 
@@ -109,16 +87,12 @@
     id: undefined, //id
     tenantId: undefined, //租户ID
     memberName: undefined, //会员名
-    taskRecordId: undefined, //来源任务实例ID
-    promotionConfigId: undefined, //关联的优惠配置ID
-    status: undefined, //【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截
-    stageLevel: undefined, //对应任务的哪个阶段
+    sourceType: undefined, //来源：TASK(任务), DRAW(抽奖), MANUAL(人工)
+    sourceBizId: undefined, //来源单号(task_record_id 或 draw_log_trace_id)
+    promotionConfigId: undefined, //优惠配置ID
+    promotionValue: undefined, //优惠金额
+    //status: undefined, //状态：0-等待中, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截
     remark: undefined, //执行失败/风控拦截原因
-    firstReviewer: undefined, //一审人
-    firstReviewTime: undefined, //一审时间
-    secondReviewer: undefined, //二审人
-    secondReviewTime: undefined, //二审时间
-    reviewComment: undefined, //审核意见/驳回理由
   };
 
   let form = reactive({ ...formDefault });
@@ -127,9 +101,10 @@
     id: [{ required: true, message: 'id 必填' }],
     tenantId: [{ required: true, message: '租户ID 必填' }],
     memberName: [{ required: true, message: '会员名 必填' }],
-    taskRecordId: [{ required: true, message: '来源任务实例ID 必填' }],
-    promotionConfigId: [{ required: true, message: '关联的优惠配置ID 必填' }],
-    stageLevel: [{ required: true, message: '对应任务的哪个阶段 必填' }],
+    sourceType: [{ required: true, message: '来源：TASK(任务), DRAW(抽奖), MANUAL(人工) 必填' }],
+    sourceBizId: [{ required: true, message: '来源单号(task_record_id 或 draw_log_trace_id) 必填' }],
+    promotionConfigId: [{ required: true, message: '优惠配置ID 必填' }],
+    promotionValue: [{ required: true, message: '优惠金额 必填' }],
   };
 
   // 点击确定，验证表单
@@ -147,9 +122,9 @@
     SmartLoading.show();
     try {
       if (form.id) {
-        await promotionProposalApi.update(form);
+        await proposalRecordApi.update(form);
       } else {
-        await promotionProposalApi.add(form);
+        await proposalRecordApi.add(form);
       }
       message.success('操作成功');
       emits('reloadList');

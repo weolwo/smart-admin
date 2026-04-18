@@ -1,35 +1,44 @@
 <!--
-  * 资产域-统一发奖提案控制表
+  * 提案表
   *
   * @Author:    weolwo
-  * @Date:      2026-04-03 18:46:32
+  * @Date:      2026-04-18 23:13:50
   * @Copyright  weolwo
 -->
 <template>
   <!---------- 查询表单form begin ----------->
   <a-form class="smart-query-form">
     <a-row class="smart-query-form-row">
+      <a-form-item label="租户ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.tenantId" placeholder="租户ID" />
+      </a-form-item>
       <a-form-item label="会员名" class="smart-query-form-item">
         <a-input style="width: 200px" v-model:value="queryForm.memberName" placeholder="会员名" />
+      </a-form-item>
+      <a-form-item label="更新时间" class="smart-query-form-item">
+        <a-range-picker v-model:value="queryForm.updateTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeUpdateTime" />
       </a-form-item>
       <a-form-item label="创建时间" class="smart-query-form-item">
         <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
       </a-form-item>
-      <a-form-item label="来源任务实例ID" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.taskRecordId" placeholder="来源任务实例ID" />
+      <a-form-item label="优惠配置ID" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.promotionConfigId" placeholder="优惠配置ID" />
       </a-form-item>
-      <a-form-item
-        label="【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截"
-        class="smart-query-form-item"
-      >
+      <a-form-item label="状态" class="smart-query-form-item">
         <a-input
           style="width: 200px"
           v-model:value="queryForm.status"
-          placeholder="【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截"
+          placeholder="状态：0-等待中, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截"
         />
       </a-form-item>
-      <a-form-item label="关联的优惠配置ID" class="smart-query-form-item">
-        <a-input style="width: 200px" v-model:value="queryForm.promotionConfigId" placeholder="关联的优惠配置ID" />
+      <a-form-item label="来源" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.sourceType" placeholder="来源：TASK(任务), DRAW(抽奖), MANUAL(人工)" />
+      </a-form-item>
+      <a-form-item label="来源单号" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.sourceBizId" placeholder="来源单号(taskRecordId 或 drawLogTraceId)" />
+      </a-form-item>
+      <a-form-item label="一审人" class="smart-query-form-item">
+        <a-input style="width: 200px" v-model:value="queryForm.firstReviewer" placeholder="一审人" />
       </a-form-item>
       <a-form-item class="smart-query-form-item">
         <a-button type="primary" @click="onSearch">
@@ -111,19 +120,19 @@
       />
     </div>
 
-    <PromotionProposalForm ref="formRef" @reloadList="queryData" />
+    <ProposalRecordForm ref="formRef" @reloadList="queryData" />
   </a-card>
 </template>
 <script setup>
   import { reactive, ref, onMounted } from 'vue';
   import { message, Modal } from 'ant-design-vue';
-  import { SmartLoading } from '/src/components/framework/smart-loading';
-  import { promotionProposalApi } from '/src/api/business/risk/promotion-proposal/promotion-proposal-api';
-  import { PAGE_SIZE_OPTIONS } from '/src/constants/common-const';
-  import { smartSentry } from '/src/lib/smart-sentry';
-  import TableOperator from '/src/components/support/table-operator/index.vue';
-  import { defaultTimeRanges } from '/src/lib/default-time-ranges';
-  import PromotionProposalForm from './promotion-proposal-form.vue';
+  import { SmartLoading } from '/@/components/framework/smart-loading';
+  import { proposalRecordApi } from '/@/api/business/risk/proposal-record/proposal-record-api';
+  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
+  import { smartSentry } from '/@/lib/smart-sentry';
+  import TableOperator from '/@/components/support/table-operator/index.vue';
+  import ProposalRecordForm from './proposal-record-form.vue';
+  import { defaultTimeRanges } from '/@/lib/default-time-ranges';
 
   // ---------------------------- 表格列 ----------------------------
 
@@ -144,23 +153,28 @@
       ellipsis: true,
     },
     {
-      title: '来源任务实例ID',
-      dataIndex: 'taskRecordId',
+      title: '来源：TASK(任务), DRAW(抽奖), MANUAL(人工)',
+      dataIndex: 'sourceType',
       ellipsis: true,
     },
     {
-      title: '关联的优惠配置ID',
+      title: '来源单号(task_record_id 或 draw_log_trace_id)',
+      dataIndex: 'sourceBizId',
+      ellipsis: true,
+    },
+    {
+      title: '优惠配置ID',
       dataIndex: 'promotionConfigId',
       ellipsis: true,
     },
     {
-      title: '【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截',
-      dataIndex: 'status',
+      title: '优惠金额',
+      dataIndex: 'promotionValue',
       ellipsis: true,
     },
     {
-      title: '对应任务的哪个阶段',
-      dataIndex: 'stageLevel',
+      title: '状态：0-等待中, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截',
+      dataIndex: 'status',
       ellipsis: true,
     },
     {
@@ -224,13 +238,19 @@
   // ---------------------------- 查询数据表单和方法 ----------------------------
 
   const queryFormState = {
+    tenantId: undefined, //租户ID
     memberName: undefined, //会员名
+    updateTime: [], //更新时间
+    updateTimeBegin: undefined, //更新时间 开始
+    updateTimeEnd: undefined, //更新时间 结束
     createTime: [], //创建时间
     createTimeBegin: undefined, //创建时间 开始
     createTimeEnd: undefined, //创建时间 结束
-    taskRecordId: undefined, //来源任务实例ID
-    status: undefined, //【字典】状态：0-初始, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截
-    promotionConfigId: undefined, //关联的优惠配置ID
+    promotionConfigId: undefined, //优惠配置ID
+    status: undefined, //状态：0-等待中, 10-待一审, 11-待二审, 20-驳回, 30-待执行, 40-执行中, 50-成功, 60-部分成功, 70-彻底失败, 80-风控拦截
+    sourceType: undefined, //来源：TASK(任务), DRAW(抽奖), MANUAL(人工)
+    sourceBizId: undefined, //来源单号(taskRecordId 或 drawLogTraceId)
+    firstReviewer: undefined, //一审人
     pageNum: 1,
     pageSize: 10,
   };
@@ -261,7 +281,7 @@
   async function queryData() {
     tableLoading.value = true;
     try {
-      let queryResult = await promotionProposalApi.queryPage(queryForm);
+      let queryResult = await proposalRecordApi.queryPage(queryForm);
       tableData.value = queryResult.data.list;
       total.value = queryResult.data.total;
     } catch (e) {
@@ -269,6 +289,11 @@
     } finally {
       tableLoading.value = false;
     }
+  }
+
+  function onChangeUpdateTime(dates, dateStrings) {
+    queryForm.updateTimeBegin = dateStrings[0];
+    queryForm.updateTimeEnd = dateStrings[1];
   }
 
   function onChangeCreateTime(dates, dateStrings) {
@@ -308,7 +333,7 @@
       let deleteForm = {
         goodsIdList: selectedRowKeyList.value,
       };
-      await promotionProposalApi.delete(data.id);
+      await proposalRecordApi.delete(data.id);
       message.success('删除成功');
       queryData();
     } catch (e) {
@@ -346,7 +371,7 @@
   async function requestBatchDelete() {
     try {
       SmartLoading.show();
-      await promotionProposalApi.batchDelete(selectedRowKeyList.value);
+      await proposalRecordApi.batchDelete(selectedRowKeyList.value);
       message.success('删除成功');
       queryData();
     } catch (e) {

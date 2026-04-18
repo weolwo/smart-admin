@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.risk.proposal.dao.ProposalRecordDao">
+
+    <resultMap id="ProposalRecordVO" type="net.lab1024.sa.risk.proposal.domain.vo.ProposalRecordVO">
+            <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
+            <result column="member_name" property="memberName" />
+            <result column="source_type" property="sourceType" />
+            <result column="source_biz_id" property="sourceBizId" />
+            <result column="promotion_config_id" property="promotionConfigId" />
+            <result column="promotion_value" property="promotionValue" />
+            <result column="status" property="status" />
+            <result column="remark" property="remark" />
+            <result column="first_reviewer" property="firstReviewer" />
+            <result column="first_review_time" property="firstReviewTime" />
+            <result column="second_reviewer" property="secondReviewer" />
+            <result column="second_review_time" property="secondReviewTime" />
+            <result column="review_comment" property="reviewComment" />
+            <result column="create_by" property="createBy" />
+            <result column="create_time" property="createTime" />
+            <result column="update_by" property="updateBy" />
+            <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                tenant_id, 
+                member_name, 
+                source_type, 
+                source_biz_id, 
+                promotion_config_id, 
+                promotion_value, 
+                status, 
+                remark, 
+                first_reviewer, 
+                first_review_time, 
+                second_reviewer, 
+                second_review_time, 
+                review_comment, 
+                create_by, 
+                create_time, 
+                update_by, 
+                update_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+                        <if test="queryForm.tenantId != null">
+                            AND tenant_id = #{queryForm.tenantId}
+                        </if>
+                        <if test="queryForm.memberName != null">
+                            AND member_name = #{queryForm.memberName}
+                        </if>
+                        <if test="queryForm.updateTimeBegin != null">
+                            AND update_time &gt;= #{queryForm.updateTimeBegin}
+                        </if>
+                        <if test="queryForm.updateTimeEnd != null">
+                            AND update_time &lt;= #{queryForm.updateTimeEnd}
+                        </if>
+                        <if test="queryForm.createTimeBegin != null">
+                            AND create_time &gt;= #{queryForm.createTimeBegin}
+                        </if>
+                        <if test="queryForm.createTimeEnd != null">
+                            AND create_time &lt;= #{queryForm.createTimeEnd}
+                        </if>
+                        <if test="queryForm.promotionConfigId != null">
+                            AND promotion_config_id = #{queryForm.promotionConfigId}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
+                        <if test="queryForm.sourceType != null">
+                            AND source_type = #{queryForm.sourceType}
+                        </if>
+                        <if test="queryForm.sourceBizId != null">
+                            AND source_biz_id = #{queryForm.sourceBizId}
+                        </if>
+                        <if test="queryForm.firstReviewer != null">
+                            AND first_reviewer = #{queryForm.firstReviewer}
+                        </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="ProposalRecordVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_proposal_record
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="ProposalRecordVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_proposal_record
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+                <delete id="batchDelete">
+                    delete from t_proposal_record
+                    where id in
+                    <foreach collection="idList" open="(" close=")" separator="," item="item">
+                        #{item}
+                    </foreach>
+                </delete>
+                <delete id="deleteById">
+                    delete from t_proposal_record
+                        where id = #{id}
+                </delete>
+
+</mapper>

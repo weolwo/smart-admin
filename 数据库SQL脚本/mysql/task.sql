@@ -171,8 +171,8 @@ CREATE TABLE `t_task_record`
     KEY `idx_t_tsk_rec_expire` (`status`, `valid_end_time`)
 ) COMMENT ='任务记录表';
 
-DROP TABLE IF EXISTS `t_promotion_proposal`;
-CREATE TABLE `t_promotion_proposal`
+DROP TABLE IF EXISTS `t_proposal_record`;
+CREATE TABLE `t_proposal_record`
 (
     `id`                  bigint         NOT NULL AUTO_INCREMENT comment 'id',
     `tenant_id`           varchar(16)    NOT NULL default '0' COMMENT '租户ID',
@@ -195,9 +195,9 @@ CREATE TABLE `t_promotion_proposal`
     `update_time`         datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_t_prm_prop_tsk_stg` (`source_type`, `source_biz_id`),
-    KEY `idx_t_prm_prop_sts` (`promotion_config_id`, `status`),
-    KEY `idx_t_prm_prop_name` (`member_name`, `create_time`)
-) COMMENT ='资产域-统一发奖提案控制表';
+    KEY `idx_prop_sts` (`promotion_config_id`, `status`),
+    KEY `idx_prop_name` (`member_name`, `create_time`)
+) COMMENT ='提案表';
 
 DROP TABLE IF EXISTS `t_prize_log`;
 CREATE TABLE `t_prize_log`
