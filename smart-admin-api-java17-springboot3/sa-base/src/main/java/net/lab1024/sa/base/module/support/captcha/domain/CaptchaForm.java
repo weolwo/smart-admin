@@ -18,10 +18,8 @@ import lombok.Data;
 public class CaptchaForm {
 
     @Schema(description = "验证码")
-    @NotBlank(message = "验证码不能为空")
     private String captchaCode;
 
     @Schema(description = "验证码uuid标识")
-    @NotBlank(message = "验证码uuid标识不能为空")
     private String captchaUuid;
 }

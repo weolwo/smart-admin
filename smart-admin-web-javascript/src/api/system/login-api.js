@@ -51,4 +51,10 @@ export const loginApi = {
   getTwoFactorLoginFlag: () => {
     return getRequest('/login/getTwoFactorLoginFlag');
   },
+  /**
+   * 获取验证码开关 @author 卓大
+   */
+  getCaptchaFlag: () => {
+    return getRequest('/login/getCaptchaFlag');
+  },
 };

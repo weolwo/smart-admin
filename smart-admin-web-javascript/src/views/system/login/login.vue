@@ -76,7 +76,7 @@
             />
           </a-popover>
         </a-form-item>
-        <a-form-item name="captchaCode">
+        <a-form-item name="captchaCode" v-if="captchaEnabled">
           <a-input class="captcha-input" v-model:value.trim="loginForm.captchaCode" placeholder="请输入验证码" />
           <img class="captcha-img" :src="captchaBase64Image" @click="getCaptcha" />
         </a-form-item>
@@ -90,7 +90,7 @@
 </template>
 <script setup>
   import { message, notification, Button } from 'ant-design-vue';
-  import { onMounted, onUnmounted, reactive, ref } from 'vue';
+  import { onMounted, onUnmounted, reactive, ref, computed } from 'vue';
   import { useRouter } from 'vue-router';
   import { loginApi } from '/@/api/system/login-api';
   import { SmartLoading } from '/@/components/framework/smart-loading';
@@ -117,7 +117,17 @@
   import { dictApi } from '/@/api/support/dict-api';
 
   //--------------------- 登录表单 ---------------------------------
+  // 1. 先定义开关变量（必须在 rules 之前）
+  const captchaEnabled = ref(true);
 
+  // 2. 再定义 rules，并使用 computed 包裹，实现动态响应
+  const rules = computed(() => {
+    return {
+      loginName: [{ required: true, message: '用户名不能为空' }],
+      password: [{ required: true, message: '密码不能为空' }],
+      captchaCode: captchaEnabled.value ? [{ required: true, message: '验证码不能为空' }] : [],
+    };
+  });
   const loginForm = reactive({
     loginName: 'admin',
     password: '',
@@ -125,11 +135,6 @@
     captchaUuid: '',
     loginDevice: LOGIN_DEVICE_ENUM.PC.value,
   });
-  const rules = {
-    loginName: [{ required: true, message: '用户名不能为空' }],
-    password: [{ required: true, message: '密码不能为空' }],
-    captchaCode: [{ required: true, message: '验证码不能为空' }],
-  };
 
   const showPassword = ref(false);
   const router = useRouter();
@@ -214,7 +219,20 @@
       console.log(e);
     }
   }
+  // 3. 写一个获取开关状态的方法
+  async function fetchCaptchaFlag() {
+    try {
+      let result = await loginApi.getCaptchaFlag();
+      captchaEnabled.value = result.data; // 把后端返回的 true/false 赋给它
 
+      // 如果开关是开启的，才去请求图形验证码图片
+      if (captchaEnabled.value) {
+        getCaptcha();
+      }
+    } catch (e) {
+      console.error('获取验证码开关失败', e);
+    }
+  }
   let refreshCaptchaInterval = null;
 
   function beginRefreshCaptchaInterval(expireSeconds) {
@@ -231,7 +249,7 @@
   }
 
   onMounted(() => {
-    getCaptcha();
+    fetchCaptchaFlag(); // <- 替换掉原来直接调用的 getCaptcha()
     getTwoFactorLoginFlag();
   });
 

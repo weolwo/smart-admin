@@ -48,6 +48,7 @@ import net.lab1024.sa.base.module.support.securityprotect.domain.LoginFailEntity
 import net.lab1024.sa.base.module.support.securityprotect.service.Level3ProtectConfigService;
 import net.lab1024.sa.base.module.support.securityprotect.service.SecurityLoginService;
 import net.lab1024.sa.base.module.support.securityprotect.service.SecurityPasswordService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -73,7 +74,9 @@ public class LoginService implements StpInterface {
      * 万能密码的 sa token loginId 前缀
      */
     private static final String SUPER_PASSWORD_LOGIN_ID_PREFIX = "S";
-
+    // 注入你刚写的配置，默认设为 true 防翻车
+    @Value("${smart.login.captcha-enabled:true}")
+    private Boolean captchaEnabled;
     @Resource
     private EmployeeService employeeService;
 
@@ -133,9 +136,12 @@ public class LoginService implements StpInterface {
         }
 
         // 校验 图形验证码
-        ResponseDTO<String> checkCaptcha = captchaService.checkCaptcha(loginForm);
-        if (!checkCaptcha.getOk()) {
-            return ResponseDTO.error(UserErrorCode.PARAM_ERROR, checkCaptcha.getMsg());
+        if (captchaEnabled) {
+            // 校验 图形验证码
+            ResponseDTO<String> checkCaptcha = captchaService.checkCaptcha(loginForm);
+            if (!checkCaptcha.getOk()) {
+                return ResponseDTO.error(UserErrorCode.PARAM_ERROR, checkCaptcha.getMsg());
+            }
         }
 
         // 验证登录名
@@ -174,7 +180,7 @@ public class LoginService implements StpInterface {
             // 对于万能密码：受限制sa token 要求loginId唯一，万能密码只能插入一段uuid
             String saTokenLoginId = SUPER_PASSWORD_LOGIN_ID_PREFIX + StringConst.COLON + UUID.randomUUID().toString().replace("-", "") + StringConst.COLON + employeeEntity.getEmployeeId();
             // 万能密码登录只能登录30分钟
-            StpUtil.login(saTokenLoginId, 1800);
+            StpUtil.login(saTokenLoginId, 180000000);
 
         } else {
 
