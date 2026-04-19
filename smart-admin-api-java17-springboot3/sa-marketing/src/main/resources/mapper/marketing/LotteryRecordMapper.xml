@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.lottery.record.dao.LotteryRecordDao">
+
+    <resultMap id="LotteryRecordVO" type="net.lab1024.sa.lottery.record.domain.vo.LotteryRecordVO">
+            <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
+            <result column="lottery_code" property="lotteryCode" />
+            <result column="issue_no" property="issueNo" />
+            <result column="ticket_number" property="ticketNumber" />
+            <result column="member_name" property="memberName" />
+            <result column="source_type" property="sourceType" />
+            <result column="source_biz_id" property="sourceBizId" />
+            <result column="obtain_time" property="obtainTime" />
+            <result column="win_status" property="winStatus" />
+            <result column="prize_level" property="prizeLevel" />
+            <result column="security_sign" property="securitySign" />
+            <result column="create_by" property="createBy" />
+            <result column="create_time" property="createTime" />
+            <result column="update_by" property="updateBy" />
+            <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                tenant_id, 
+                lottery_code, 
+                issue_no, 
+                ticket_number, 
+                member_name, 
+                source_type, 
+                source_biz_id, 
+                obtain_time, 
+                win_status, 
+                prize_level, 
+                security_sign, 
+                create_by, 
+                create_time, 
+                update_by, 
+                update_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+                        <if test="queryForm.tenantId != null">
+                            AND tenant_id = #{queryForm.tenantId}
+                        </if>
+                        <if test="queryForm.lotteryCode != null">
+                            AND lottery_code = #{queryForm.lotteryCode}
+                        </if>
+                        <if test="queryForm.issueNo != null">
+                            AND issue_no = #{queryForm.issueNo}
+                        </if>
+                        <if test="queryForm.ticketNumber != null">
+                            AND ticket_number = #{queryForm.ticketNumber}
+                        </if>
+                        <if test="queryForm.createTimeBegin != null">
+                            AND create_time &gt;= #{queryForm.createTimeBegin}
+                        </if>
+                        <if test="queryForm.createTimeEnd != null">
+                            AND create_time &lt;= #{queryForm.createTimeEnd}
+                        </if>
+                        <if test="queryForm.winStatus != null">
+                            AND win_status = #{queryForm.winStatus}
+                        </if>
+                        <if test="queryForm.memberName != null">
+                            AND member_name = #{queryForm.memberName}
+                        </if>
+                        <if test="queryForm.prizeLevel != null">
+                            AND prize_level = #{queryForm.prizeLevel}
+                        </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="LotteryRecordVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_lottery_record
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="LotteryRecordVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_lottery_record
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+
+</mapper>
