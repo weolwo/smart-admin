@@ -25,15 +25,15 @@ CREATE TABLE `t_prize_pool_item`
 (
     `id`             bigint         NOT NULL AUTO_INCREMENT comment 'id',
     `tenant_id`      varchar(16)    NOT NULL DEFAULT '0' comment '租户id',
-    `activity_code`  varchar(32)    NOT NULL COMMENT '归属活动编码',
-    `item_name`      varchar(128)   NOT NULL COMMENT '奖项展示名称(如: 豪华茅台)',
+    `activity_code`  varchar(32)    NOT NULL COMMENT '活动编码',
+    `item_name`      varchar(128)   NOT NULL COMMENT '奖项名称(如: 豪华茅台)',
     `item_value`     decimal(10, 4) NULL     default 0.0000 COMMENT '奖项价值',
     `item_image`     varchar(255)            DEFAULT NULL COMMENT '奖项UI图标URL',
-    `prize_code`     varchar(64)    NOT NULL COMMENT '关联(t_prize_config)',
+    `prize_code`     varchar(64)    NOT NULL COMMENT '奖品编码',
     `user_max_count` int            NOT NULL DEFAULT '-1' COMMENT '单人限领次数: -1不限, 1表示每人最多中一次',
-    `total_stock`    int            NOT NULL DEFAULT '-1' COMMENT '本次活动总共出几个？-1不限',
-    `used_stock`     int            NOT NULL DEFAULT '0' COMMENT '跨奖池累计已出数量',
-    `white_list`     json                    DEFAULT NULL COMMENT '活动级白名单：指定用户必中',
+    `total_stock`    int            NOT NULL DEFAULT '-1' COMMENT '总库存',
+    `used_stock`     int            NOT NULL DEFAULT '0' COMMENT '已用库存',
+    `white_list`     json                    DEFAULT NULL COMMENT '白名单：指定用户必中',
 
     `create_by`     varchar(32)          DEFAULT NULL comment '创建人',
     `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP comment '创建时间',
@@ -41,7 +41,7 @@ CREATE TABLE `t_prize_pool_item`
     `update_time`   datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP comment '更新时间',
     PRIMARY KEY (`id`),
     KEY `idx_activity` (`activity_code`)
-) COMMENT ='奖池奖项库';
+) COMMENT ='奖池奖项';
 
 -- 3. 奖池配置表 (多池支持与抽奖门票)
 DROP TABLE IF EXISTS `t_prize_pool_config`;

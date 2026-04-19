@@ -1,0 +1,102 @@
+package net.lab1024.sa.draw.poolitem.domain.entity;
+
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.Data;
+
+/**
+ * 奖池奖项库 实体类
+ *
+ * @Author weolwo
+ * @Date 2026-04-19 09:52:45
+ * @Copyright weolwo
+ */
+
+@Data
+@TableName("t_prize_pool_item")
+public class PrizePoolItem {
+
+    /**
+     * id
+     */
+    @TableId(type = IdType.AUTO)
+    private Long id;
+
+    /**
+     * 租户id
+     */
+    private String tenantId;
+
+    /**
+     * 归属活动编码
+     */
+    private String activityCode;
+
+    /**
+     * 奖项展示名称(如: 豪华茅台)
+     */
+    private String itemName;
+
+    /**
+     * 奖项价值
+     */
+    private BigDecimal itemValue;
+
+    /**
+     * 奖项UI图标URL
+     */
+    private String itemImage;
+
+    /**
+     * 关联(t_prize_config)
+     */
+    private String prizeCode;
+
+    /**
+     * 单人限领次数: -1不限, 1表示每人最多中一次
+     */
+    private Integer userMaxCount;
+
+    /**
+     * 本次活动总共出几个？-1不限
+     */
+    private Integer totalStock;
+
+    /**
+     * 跨奖池累计已出数量
+     */
+    private Integer usedStock;
+
+    /**
+     * 活动级白名单：指定用户必中
+     */
+    private String whiteList;
+
+    /**
+     * 创建人
+     */
+    private String createBy;
+
+    /**
+     * 创建时间
+     */
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createTime;
+
+    /**
+     * 更新人
+     */
+    private String updateBy;
+
+    /**
+     * 更新时间
+     */
+    @TableField(fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updateTime;
+
+}
