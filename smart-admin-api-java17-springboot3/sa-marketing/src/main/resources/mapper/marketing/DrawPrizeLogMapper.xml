@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.lab1024.sa.draw.drawlog.dao.DrawPrizeLogDao">
+
+    <resultMap id="DrawPrizeLogVO" type="net.lab1024.sa.draw.drawlog.domain.vo.DrawPrizeLogVO">
+            <result column="id" property="id" />
+            <result column="tenant_id" property="tenantId" />
+            <result column="trace_id" property="traceId" />
+            <result column="activity_code" property="activityCode" />
+            <result column="pool_code" property="poolCode" />
+            <result column="member_name" property="memberName" />
+            <result column="prize_item_id" property="prizeItemId" />
+            <result column="prize_code" property="prizeCode" />
+            <result column="status" property="status" />
+            <result column="remark" property="remark" />
+            <result column="create_time" property="createTime" />
+    </resultMap>
+
+    <sql id="base_columns">
+                id, 
+                tenant_id, 
+                trace_id, 
+                activity_code, 
+                pool_code, 
+                member_name, 
+                prize_item_id, 
+                prize_code, 
+                status, 
+                remark, 
+                create_time
+    </sql>
+
+    <sql id="query_conditions">
+        <where>
+                        <if test="queryForm.tenantId != null">
+                            AND tenant_id = #{queryForm.tenantId}
+                        </if>
+                        <if test="queryForm.traceId != null">
+                            AND trace_id = #{queryForm.traceId}
+                        </if>
+                        <if test="queryForm.activityCode != null">
+                            AND activity_code = #{queryForm.activityCode}
+                        </if>
+                        <if test="queryForm.createTimeBegin != null">
+                            AND create_time &gt;= #{queryForm.createTimeBegin}
+                        </if>
+                        <if test="queryForm.createTimeEnd != null">
+                            AND create_time &lt;= #{queryForm.createTimeEnd}
+                        </if>
+                        <if test="queryForm.memberName != null">
+                            AND member_name = #{queryForm.memberName}
+                        </if>
+                        <if test="queryForm.poolCode != null">
+                            AND pool_code = #{queryForm.poolCode}
+                        </if>
+                        <if test="queryForm.status != null">
+                            AND status = #{queryForm.status}
+                        </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultMap="DrawPrizeLogVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_draw_prize_log
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="queryList" resultMap="DrawPrizeLogVO">
+        SELECT
+        <include refid="base_columns"/>
+        FROM t_draw_prize_log
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+                <delete id="batchDelete">
+                    delete from t_draw_prize_log
+                    where id in
+                    <foreach collection="idList" open="(" close=")" separator="," item="item">
+                        #{item}
+                    </foreach>
+                </delete>
+                <delete id="deleteById">
+                    delete from t_draw_prize_log
+                        where id = #{id}
+                </delete>
+
+</mapper>
