@@ -105,5 +105,6 @@ CREATE TABLE `t_lottery_number_pool`
     `sequence_no`   int         NOT NULL COMMENT '发号序列号',
     PRIMARY KEY (`id`),
     -- 索引用于：开奖时根据中奖号字符串反查 ID
-    UNIQUE KEY `uk_lottery_num` (`lottery_code`, `ticket_number`)
+    UNIQUE KEY `uk_lottery_num` (`lottery_code`, `ticket_number`),
+    KEY `idx_number_pool_member` (`sequence_no`)
 ) COMMENT ='彩票号码池';

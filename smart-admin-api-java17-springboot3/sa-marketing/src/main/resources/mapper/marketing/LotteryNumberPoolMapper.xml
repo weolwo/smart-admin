@@ -35,7 +35,6 @@
         <include refid="base_columns"/>
         FROM t_lottery_number_pool
         <include refid="query_conditions"/>
-        ORDER BY create_time DESC
     </select>
 
     <select id="queryList" resultMap="LotteryNumberPoolVO">
@@ -43,7 +42,6 @@
         <include refid="base_columns"/>
         FROM t_lottery_number_pool
         <include refid="query_conditions"/>
-        ORDER BY create_time DESC
     </select>
 
                 <delete id="batchDelete">

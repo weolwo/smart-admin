@@ -53,6 +53,7 @@
         <tika.version>3.1.0</tika.version>
         <httpcomponents.version>5.5</httpcomponents.version>
         <qlexpress.version>4.1.0</qlexpress.version>
+        <transmittable-thread-local.version>2.14.5</transmittable-thread-local.version>
     </properties>
 
     <dependencyManagement>
@@ -319,6 +320,12 @@
                 <groupId>com.alibaba</groupId>
                 <artifactId>qlexpress4</artifactId>
                 <version>${qlexpress.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>transmittable-thread-local</artifactId>
+                <version>${transmittable-thread-local.version}</version>
+                <scope>compile</scope>
             </dependency>
         </dependencies>
 
