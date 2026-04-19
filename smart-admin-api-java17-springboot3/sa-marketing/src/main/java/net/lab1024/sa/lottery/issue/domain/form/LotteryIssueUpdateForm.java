@@ -1,0 +1,50 @@
+package net.lab1024.sa.lottery.issue.domain.form;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
+import java.time.LocalDateTime;
+import lombok.Data;
+
+/**
+ * 期号配置 更新表单
+ *
+ * @Author weolwo
+ * @Date 2026-04-19 11:23:43
+ * @Copyright weolwo
+ */
+
+@Data
+public class LotteryIssueUpdateForm {
+
+    @Schema(description = "id", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "id 不能为空")
+    private Long id;
+
+    @Schema(description = "开始售卖", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "开始售卖 不能为空")
+    private LocalDateTime sellStartTime;
+
+    @Schema(description = "结束时间", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "结束时间 不能为空")
+    private LocalDateTime sellEndTime;
+
+    @Schema(description = "开奖时间")
+    private LocalDateTime openTime;
+
+    @Schema(description = "是否可重复开奖：0否，1是", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "是否可重复开奖：0否，1是 不能为空")
+    private Integer canRepeat;
+
+    @Schema(description = "开奖号码")
+    private String winningNumber;
+
+    @Schema(description = "状态: 0-待开奖, 1-售卖中, 2-已开奖")
+    private Integer status;
+
+    @Schema(description = "更新人")
+    private String updateBy;
+
+    @Schema(description = "更新时间")
+    private LocalDateTime updateTime;
+
+}
