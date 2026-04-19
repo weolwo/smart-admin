@@ -2,19 +2,21 @@ DROP TABLE IF EXISTS `t_lottery_config`;
 CREATE TABLE `t_lottery_config`
 (
     `id`              bigint         NOT NULL AUTO_INCREMENT comment 'id',
-    `tenant_id`       varchar(16)    NOT NULL DEFAULT '0',
-    `activity_code`   varchar(32)    NOT NULL COMMENT '挂载的活动编码',
-    `lottery_code`    varchar(32)    NOT NULL COMMENT '彩票玩法唯一编码',
-    `lottery_name`    varchar(128)   NOT NULL COMMENT '彩票名称 (如: 五一狂欢盲盒券)',
+    `tenant_id`       varchar(16)    NOT NULL DEFAULT '0' comment '租户id',
+    `activity_code`   varchar(32)    NOT NULL COMMENT '活动编码',
+    `lottery_code`    varchar(32)    NOT NULL COMMENT '彩票编码',
+    `lottery_name`    varchar(128)   NOT NULL COMMENT '彩票名称',
     `number_charset`  varchar(32)    NOT NULL DEFAULT '0-9' COMMENT '字符集：0-9, A-Z',
     `number_length`   tinyint        NOT NULL DEFAULT 5 COMMENT '号码长度',
     `total_count`     int            NOT NULL COMMENT '号池总数 (如: 1,000,000)',
-    `cost_asset_type` varchar(32)    NOT NULL DEFAULT 'SCORE' COMMENT '入场成本-资产类型 (SCORE, FREE)',
+    `cost_asset_type` varchar(32)    NOT NULL DEFAULT 'SCORE' COMMENT '入场成本类型 (SCORE, FREE)',
     `cost_value`      decimal(18, 4) NOT NULL DEFAULT '0' COMMENT '入场成本-数值',
 
     `status`          tinyint        NOT NULL DEFAULT '1' COMMENT '状态：0-下线, 1-上线',
-    `create_time`     datetime                DEFAULT CURRENT_TIMESTAMP,
-    `update_time`     datetime                DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `create_by`     varchar(32)          DEFAULT NULL comment '创建人',
+    `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP comment '创建时间',
+    `update_by`     varchar(32)          DEFAULT NULL comment '更新人',
+    `update_time`   datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP comment '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_lottery_code` (`lottery_code`)
 ) COMMENT ='彩票配置';
@@ -23,7 +25,7 @@ CREATE TABLE `t_lottery_issue`
 (
     `id`              bigint      NOT NULL AUTO_INCREMENT comment 'id',
     `tenant_id`       varchar(16) NOT NULL DEFAULT '0' comment '租户id',
-    `lottery_code`    varchar(32) NOT NULL COMMENT '彩票配置编码',
+    `lottery_code`    varchar(32) NOT NULL COMMENT '彩票编码',
     `issue_no`        varchar(32) NOT NULL COMMENT '期号',
     `sold_count`      int         NOT NULL DEFAULT 0 COMMENT '已售/已派发数量',
 
@@ -35,8 +37,10 @@ CREATE TABLE `t_lottery_issue`
     `can_repeat`      tinyint     NOT NULL DEFAULT 0 COMMENT '是否可重复开奖：0否，1是',
     `winning_number`  json                 DEFAULT NULL COMMENT '开奖号码',
     `status`          tinyint     NOT NULL DEFAULT '0' COMMENT '状态: 0-待开奖, 1-售卖中, 2-已开奖',
-    `create_time`     datetime             DEFAULT CURRENT_TIMESTAMP,
-    `update_time`     datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `create_by`     varchar(32)          DEFAULT NULL comment '创建人',
+    `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP comment '创建时间',
+    `update_by`     varchar(32)          DEFAULT NULL comment '更新人',
+    `update_time`   datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP comment '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_issue_no` (`lottery_code`, `issue_no`)
 ) COMMENT ='期号配置';
@@ -45,7 +49,7 @@ CREATE TABLE `t_lottery_prize_rule`
 (
     `id`           bigint         NOT NULL AUTO_INCREMENT comment 'id',
     `tenant_id`    varchar(16)    NOT NULL DEFAULT '0' comment '租户id',
-    `lottery_code` varchar(32)    NOT NULL COMMENT '彩票配置编码',
+    `lottery_code` varchar(32)    NOT NULL COMMENT '彩票编码',
 
     `prize_level`  int            NOT NULL COMMENT '奖励等级',
     `prize_name`   varchar(64)    NOT NULL COMMENT '如: 终极大奖',
@@ -54,17 +58,20 @@ CREATE TABLE `t_lottery_prize_rule`
     -- 【关联底层财务与资产】
     `prize_code`   varchar(64)    NOT NULL COMMENT '奖品编码',
     `prize_value`  decimal(18, 4) NOT NULL COMMENT '奖励价值',
-    `create_time`  datetime                DEFAULT CURRENT_TIMESTAMP,
+    `create_by`     varchar(32)          DEFAULT NULL comment '创建人',
+    `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP comment '创建时间',
+    `update_by`     varchar(32)          DEFAULT NULL comment '更新人',
+    `update_time`   datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP comment '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_lottery_level` (`lottery_code`, `prize_level`)
 ) COMMENT ='彩票奖励配置';
 
-DROP TABLE IF EXISTS `t_lottery_ticket_record`;
-CREATE TABLE `t_lottery_ticket_record`
+DROP TABLE IF EXISTS `t_lottery_record`;
+CREATE TABLE `t_lottery_record`
 (
     `id`            bigint       NOT NULL AUTO_INCREMENT comment 'id',
     `tenant_id`     varchar(16)  NOT NULL DEFAULT '0'comment '租户id',
-    `lottery_code`  varchar(32)  NOT NULL COMMENT '彩票配置编码',
+    `lottery_code`  varchar(32)  NOT NULL COMMENT '彩票编码',
     `issue_no`      varchar(32)  NOT NULL COMMENT '归属期号',
     `ticket_number` varchar(32)  NOT NULL COMMENT '彩票号码',
 
@@ -78,8 +85,10 @@ CREATE TABLE `t_lottery_ticket_record`
     `win_status`    tinyint      NOT NULL DEFAULT 0 COMMENT '中奖状态: 0-未开奖, 1-未中奖, 已开奖',
     `prize_level`   int                   DEFAULT NULL COMMENT '奖励等级',
     `security_sign` varchar(128) NOT NULL COMMENT '签名',
-    `create_time`   datetime              DEFAULT CURRENT_TIMESTAMP,
-    `update_time`   datetime              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `create_by`     varchar(32)          DEFAULT NULL comment '创建人',
+    `create_time`   datetime             DEFAULT CURRENT_TIMESTAMP comment '创建时间',
+    `update_by`     varchar(32)          DEFAULT NULL comment '更新人',
+    `update_time`   datetime             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP comment '更新时间',
     PRIMARY KEY (`id`),
     -- 【核心索引】
     UNIQUE KEY `uk_issue_ticket` (`lottery_code`, `issue_no`, `ticket_number`),
@@ -90,7 +99,7 @@ DROP TABLE IF EXISTS `t_lottery_number_pool`;
 CREATE TABLE `t_lottery_number_pool`
 (
     `id`            bigint      NOT NULL AUTO_INCREMENT comment 'id',
-    `lottery_code`  varchar(32) NOT NULL COMMENT '彩票配置编码',
+    `lottery_code`  varchar(32) NOT NULL COMMENT '彩票编码',
     `ticket_number` varchar(32) NOT NULL COMMENT '彩票号码',
     -- 【终极发号游标键】每个活动内部绝对连续的序号 (1, 2, 3... 100000)
     `sequence_no`   int         NOT NULL COMMENT '发号序列号',
