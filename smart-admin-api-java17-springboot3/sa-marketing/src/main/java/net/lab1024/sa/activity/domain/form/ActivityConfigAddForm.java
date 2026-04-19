@@ -1,4 +1,4 @@
-package net.lab1024.sa.activity.activityconfig.domain.form;
+package net.lab1024.sa.activity.domain.form;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 活动配置 更新表单
+ * 活动配置 新建表单
  *
  * @Author weolwo
  * @Date 2026-04-18 19:31:49
@@ -15,11 +15,15 @@ import lombok.Data;
  */
 
 @Data
-public class ActivityConfigUpdateForm {
+public class ActivityConfigAddForm {
 
-    @Schema(description = "id", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotNull(message = "id 不能为空")
-    private Long id;
+    @Schema(description = "租户id", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "租户id 不能为空")
+    private String tenantId;
+
+    @Schema(description = "活动编码", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "活动编码 不能为空")
+    private String activityCode;
 
     @Schema(description = "活动名称", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "活动名称 不能为空")

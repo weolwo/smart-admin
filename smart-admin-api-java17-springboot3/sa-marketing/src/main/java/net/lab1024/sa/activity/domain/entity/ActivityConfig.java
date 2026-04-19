@@ -1,4 +1,4 @@
-package net.lab1024.sa.activity.activityconfig.domain.entity;
+package net.lab1024.sa.activity.domain.entity;
 
 import com.baomidou.mybatisplus.annotation.FieldFill;
 import com.baomidou.mybatisplus.annotation.IdType;

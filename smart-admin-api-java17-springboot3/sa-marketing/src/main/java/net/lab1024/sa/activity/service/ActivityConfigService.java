@@ -1,12 +1,12 @@
-package net.lab1024.sa.activity.activityconfig.service;
+package net.lab1024.sa.activity.service;
 
 import java.util.List;
-import net.lab1024.sa.activity.activityconfig.dao.ActivityConfigDao;
-import net.lab1024.sa.activity.activityconfig.domain.entity.ActivityConfig;
-import net.lab1024.sa.activity.activityconfig.domain.form.ActivityConfigAddForm;
-import net.lab1024.sa.activity.activityconfig.domain.form.ActivityConfigQueryForm;
-import net.lab1024.sa.activity.activityconfig.domain.form.ActivityConfigUpdateForm;
-import net.lab1024.sa.activity.activityconfig.domain.vo.ActivityConfigVO;
+import net.lab1024.sa.activity.dao.ActivityConfigDao;
+import net.lab1024.sa.activity.domain.entity.ActivityConfig;
+import net.lab1024.sa.activity.domain.form.ActivityConfigAddForm;
+import net.lab1024.sa.activity.domain.form.ActivityConfigQueryForm;
+import net.lab1024.sa.activity.domain.form.ActivityConfigUpdateForm;
+import net.lab1024.sa.activity.domain.vo.ActivityConfigVO;
 import net.lab1024.sa.base.common.util.SmartBeanUtil;
 import net.lab1024.sa.base.common.util.SmartPageUtil;
 import net.lab1024.sa.base.common.domain.ResponseDTO;

@@ -1,7 +1,7 @@
-package net.lab1024.sa.activity.activityconfig.manager;
+package net.lab1024.sa.activity.manager;
 
-import net.lab1024.sa.activity.activityconfig.dao.ActivityConfigDao;
-import net.lab1024.sa.activity.activityconfig.domain.entity.ActivityConfig;
+import net.lab1024.sa.activity.dao.ActivityConfigDao;
+import net.lab1024.sa.activity.domain.entity.ActivityConfig;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.stereotype.Service;

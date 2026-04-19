@@ -1,14 +1,13 @@
-package net.lab1024.sa.activity.activityconfig.dao;
+package net.lab1024.sa.activity.dao;
 
         import java.util.List;
-        import net.lab1024.sa.activity.activityconfig.domain.entity.ActivityConfig;
-        import net.lab1024.sa.activity.activityconfig.domain.form.ActivityConfigQueryForm;
-        import net.lab1024.sa.activity.activityconfig.domain.vo.ActivityConfigVO;
+        import net.lab1024.sa.activity.domain.entity.ActivityConfig;
+        import net.lab1024.sa.activity.domain.form.ActivityConfigQueryForm;
+        import net.lab1024.sa.activity.domain.vo.ActivityConfigVO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.apache.ibatis.annotations.Mapper;
+        import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import java.util.List;
 
 /**
  * 活动配置 Dao
