@@ -155,7 +155,18 @@ const result = ref<RedeemResult | null>(null)
 /** 按钮为什么不能点，要说出来 —— 一个没有解释的置灰按钮等于死路 */
 const blockedReason = computed<string | null>(() => {
   if (detail.data.value === null) {
+    // 模板里整块都在 detail.data 非空之后才渲染，所以这条走不到；留着是为了
+    // 让这个 computed 单独看也是自洽的
     return null
+  }
+  /*
+   * 🔴 地址还在路上时也要拦。
+   * 少了这一条，实物商品会在 addresses 落地前短暂放行 ——
+   * 那一瞬间 address 是 null，请求就带着 null 出去了，
+   * 后端回「请选择收货地址」，而页面上地址那一栏随后正常显示出来。
+   */
+  if (needsAddress.value && addresses.loading.value) {
+    return '加载中…'
   }
   if (sku.value === null) {
     return '请先回上一页选择规格'
@@ -185,7 +196,13 @@ async function onConfirm(): Promise<void> {
     const outcome = await redeem({
       skuId: chosen.skuId,
       quantity: quantity.value,
-      addressId: needsAddress.value ? (address.value?.id ?? null) : null,
+      /*
+       * 🔴 只看 address，不再另判一次 needsAddress。
+       * address 本身已经保证「非实物为 null」，而拦截用的 blockedReason 判的也是它 ——
+       * 三处各判一遍的话，它们迟早会不一致：那时按钮放行、请求却带着 null 出去，
+       * 表现就是后端回「请选择收货地址」而前端明明显示着地址。
+       */
+      addressId: address.value?.id ?? null,
       requestId: crypto.randomUUID(),
     })
     result.value = outcome

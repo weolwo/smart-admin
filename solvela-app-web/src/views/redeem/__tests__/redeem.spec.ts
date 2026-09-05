@@ -1,10 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import type { CommodityQuery } from '@/api/mall'
 import type { Address, AddressInput } from '@/api/address'
+import { ADDRESSES } from '@/testing/fixtures'
 import { toId, type Id } from '@/types/contract'
 
 import RedeemView from '../RedeemView.vue'
@@ -19,6 +20,9 @@ import RedeemView from '../RedeemView.vue'
  * 兑换返回值。桩里固定是 30-已完成，而「商品将寄往」那一行只在
  * 10-待履约 时画 —— 要验它就得能换掉这个返回。
  */
+/** 让某条用例把地址请求挂住，用来验「详情先回来、地址还在路上」那一刻 */
+const holdAddresses = vi.hoisted(() => ({ value: null as Promise<unknown> | null }))
+
 const redeemResult = vi.hoisted(() => ({
   value: null as { orderNo: string; status: number; message: string } | null,
 }))
@@ -93,6 +97,7 @@ vi.mock('@/api/address', async (importOriginal) => {
   return {
     ...actual,
     fetchAddresses: () =>
+      holdAddresses.value ??
       Promise.resolve([...list].sort((a, b) => Number(b.isDefault) - Number(a.isDefault))),
     fetchAddress: (id: Id) => {
       const found = list.find((a) => a.id === id)
@@ -164,6 +169,16 @@ async function mountRedeem(path: string) {
 const FULL = '/redeem/7002?sku=80021&qty=1'
 
 describe('RedeemView', () => {
+  /*
+   * 每条用例前复位这两个开关。少了这一步，一条用例失败（没走到收尾那行）
+   * 就会把「地址永远加载中」漏给后面所有用例 —— 一处红变成一片红，
+   * 而真正坏掉的那条淹没在里面。
+   */
+  beforeEach(() => {
+    holdAddresses.value = null
+    redeemResult.value = null
+  })
+
   it('把 query 里的 SKU 还原成可读摘要，并显示件数', async () => {
     const w = await mountRedeem(FULL)
     const html = w.html()
@@ -231,6 +246,34 @@ describe('RedeemView', () => {
     // 该说的是「去哪看」，不是留一行「—」
     expect(text).toContain('兑换记录')
     redeemResult.value = null
+  })
+
+  it('🔴 地址还在路上时说「加载中」，不是「请选择收货地址」', async () => {
+    /*
+     * 详情和地址是两个并行请求，详情先回来是常事。那一刻 address 还是 null，
+     * 页面却对着一个有默认地址的账号说「请选择收货地址」——
+     * 用户看到的就是「明明有地址，却一直让我选」。
+     *
+     * 拦是对的（不能让 null 地址溜出去），但话说错了。
+     */
+    let release!: (v: Address[]) => void
+    holdAddresses.value = new Promise<Address[]>((r) => {
+      release = r
+    })
+
+    await router.push('/redeem/7005?sku=97005&qty=1')
+    await router.isReady()
+    const w = mount(RedeemView, { global })
+    await settle()
+
+    expect(w.find('.sv-btn').attributes('disabled')).toBeDefined()
+    expect(w.find('.bar__hint').text()).toContain('加载中')
+    expect(w.find('.bar__hint').text()).not.toContain('请选择收货地址')
+
+    release(ADDRESSES)
+    holdAddresses.value = null
+    await settle()
+    expect(w.find('.sv-btn').attributes('disabled')).toBeUndefined()
   })
 
   it('实物的成功页要说清寄到哪', async () => {
