@@ -88,10 +88,29 @@ const pickedAddressId = computed<Id | null>(() => {
 /**
  * 最终用哪条地址：挑过就用挑的，否则用默认那条
  *（{@link fetchAddresses} 把默认地址排在最前，所以取第 0 条即可）。
+ *
+ * <h3>🔴 非实物一律为 null</h3>
+ * 券和红包不寄东西。这里原先不看商品类型，于是兑一张券时它照样算出了
+ * 用户的默认地址，成功页因此显示「商品将寄往：××」——
+ * 用户以为一张券要寄快递。提交时的 addressId 另有 needsAddress 把关，
+ * 所以那是个纯展示问题，但<b>展示错了一样是错</b>。
+ *
+ * <p>根子上的问题是「有没有地址」被算成了「地址簿里有没有东西」，
+ * 而它真正该表达的是「这一单要不要寄」。改在这里而不是改成功页那一行：
+ * 只要 address 会为非实物算出值，下一个用它的地方还会再错一次。
  */
 const address = computed<Address | null>(() => {
+  if (!needsAddress.value) {
+    return null
+  }
   const list = addresses.data.value ?? []
   if (pickedAddressId.value !== null) {
+    /*
+     * 🔴 两边都必须是字符串。后端的 Long 小值下发的是 JSON 数字，
+     * 而 query 里永远是字符串 —— 归一在 api/address.ts 的反序列化边界做。
+     * 少了那一步，`1 === '1'` 恒 false：挑过一次地址之后
+     * 这里永远找不到，兑换页会一直提示「请选择收货地址」。
+     */
     return list.find((a) => a.id === pickedAddressId.value) ?? null
   }
   return list[0] ?? null
@@ -207,8 +226,17 @@ function goRecords(): void {
         <p v-if="result.status === OrderStatus.UNPAID" class="done__note">
           ⚠️ 现金部分还没有支付链路（后端未实现），这一单会停在「待支付」。
         </p>
+        <!--
+          只有实物才寄。券/红包画这一行等于告诉用户「你的券要走快递」。
+          🔴 这里<b>只判 address</b>，不再顺手加一个 needsAddress：
+          address 本身已经保证「非实物为 null」，两道守卫看着更保险，
+          实际是两道都测不到 —— 拿掉任意一道测试都还是绿的。
+        -->
+        <p v-else-if="result.status === OrderStatus.PENDING && address !== null" class="done__note">
+          商品将寄往：{{ formatAddressLine(address) }}
+        </p>
         <p v-else-if="result.status === OrderStatus.PENDING" class="done__note">
-          商品将寄往：{{ address === null ? '—' : formatAddressLine(address) }}
+          我们会尽快为你发放，可在「我的 → 兑换记录」查看
         </p>
         <Button @click="goRecords">查看我的记录</Button>
       </div>

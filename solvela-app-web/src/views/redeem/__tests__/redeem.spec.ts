@@ -15,6 +15,14 @@ import RedeemView from '../RedeemView.vue'
  * 所以在这里把它钉死 —— 比让测试依赖某个桩里的数字更清楚，
  * 也不会因为后端改了样例数据就红。
  */
+/**
+ * 兑换返回值。桩里固定是 30-已完成，而「商品将寄往」那一行只在
+ * 10-待履约 时画 —— 要验它就得能换掉这个返回。
+ */
+const redeemResult = vi.hoisted(() => ({
+  value: null as { orderNo: string; status: number; message: string } | null,
+}))
+
 /* mock 工厂里不能写 import() 类型注解（eslint），先在这里起个别名 */
 /* eslint-disable-next-line @typescript-eslint/consistent-type-imports */
 type MallModule = typeof import('@/api/mall')
@@ -70,7 +78,7 @@ vi.mock('@/api/mall', async (importOriginal) => {
       else favorites.delete(id)
       return Promise.resolve()
     },
-    redeem: () => Promise.resolve(fixtures.REDEEM_RESULT),
+    redeem: () => Promise.resolve(redeemResult.value ?? fixtures.REDEEM_RESULT),
   }
 })
 
@@ -202,6 +210,51 @@ describe('RedeemView', () => {
     const virtual = await mountRedeem('/redeem/7008?sku=97008&qty=1')
     expect(virtual.html()).not.toContain('收货地址')
     expect(virtual.html()).toContain('1,000 积分')
+  })
+
+  it('🔴 兑券的成功页不许出现收货地址 —— 券不走快递', async () => {
+    redeemResult.value = { orderNo: 'DEMO1', status: 10, message: '兑换成功' }
+    // 7008 是 COUPON，1000 积分，余额够
+    const w = await mountRedeem('/redeem/7008?sku=97008&qty=1')
+    await w.find('.sv-btn').trigger('click')
+    await settle()
+
+    /*
+     * address 原先不看商品类型，照样算出用户的默认地址，于是兑一张券
+     * 也显示「商品将寄往：××」—— 用户以为一张券要寄快递。
+     * 提交的 addressId 另有 needsAddress 把关，所以是纯展示问题，
+     * 但展示错了一样是错。
+     */
+    const text = w.text()
+    expect(text).not.toContain('寄往')
+    expect(text).not.toContain('张三')
+    // 该说的是「去哪看」，不是留一行「—」
+    expect(text).toContain('兑换记录')
+    redeemResult.value = null
+  })
+
+  it('实物的成功页要说清寄到哪', async () => {
+    redeemResult.value = { orderNo: 'DEMO2', status: 10, message: '兑换成功' }
+    // 7005 是 PHYSICAL，8900 积分，余额 12345 够
+    const w = await mountRedeem('/redeem/7005?sku=97005&qty=1')
+    await w.find('.sv-btn').trigger('click')
+    await settle()
+    expect(w.text()).toContain('寄往')
+    redeemResult.value = null
+  })
+
+  it('🔴 挑过地址之后还认得出来 —— query 是字符串，而 id 曾经是数字', async () => {
+    /*
+     * 地址簿把 address=8001 塞进 query，而后端的 Long 小值下发的是 JSON 数字。
+     * 归一少做一步，`8001 === '8001'` 恒 false：挑过一次地址之后页面永远找不到它，
+     * 于是一直提示「请选择收货地址」，而用户明明选了。
+     * api/address.ts 的反序列化边界把 id 收成字符串，这条盯着它。
+     */
+    const w = await mountRedeem('/redeem/7005?sku=97005&qty=1&address=8001')
+    expect(w.html()).toContain('张三')
+    // 拦不住是重点：不是「没选地址」，而是选了却认不出来
+    expect(w.text()).not.toContain('请选择收货地址')
+    expect(w.find('.sv-btn').attributes('disabled')).toBeUndefined()
   })
 
   it('虚拟商品积分够，能兑，兑完显示订单号与到账', async () => {
