@@ -89,20 +89,24 @@ const pickedAddressId = computed<Id | null>(() => {
  * 最终用哪条地址：挑过就用挑的，否则用默认那条
  *（{@link fetchAddresses} 把默认地址排在最前，所以取第 0 条即可）。
  *
- * <h3>🔴 非实物一律为 null</h3>
- * 券和红包不寄东西。这里原先不看商品类型，于是兑一张券时它照样算出了
- * 用户的默认地址，成功页因此显示「商品将寄往：××」——
- * 用户以为一张券要寄快递。提交时的 addressId 另有 needsAddress 把关，
- * 所以那是个纯展示问题，但<b>展示错了一样是错</b>。
+ * <h3>🔴 这里<b>不看商品类型</b>，是刻意的</h3>
+ * 曾经这里判过 `if (!needsAddress) return null`，看着更「干净」，
+ * 但它把整条链路的失败方向指错了：
  *
- * <p>根子上的问题是「有没有地址」被算成了「地址簿里有没有东西」，
- * 而它真正该表达的是「这一单要不要寄」。改在这里而不是改成功页那一行：
- * 只要 address 会为非实物算出值，下一个用它的地方还会再错一次。
+ * <ul>
+ *   <li>给券<b>多带</b>一个地址 —— <b>完全无害</b>。后端只在实物分支读 addressId，
+ *       券的订单 address_id 照样是 NULL（线上那一单验证过）；</li>
+ *   <li>给实物<b>少带</b>一个地址 —— 直接兑不了，后端回「请选择收货地址」，
+ *       而页面上地址那一栏明明显示着地址。</li>
+ * </ul>
+ *
+ * 两种错法的代价差这么远，默认方向就该是「带上」。
+ * commodityType 只要有任何一刻不是预期值（还没加载完、字段没到、类型改名），
+ * 判在这里就会让实物兑换整个失效 —— 而那是用户唯一能看见的后果。
+ *
+ * <p>「要不要显示收货地址」是<b>展示</b>问题，交给模板里的 needsAddress。
  */
 const address = computed<Address | null>(() => {
-  if (!needsAddress.value) {
-    return null
-  }
   const list = addresses.data.value ?? []
   if (pickedAddressId.value !== null) {
     /*
@@ -197,10 +201,10 @@ async function onConfirm(): Promise<void> {
       skuId: chosen.skuId,
       quantity: quantity.value,
       /*
-       * 🔴 只看 address，不再另判一次 needsAddress。
-       * address 本身已经保证「非实物为 null」，而拦截用的 blockedReason 判的也是它 ——
-       * 三处各判一遍的话，它们迟早会不一致：那时按钮放行、请求却带着 null 出去，
-       * 表现就是后端回「请选择收货地址」而前端明明显示着地址。
+       * 🔴 有地址就带上，<b>不判商品类型</b>。
+       * 后端只在实物分支读它，给券多带一个是无害的；而少带一个的代价是
+       * 实物压根兑不了（后端回「请选择收货地址」，页面上却显示着地址）。
+       * 两种错法的代价差这么远，默认方向就该是「带上」。
        */
       addressId: address.value?.id ?? null,
       requestId: crypto.randomUUID(),
@@ -245,11 +249,13 @@ function goRecords(): void {
         </p>
         <!--
           只有实物才寄。券/红包画这一行等于告诉用户「你的券要走快递」。
-          🔴 这里<b>只判 address</b>，不再顺手加一个 needsAddress：
-          address 本身已经保证「非实物为 null」，两道守卫看着更保险，
-          实际是两道都测不到 —— 拿掉任意一道测试都还是绿的。
+          两个条件问的不是同一件事：needsAddress 是「这单要不要寄」，
+          address 是「有没有地址」—— 都要成立才画得出这句话。
         -->
-        <p v-else-if="result.status === OrderStatus.PENDING && address !== null" class="done__note">
+        <p
+          v-else-if="result.status === OrderStatus.PENDING && needsAddress && address !== null"
+          class="done__note"
+        >
           商品将寄往：{{ formatAddressLine(address) }}
         </p>
         <p v-else-if="result.status === OrderStatus.PENDING" class="done__note">

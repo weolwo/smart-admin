@@ -23,6 +23,11 @@ import RedeemView from '../RedeemView.vue'
 /** 让某条用例把地址请求挂住，用来验「详情先回来、地址还在路上」那一刻 */
 const holdAddresses = vi.hoisted(() => ({ value: null as Promise<unknown> | null }))
 
+/** 记下最后一次提交的 payload —— 「地址带没带上」只能从这里看 */
+const redeemPayload = vi.hoisted(() => ({
+  value: null as { addressId: string | null } | null,
+}))
+
 const redeemResult = vi.hoisted(() => ({
   value: null as { orderNo: string; status: number; message: string } | null,
 }))
@@ -82,7 +87,10 @@ vi.mock('@/api/mall', async (importOriginal) => {
       else favorites.delete(id)
       return Promise.resolve()
     },
-    redeem: () => Promise.resolve(redeemResult.value ?? fixtures.REDEEM_RESULT),
+    redeem: (payload: { addressId: string | null }) => {
+      redeemPayload.value = payload
+      return Promise.resolve(redeemResult.value ?? fixtures.REDEEM_RESULT)
+    },
   }
 })
 
@@ -177,6 +185,7 @@ describe('RedeemView', () => {
   beforeEach(() => {
     holdAddresses.value = null
     redeemResult.value = null
+    redeemPayload.value = null
   })
 
   it('把 query 里的 SKU 还原成可读摘要，并显示件数', async () => {
@@ -274,6 +283,27 @@ describe('RedeemView', () => {
     holdAddresses.value = null
     await settle()
     expect(w.find('.sv-btn').attributes('disabled')).toBeUndefined()
+  })
+
+  it('🔴 有地址就带上，不看商品类型 —— 少带的代价远大于多带', async () => {
+    /*
+     * 这一条对着一个线上现象：兑手机时 payload 里 addressId 是 null，
+     * 后端回「请选择收货地址」，而页面上地址那一栏明明显示着地址。
+     *
+     * 根子上是失败方向指错了：曾经 address 会先判一次 commodityType，
+     * 于是 commodityType 只要有任何一刻不是预期值，实物兑换就整个失效。
+     * 而反过来「给券多带一个地址」是无害的 —— 后端只在实物分支读它。
+     */
+    const physical = await mountRedeem('/redeem/7005?sku=97005&qty=1')
+    await physical.find('.sv-btn').trigger('click')
+    await settle()
+    expect(redeemPayload.value?.addressId).toBe('8001')
+
+    // 券也带上，无害：后端不读，订单的 address_id 照样是 NULL
+    const coupon = await mountRedeem('/redeem/7008?sku=97008&qty=1')
+    await coupon.find('.sv-btn').trigger('click')
+    await settle()
+    expect(redeemPayload.value?.addressId).toBe('8001')
   })
 
   it('实物的成功页要说清寄到哪', async () => {
