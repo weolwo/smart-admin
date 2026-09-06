@@ -162,24 +162,23 @@ public class MemberWalletService {
             throw new BusinessException(BizErrorCode.AMOUNT_MUST_BE_GREATER_THAN_ZERO);
         }
 
-        // 1. 查钱包与自愈
+        // 钱包不存在就当场建一个：入账是「钱要进来」，为此让用户看到一个错误没有道理。
+        // 注册时不预建全部资产类型的钱包，正是因为可以在这里自愈
         MemberWallet wallet = memberWalletDao.getByMemberIdAndAssetType(proposal.getMemberId(), assetType.name());
         if (wallet == null) {
             wallet = initMemberWallet(proposal.getMemberId(), assetType);
         }
 
-        // 2. 状态校验 (调用充血模型)
         wallet.checkAvailable();
         BigDecimal balanceAfter = wallet.calculateAfterBalance(amount);
 
-        // 3. 乐观锁更新
         int updateRows = memberWalletDao.addBalanceWithVersion(wallet.getId(), amount, wallet.getVersion());
         if (updateRows == 0) {
-            // 抛出专用的并发异常，外层可以根据这个做特定处理
+            // 🔴 抢不到就抛，绝不往下走去写流水。写了就是「钱没加，流水说加了」——
+            // 账实不符，而且事后没有任何办法分辨哪些流水是真的
             throw new BusinessException(BizErrorCode.ACCOUNT_BALANCE_CHANGED);
         }
 
-        // 4. 写流水 (省略构建过程，直接看核心)
         MemberAssetTransaction txn = buildTransaction(proposal, assetType, amount, balanceAfter);
         memberAssetTransactionDao.insert(txn);
     }

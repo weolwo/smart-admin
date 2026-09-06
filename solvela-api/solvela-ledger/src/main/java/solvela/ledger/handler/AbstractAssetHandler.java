@@ -27,6 +27,15 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public abstract class AbstractAssetHandler implements IAssetHandler {
 
+    /**
+     * 抢锁最多等几秒。
+     *
+     * <p>调用方是同步的 HTTP 请求，这个值实际是在回答「用户愿意为一次撞锁多等多久」。
+     * 调大不会提高成功率 —— 同一个会员的并发本来就少，撞上说明多半是重复提交，
+     * 而重复提交等再久也只会成功一次。
+     */
+    private static final long LOCK_WAIT_SECONDS = 3;
+
     @Resource
     private RedissonClient redissonClient;
 
@@ -35,23 +44,21 @@ public abstract class AbstractAssetHandler implements IAssetHandler {
      */
     @Override
     public final DispatchOutcome dispatch(ProposalRecord proposal) {
-        // 1. 获取子类定义的锁 Key
         String lockKey = getLockKey(proposal);
         if (lockKey == null) {
-            // 预留后路：如果某个资产不需要加锁（比如发优惠券），直接执行
+            // 不是所有资产都需要串行化：发券/发实物是纯插入，靠唯一键去重就够了，
+            // 为它们加一把分布式锁只是白白多一次 Redis 往返
             return executeWithLock(proposal);
         }
 
         RLock lock = redissonClient.getLock(lockKey);
         try {
-            // 2. 尝试加锁
-            boolean isLocked = lock.tryLock(3, TimeUnit.SECONDS);
-            if (!isLocked) {
+            if (!lock.tryLock(LOCK_WAIT_SECONDS, TimeUnit.SECONDS)) {
+                // 抢不到就直接失败，不排队等：调用方是同步的 HTTP 请求，
+                // 让它挂在这里等锁，等来的多半是网关超时而不是成功
                 log.warn("【并发拦截】未获取到资产操作锁，提案ID: {}", proposal.getId());
                 return DispatchOutcome.failed("系统繁忙，请稍后再试");
             }
-
-            // 3. 【绝杀钩子】锁获取成功，调用子类的具体路由逻辑
             return executeWithLock(proposal);
 
         } catch (InterruptedException e) {
@@ -59,7 +66,8 @@ public abstract class AbstractAssetHandler implements IAssetHandler {
             log.error("【系统异常】获取锁被中断，提案ID: {}", proposal.getId());
             return DispatchOutcome.failed("操作被中断");
         } finally {
-            // 4. 标准化释放锁
+            // 🔴 必须判 isHeldByCurrentThread：tryLock 超时返回 false 时这个线程并没有持锁，
+            // 无条件 unlock 会把别人正持着的锁释放掉，两个请求同时动同一个钱包
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }

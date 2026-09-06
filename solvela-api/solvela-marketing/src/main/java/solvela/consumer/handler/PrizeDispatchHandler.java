@@ -50,31 +50,35 @@ public class PrizeDispatchHandler implements BizEventHandler<UserPrizeEvent> {
     public void handle(UserPrizeEvent event) {
         log.info(">>>> [奖励派发链路] 收到事件，来源单号: {}, 奖品: {}", event.getSourceBizId(), event.getPrizeCode());
 
-        // 1. 获取最新鲜的配置 (带本地缓存最佳)
         PrizeConfig config = prizeConfigService.getByPrizeCode(event.getPrizeCode());
         if (config == null || config.getStatus() == EnableStatusEnum.DISABLED) {
+            // 事件已经发出来了才发现奖品配置没了 —— 运营停用配置不会撤回在途的事件。
+            // 这条日志是唯一线索：不打的话表现是「用户中了奖但什么都没收到」，查无对证
             log.error("【重大异常】奖品配置不存在或已停用！prizeCode: {}", event.getPrizeCode());
             return;
         }
 
-        // 2. 缝合 Event 与 Config，构造发奖流水记录
         PrizeLog prizeLog = buildPrizeLog(event, config);
 
+        /*
+         * 幂等靠 t_prize_log 上的 uk_external_biz 唯一索引，不靠先查后插。
+         * MQ 至少投递一次，重复投递是常态而不是异常；查了再插中间有窗口，
+         * 而这条路一旦重复放过去就是【同一个奖发两次】。
+         */
         try {
-            // 3. 落库防重！利用数据库的 uk_external_biz 唯一索引兜底
             prizeLogService.save(prizeLog);
         } catch (DuplicateKeyException e) {
             log.warn("【防重拦截】该业务单号已存在发奖提案，自动忽略。单号: {}", event.getSourceBizId());
             return;
         }
 
-        // 4. 风控与审批拦截阀门
         if (config.getApproveMode() == ApproveModeEnum.MANUAL) {
+            // 流程到此为止，等运营在后台点通过（approveDispatch 是它唯一的出口）。
+            // 状态停在 待审批(1) + 等待执行(0)，提案与账务都还没发生
             log.info("【风控拦截】命中人工审批，提案已挂起。LogId: {}", prizeLog.getId());
-            return; // 流程到此结束！后台状态停留在：待审批(1) + 等待执行(0)
+            return;
         }
 
-        // 5. 自动免审通道，全速放行！
         doDispatch(prizeLog);
     }
 
@@ -206,12 +210,16 @@ public class PrizeDispatchHandler implements BizEventHandler<UserPrizeEvent> {
     }
 
     /**
-     * 拼装提案日志
+     * 拼装发奖流水。
+     *
+     * <h3>取值来源分两处，别混</h3>
+     * <b>谁中了什么、值多少</b>来自事件（{@code UserPrizeEvent}）—— 那是发放方在中奖那一刻
+     * 算出来的事实；<b>奖品叫什么、是哪类资产</b>来自配置。反过来取会出问题：
+     * 拿配置里的 prizeValue 覆盖事件里的，彩票那种按中奖等级算出来的金额会被抹平成基准价。
      */
     private PrizeLog buildPrizeLog(UserPrizeEvent event, PrizeConfig config) {
         PrizeLog log = new PrizeLog();
 
-        // --- 1. 来自 Event 的动态数据 (用户相关) ---
         // 关联键与展示快照一起落：memberId 是查询/对账用的键，memberName 是「中奖当时那个账号」
         log.setMemberId(event.getMemberId());
         log.setMemberName(event.getMemberName());
@@ -223,19 +231,16 @@ public class PrizeDispatchHandler implements BizEventHandler<UserPrizeEvent> {
         log.setPrizeValue(event.getPrizeValue()); // 通常价值以 Event(彩票引擎算出的)为准
         log.setPrizeLevel(event.getPrizeLevel());
 
-        // --- 2. 来自 Config 的静态规则 (资产相关) ---
         log.setPrizeCode(config.getPrizeCode());
         log.setPrizeName(config.getPrizeName());
         log.setPrizeType(config.getPrizeType());
 
-        // --- 3. 初始状态与时效 ---
+        // 审批状态在落库时就定下来，不留 null：null 会让「不需要审批」和「还没决定」
+        // 变成同一个值，而后台的待审列表正是按这一列筛的
         log.setApproveStatus(config.getApproveMode() == ApproveModeEnum.MANUAL
                 ? PrizeApproveStatusEnum.PENDING
                 : PrizeApproveStatusEnum.NOT_REQUIRED);
         log.setStatus(PrizeDispatchStatusEnum.WAITING);
-
-        // 如果有配置过期时间，在这里相加
-        // log.setExpireTime(LocalDateTime.now().plusHours(config.getExpireHours()));
 
         return log;
     }

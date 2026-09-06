@@ -76,14 +76,15 @@ public class AssetDispatchEngine implements AssetDispatcher {
         boolean budgetDeducted = false;
 
         try {
-            // 1. 推进状态：30(待执行) -> 40(执行中)。条件更新即并发闸门，抢不到说明别人已在执行或已完结
+            // 30(待执行) -> 40(执行中)。这次条件更新就是并发闸门：抢不到说明别人已在执行或已完结，
+            // 直接退出而不是重试 —— 重试等于同一笔奖被发两次
             int rows = proposalRecordDao.updateStatus(proposal.getId(), ProposalStatusEnum.PENDING_EXECUTE, ProposalStatusEnum.EXECUTING);
             if (rows == 0) {
                 log.warn("【引擎拦截】提案正在执行中或已完结，忽略本次调用。提案ID: {}", proposal.getId());
                 return;
             }
 
-            // 2. 预算硬限流：把「够不够」压进 UPDATE 的 WHERE，一条 SQL 完成校验+扣减。
+            // 预算硬限流：把「够不够」压进 UPDATE 的 WHERE，一条 SQL 完成校验+扣减。
             //    风控链上的 GlobalBudgetRiskFilter 是「先读后判」的弱校验，高并发下读到的余量早已过期，
             //    真正防超发的是这里的条件更新。必须在动账之前扣，扣不动就别发。
             if (promotionConfigDao.deductBudget(config.getId(), amount, quantity) == 0) {
@@ -94,15 +95,16 @@ public class AssetDispatchEngine implements AssetDispatcher {
             }
             budgetDeducted = true;
 
-            // 3. 按**提案自带的**资产类型选执行策略。
+            // 按**提案自带的**资产类型选执行策略。
             //    以前是读 config.getPrizeType()，等于「为了知道发什么，先得加载预算配置」——
             //    路由和预算是两件事，不该耦合。提案自带 assetType 后引擎自洽了。
             IAssetHandler handler = strategyFactory.getHandler(proposal.getAssetType());
 
-            // 4. 极简下发：只管抛给下层，拿到成功/失败的结果
+            // 下发只管抛给下层：引擎不认识任何一种资产，加一种资产不用改这里
             DispatchOutcome outcome = handler.dispatch(proposal);
 
-            // 5. 闭环：根据结果落终态。失败原因写进 remark，运营/研发能直接从提案列表看出卡在哪
+            // 闭环：无论成败都要落终态。失败原因写进 remark —— 运营和研发都只看得到提案列表，
+            // 不写的话「卡在哪」这个问题只能去翻日志
             if (outcome.ok()) {
                 proposalRecordDao.updateStatusAndRemark(proposal.getId(), ProposalStatusEnum.SUCCESS, "资产下发成功");
                 syncPrizeLog(proposal, PrizeDispatchStatusEnum.SUCCESS, null);
