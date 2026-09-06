@@ -83,6 +83,154 @@ return baseScore            // ❌ 会被当成两条语句
        + bonusScore;
 ```
 
+## 业务域函数
+
+除了 `tool_` / `cache_`，各业务域也会把自己的能力挂上来。**查询类函数一律返回 map**（原因见下节：
+隔离策略下脚本读不出普通对象的字段，而且不报错，只是拿到 null）。
+
+| 函数 | 说明 |
+|---|---|
+| `member_info()` | 当前会员资料 map：`memberId/memberName/nickname/gender/status/registerSource/registerTime/registerDays/birthday/birthdayToday/inviteId/invited`。**一次执行只查一次库**，写几遍都行 |
+| `member_registerDays()` / `member_isNewMember(7)` | 注册天数 / N 天内注册。阈值由脚本给——几天算新人是**活动**的判据 |
+| `prize_countWon([活动编码])` / `prize_hasWon('PRIZE_CODE')` | 中奖次数 / 有没有中过某个奖。活动编码可选，不传就是全部活动累计 |
+| `prize_listRecent(10, [活动编码])` | 最近的中奖明细，每条一个 map，上限 50 条 |
+| `draw_countDrawn()` / `draw_executeDrawByScript(池)` / `draw_executeMultiDrawByScript(池, 次数)` | 抽奖。后两个**有副作用** |
+| `lottery_countMine(玩法, 期号)` / `lottery_issue(玩法, 期号)` | 彩票领号。后者**有副作用**；🔴 单人限购只能靠脚本自己用 `countMine` 判，发号引擎不管限购 |
+
+**会员号不是参数**：所有这些函数的会员号都从内部通道取，脚本看不见也改不掉。没有
+`member_infoOf(memberId)` 这种重载是刻意的——那等于让脚本查任意人的资料、拿别人的记录放宽自己的限制。
+
+**有副作用的函数一次执行只准调一次**（发奖、领号合计），且应当是脚本的最后一步。
+
+## 时间 / 字符串 / JSON
+
+脚本里 `s.trim()`、`s.length()` 这类 Java 方法调用**全都不通**（原因见下一节），所以这些事都走 `tool_` 函数。
+
+**时间**——参数既可以是 `'2026-09-06 09:15:00'` 这样的串，也可以是场景变量里的时间对象（如 `eventTime`），两种都认；认不出来会直接报错，不会静默当成「现在」。
+
+| 函数 | 说明 |
+|---|---|
+| `tool_now()` / `tool_today()` / `tool_timestamp()` | 当前时间串 / 当前日期串 / Unix 秒 |
+| `tool_dateOf([时间])` | 日期部分 `yyyy-MM-dd`。**不传参数就是今天**，常用来拼当天的缓存键 |
+| `tool_hourOfDay([时间])` / `tool_dayOfWeek([时间])` / `tool_isWeekend([时间])` | 小时 0~23 / 星期 1~7（1=周一）/ 是否周末 |
+| `tool_nowBetween('09:00','12:00')` | 当前时刻在不在这个时段。**支持跨零点**：`('22:00','02:00')` 是晚 10 点到次日 2 点 |
+| `tool_daysBetween(a,b)` / `tool_secondsBetween(a,b)` / `tool_daysSince(t)` | 差值。`tool_daysSince(注册时间) <= 7` 就是新人 |
+| `tool_isBefore(a,b)` / `tool_isAfter(a,b)` | 先后比较 |
+| `tool_plusDays(t,n)` / `tool_plusHours(t,n)` | 加减，负数往前推。结果可以再喂给别的时间函数 |
+| `tool_format(t, 'yyyy-MM-dd HH:mm')` | 格式化，格式串写错直接报错 |
+
+**字符串**——参数都收任意类型，传数字/时间进来会自动转字符串（不会变 null）。
+
+| 函数 | 说明 |
+|---|---|
+| `tool_isBlank(v)` / `tool_isNotBlank(v)` | 判空 |
+| `tool_str(v)` | 任意值转串，**null 转成空串**而不是 `"null"` 这四个字 |
+| `tool_num(v, 默认值)` | 🔴 安全转数字。`params['times']` 是 Object，直接 `> 3` 在类型不一致时会静默判 false |
+| `tool_defaultIfBlank(v, 默认值)` | 空就给默认值 |
+| `tool_trim` / `tool_upper` / `tool_lower` / `tool_substring(v, n)` | 常规变形 |
+| `tool_replace(v, 旧, 新)` / `tool_split(v, 分隔符)` | 替换 / 切分。**分隔符是纯文本不是正则**，写 `'|'` 就是竖线本身 |
+| `tool_startsWith` / `tool_endsWith` / `tool_equalsIgnoreCase` | 判定 |
+| `tool_mask(phone, 3, 7)` | 脱敏 → `138****8000`。**打日志前先过一遍** |
+
+**JSON**
+
+| 函数 | 说明 |
+|---|---|
+| `tool_jsonGet(payload, 'order.amount', 0)` | 🔴 按路径取值。点号分隔，纯数字那段按下标取；**断在哪一层都返回默认值**。入参可以是 map，也可以是 JSON 串 |
+| `tool_toJson(v)` / `tool_toJsonPretty(v)` | 转 JSON 串，打日志用。⚠️ 传字符串进来原样返回，不加引号 |
+| `tool_parseJson(text)` | 解析成 map/list。**解析失败直接报错**——返回 null 会让脚本静默走完一条错误分支 |
+
+> 深层取值别写 `payload['order']['amount']`：中间某层不存在时报错信息里看不出是哪一层断的，用 `tool_jsonGet`。
+
+## 集合怎么写（QLExpress 4.x 和 3.x 不一样）
+
+**4.x 有原生字面量，不需要 3.x 的 `NewList` / `NewMap`：**
+
+```javascript
+l = [1, 2, 3];            // ArrayList
+m = {"a": 1, "b": 2};     // LinkedHashMap
+m2 = {:};                 // 空 map —— 不是 {}，那是空代码块
+m['c'] = 3;  m.d = 4;     // map 写入、读取都可以
+v = l[0];   n = l.length;
+for (x : l) { ... }
+big = l.filter(x -> x > 1);   // filter / map 是 QL 内置扩展，隔离策略下也能用
+```
+
+**🔴 但所有 Java 方法调用都是不通的**（引擎跑在 `isolation` 安全策略下）：
+
+```javascript
+l.add(x)    l.size()    l.sort()    m.put(k,v)    m.keySet()    s.length()
+new ArrayList()    new HashMap()
+```
+
+在脚本顶部写 `import java.util.HashMap;` **救不了**——import 只影响「类名解析得出来吗」，不影响「能不能调用它」。
+（QL 默认已经 import 了 `java.lang`、`java.util`、`java.math`、`java.util.stream`、`java.util.function` 五个包，
+而且 import 语句必须在文件最开头，写在语句后面是语法错误。）
+
+所以缺的那几件事由 `tool_` 补：
+
+| 想干的事 | 写法 |
+|---|---|
+| 列表追加（`l.add` 不通） | `tool_listAdd(l, x)`，返回同一个列表 |
+| 造列表 / map | `tool_listOf(a, b)` / `tool_mapOf('a', 1, 'b', 2)` |
+| **集合大小** | `tool_size(coll)` |
+| 安全取值 | `tool_get(params, 'tier', 'NORMAL')` |
+| 包含判定 | `tool_contains(l, x)` / `tool_contains(m, 'key')` |
+| 拼字符串 | `tool_join(l, ',')` |
+
+**两个静默的坑：**
+
+- 🔴 `m.length` 对 map **不报错，返回 null**——那是在取一个名叫 `length` 的键。大小一律用 `tool_size`。
+- 🔴 `params['tier']` 键不存在时是 `null`，然后 null 一路往下走、静默走错分支。用 `tool_get` 给个默认值。
+- 🔴 数字比较：字面量里的 `1` 是 Integer，算出来的 `0 + 1` 是 BigDecimal（`precise=true`），
+  `tool_contains` 已经按数值比了，但自己写 `==` 时要注意。
+
+## 脚本自己的计数器（cache_ 域）
+
+库里没有「参与流水」表的玩法（BASIC 活动就是），「这个人今天参与过几次」只能靠它：
+
+```javascript
+times = cache_incr('join:' + memberId, 86400);   // +1 并返回累加后的值，当天有效
+if (times > 3) {                                  // 注意是 > 3 不是 >= 3
+    return null;                                  // 今天次数用完
+}
+return draw_executeDrawByScript('POOL_A');
+```
+
+| 函数 | 说明 |
+|---|---|
+| `cache_incr(name, ttl秒)` | +1 并返回**累加后**的值，第一次计数时开始计 TTL（固定窗口，不续期） |
+| `cache_count(name)` | 读当前计数，不存在返回 0 |
+| `cache_set/get/exists/del(name, ...)` | 标记位，`set` 要带 TTL |
+| `cache_ttl(name)` | 剩余秒数，-2 = 键不存在，-1 = 没设过期 |
+
+**规矩：**
+
+- 键名你只能决定最后一段。实际的 key 是 `项目名:环境:script:{脚本编码}:{你给的名字}`——所以两个活动的脚本不会互相踩，
+  **在线试跑也碰不到线上脚本的键**。名字只允许 `A-Za-z0-9_:.-`，最长 64。
+- **TTL 必填，最长 30 天。** 没有 TTL 的键永不过期，键名写错一次就是一批永远没人发现的垃圾。
+- 🔴 **写入不随事务回滚。** `cache_incr` 之后抛异常，数据库会回滚，这次 +1 不会退回去。
+  所以它的语义是「尝试了几次」，不是「成功了几次」。要「成功几次」去数业务表（抽奖用 `draw_countDrawn`）。
+
+## 怎么在脚本里打日志
+
+脚本没有断点也没有单步，跑完只剩一个返回值。判定为什么是这个结果，除了它自己说出来，事后只能靠重放。
+
+```javascript
+tool_log('准入判定', 'memberId=', memberId, 'level=', memberLevel);
+if (memberLevel < 3) {
+    tool_logWarn('等级不够，拒绝');
+    return false;
+}
+return true;
+```
+
+- `tool_log(...)`：INFO；`tool_logWarn(...)`：WARN，留给「走到了不该走的分支」。
+- 参数个数不限，**用空格拼接**，不用 `{}` 占位符 —— 占位符对不齐时，最需要的那个值恰好打不出来。
+- 每行自动带上脚本名（`[draw/vip_entry] ...`），日志名是 `solvela.script`，可以在 logback 里单独调级别。
+- **单次执行最多 100 行**，超了只再说一句「已达上限」就闭嘴。循环里打日志会撞到这条 —— 把它挪到循环外。
+- 返回值是拼好的那行文本，没有副作用，调多少次都行。
+
 ## 新增一个脚本
 
 1. 按上面的规则建文件

@@ -41,6 +41,17 @@ public enum ScriptDomain {
     RISK("risk", "风控域", "频次限制、黑名单、设备指纹校验等"),
 
     TOOL("tool", "通用工具", "字符串、日期、数学等与业务无关的纯函数"),
+
+    /**
+     * 缓存域：脚本自己的计数器与标记位。
+     *
+     * <p>和其它域不一样，它不代表某块业务，代表的是<b>脚本自己需要一点状态</b> ——
+     * 「这个人今天参与过几次」这类判据在库里没有对应的表时，只能落在这里。
+     *
+     * <p>🔴 本域的函数<b>会写 Redis</b>，而 Redis 的写不跟着数据库事务回滚。
+     * 详见 {@code CacheScriptHandler}。
+     */
+    CACHE("cache", "缓存域", "脚本自己的计数器与标记位，带 TTL，写入不随事务回滚"),
     ;
 
     private final String namespace;

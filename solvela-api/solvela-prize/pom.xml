@@ -26,6 +26,15 @@
     -->
 
     <dependencies>
+        <!-- 脚本引擎：PrizeScriptFunctions 把中奖记录查询以 prize_ 域暴露给规则脚本。
+             方向是对的 —— scriptengine 是叶子（只依赖 model + base），奖品域依赖它不成环。
+             反过来把奖品函数写进 scriptengine 才是错的：那会让引擎认识每一个业务域 -->
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-scriptengine</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
         <!-- 本模块直接用到 model 的实体 7 处。
              原来靠 base 传递过来 —— 用什么就声明什么，别指望别人替你带。 -->
         <dependency>

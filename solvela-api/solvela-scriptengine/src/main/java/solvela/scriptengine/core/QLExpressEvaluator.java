@@ -76,6 +76,9 @@ public class QLExpressEvaluator implements ScriptEvaluator {
         // 🔴 只喂 getScriptVariables()：内部数据通道（traceId / 操作人 / 幂等键等）
         //    绝不能流进脚本可见的变量表。整个 EngineContext 走 attachments 给 Java 函数用。
         Map<String, Object> variables = new HashMap<>(engineContext.getScriptVariables());
+        // 把脚本名写进内部通道：Java 函数（tool_log）要靠它把日志归到具体脚本上。
+        // 走内部通道而不是变量表，脚本既读不到也改不掉自己的身份标识
+        engineContext.bindInternal(EngineContext.INTERNAL_SCRIPT_NAME, script.name());
         try {
             return runner.execute(script.content(), variables, buildOptions(script, engineContext)).getResult();
         } catch (QLTimeoutException e) {

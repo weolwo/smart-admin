@@ -26,6 +26,15 @@
     -->
 
     <dependencies>
+        <!-- 脚本引擎：MemberScriptFunctions 把会员资料查询以 member_ 域暴露给规则脚本。
+             方向是对的 —— scriptengine 是叶子（只依赖 model + base），会员域依赖它不成环。
+             反过来把会员函数写进 scriptengine 才是错的：那会让引擎认识每一个业务域 -->
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-scriptengine</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
 
         <!-- 本模块实现的对外契约。api 在前、实现在后，方向不可反 -->
         <dependency>

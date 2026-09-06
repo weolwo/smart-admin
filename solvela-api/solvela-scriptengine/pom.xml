@@ -38,7 +38,10 @@
              改成列出真正用到的那几块 —— 写门面等于把 JDBC 驱动、S3 SDK、Excel 引擎一并背上。
              归因：core 只有 2 处，但 data 是必需的 —— ScriptManager / ScriptRefManager 继承
              mybatis-plus 的 ServiceImpl，那在 mybatis-plus 的 spring 扩展包里，由 base-data 提供。
-             不要 file、不要 redis：一处都没用到 -->
+             不要 file：一处都没用到。
+             base-redis 是 2026-09-06 加的：CacheScriptHandler 给脚本提供计数器与标记位
+             （「这个人今天参与过几次」在库里没有对应的表时，只能落在 Redis），
+             它复用 RedisService 的环境隔离前缀与原子 INCR+TTL，不自己碰 StringRedisTemplate -->
         <dependency>
             <groupId>solvela</groupId>
             <artifactId>solvela-base-core</artifactId>
@@ -56,6 +59,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aspectj</artifactId>
+        </dependency>
+
+        <!-- CacheScriptHandler：脚本的计数器/标记位走 RedisService -->
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-base-redis</artifactId>
+            <version>3.0.0</version>
         </dependency>
 
         <!-- QLExpress4 规则引擎。全工程只有本模块用它 ——
