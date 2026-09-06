@@ -62,6 +62,20 @@ export type Raw<T> = {
  * 所有反序列化入口都必须过这一层，别在业务代码里直接 `as Id`。
  */
 export function toId(raw: string | number): Id {
+  /*
+   * 🔴 undefined / null 要当场炸，不能静默放行。
+   *
+   * 2026-09-06 的现场：Address 的字段名写成了 `id`，而网关下发的是 `addressId`。
+   * 于是 toId(undefined) 原样返回 undefined，页面上地址显示得好好的
+   *（其余字段都对），提交时 addressId 却是 null，后端回「请选择收货地址」。
+   *
+   * TypeScript 拦不住这个：它只知道我声明了什么，不知道线上真发的是什么。
+   * 这一层是**唯一**能发现「声明和线上对不上」的地方 —— 放行等于把发现的机会
+   * 推迟到某个远处的 `x === undefined` 恒 false，那时已经完全看不出因果了。
+   */
+  if (raw === undefined || raw === null) {
+    throw new TypeError('主键为空 —— 多半是字段名和后端下发的对不上，检查反序列化那一层')
+  }
   if (typeof raw === 'number') {
     if (!Number.isSafeInteger(raw)) {
       // 走到这里说明这个数字在 JSON.parse 阶段就已经丢精度了，救不回来，只能让它响

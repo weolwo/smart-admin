@@ -131,7 +131,7 @@ export function detailOf(commodityId: string): CommodityDetail {
 
 export const ADDRESSES: Address[] = [
   {
-    id: toId('8001'),
+    addressId: toId('8001'),
     receiverName: '张三',
     // 脱敏值：列表接口下发的就是这个，不是明文
     receiverPhone: '138****8000',
@@ -142,7 +142,7 @@ export const ADDRESSES: Address[] = [
     isDefault: true,
   },
   {
-    id: toId('8002'),
+    addressId: toId('8002'),
     receiverName: '李四',
     receiverPhone: '139****9111',
     province: '浙江省',

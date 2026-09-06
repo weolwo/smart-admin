@@ -26,30 +26,30 @@ vi.mock('@/api/address', async (importOriginal) => {
     fetchAddresses: () =>
       Promise.resolve([...list].sort((a, b) => Number(b.isDefault) - Number(a.isDefault))),
     fetchAddress: (id: Id) => {
-      const found = list.find((a) => a.id === id)
+      const found = list.find((a) => a.addressId === id)
       return found === undefined ? Promise.reject(new Error('不存在')) : Promise.resolve(found)
     },
     createAddress: (input: AddressInput) => {
       const created: Address = {
         ...fixtures.ADDRESSES[0]!,
         ...input,
-        id: toId('8100'),
+        addressId: toId('8100'),
         isDefault: false,
       }
       list = [...list, created]
       return Promise.resolve(created)
     },
     updateAddress: (id: Id, input: AddressInput) => {
-      const updated: Address = { ...list.find((a) => a.id === id)!, ...input }
-      list = list.map((a) => (a.id === id ? updated : a))
+      const updated: Address = { ...list.find((a) => a.addressId === id)!, ...input }
+      list = list.map((a) => (a.addressId === id ? updated : a))
       return Promise.resolve(updated)
     },
     deleteAddress: (id: Id) => {
-      list = list.filter((a) => a.id !== id)
+      list = list.filter((a) => a.addressId !== id)
       return Promise.resolve()
     },
     setDefaultAddress: (id: Id) => {
-      list = list.map((a) => ({ ...a, isDefault: a.id === id }))
+      list = list.map((a) => ({ ...a, isDefault: a.addressId === id }))
       return Promise.resolve()
     },
   }

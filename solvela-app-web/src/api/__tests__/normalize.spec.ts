@@ -109,9 +109,40 @@ describe('ID 归一', () => {
     expect((await fetchFavorites())[0]?.commodityId).toBe('2')
   })
 
-  it('地址簿：id 收成字符串（兑换页要拿它和选中的地址比）', async () => {
-    reply([{ id: 9, receiverName: '张三', isDefault: true }])
-    expect((await fetchAddresses())[0]?.id).toBe('9')
+  it('🔴 地址簿的字段名是 addressId，不是 id', async () => {
+    /*
+     * 这条用例第一版把桩写成了 `{ id: 9 }` —— 照着**前端的声明**造数，
+     * 而不是照着线上真发的样子。于是它绿着，而线上 address.id 恒为 undefined：
+     * 页面上地址显示得好好的，提交时 addressId 却是 null，
+     * 后端回「请选择收货地址」。
+     *
+     * 桩必须照抄线上形状。网关直接下发契约对象 MallAddressView，字段名就是 addressId。
+     */
+    reply([
+      {
+        addressId: 9,
+        receiverName: '张三',
+        receiverPhone: '138****8000',
+        province: '广东省',
+        city: '深圳市',
+        district: '南山区',
+        detailAddress: '科技园南路 1 号',
+        isDefault: true,
+      },
+    ])
+    const list = await fetchAddresses()
+    expect(list[0]?.addressId).toBe('9')
+    expect(typeof list[0]?.addressId).toBe('string')
+  })
+
+  it('🔴 字段名对不上时当场炸，不静默给 undefined', async () => {
+    /*
+     * 静默放行才是真正的坑：undefined 会一路飘到某个
+     * `a.addressId === picked` 恒 false 的地方，那时已经完全看不出因果。
+     * 反序列化这一层是唯一能发现「声明和线上对不上」的地方。
+     */
+    reply([{ id: 9, receiverName: '张三' }])
+    await expect(fetchAddresses()).rejects.toThrow(TypeError)
   })
 
   it('优惠记录 / 任务：recordId 与 taskId 也收', async () => {

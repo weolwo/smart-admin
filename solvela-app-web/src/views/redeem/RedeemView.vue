@@ -115,7 +115,7 @@ const address = computed<Address | null>(() => {
      * 少了那一步，`1 === '1'` 恒 false：挑过一次地址之后
      * 这里永远找不到，兑换页会一直提示「请选择收货地址」。
      */
-    return list.find((a) => a.id === pickedAddressId.value) ?? null
+    return list.find((a) => a.addressId === pickedAddressId.value) ?? null
   }
   return list[0] ?? null
 })
@@ -206,7 +206,7 @@ async function onConfirm(): Promise<void> {
        * 实物压根兑不了（后端回「请选择收货地址」，页面上却显示着地址）。
        * 两种错法的代价差这么远，默认方向就该是「带上」。
        */
-      addressId: address.value?.id ?? null,
+      addressId: address.value?.addressId ?? null,
       requestId: crypto.randomUUID(),
     })
     result.value = outcome

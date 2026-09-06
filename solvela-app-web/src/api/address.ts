@@ -19,7 +19,15 @@ import { request } from './http'
  */
 
 export interface Address {
-  id: Id
+  /**
+   * 🔴 字段名是 `addressId` 不是 `id` —— 网关直接下发契约对象 MallAddressView。
+   *
+   * 这里曾经写的是 `id`，于是 `address.id` 恒为 undefined：
+   * 页面上地址显示得好好的（其余字段都对），提交时 addressId 却是 null，
+   * 后端回「请选择收货地址」。TypeScript 一个字都没报 —— 它只知道声明，
+   * 不知道线上真发的是什么。
+   */
+  addressId: Id
   /** 收件人姓名。落库密文，下发时后台已解密 */
   receiverName: string
   /** 收件人手机号，**列表接口下发脱敏值**，如 138****8000 */
@@ -56,7 +64,7 @@ export function formatAddressLine(address: Address): string {
  */
 /** 反序列化边界：Long 小值下发为数字，在这里归一成字符串。见 types/contract.ts 的 Raw */
 function normalize(raw: Raw<Address>): Address {
-  return { ...raw, id: toId(raw.id) }
+  return { ...raw, addressId: toId(raw.addressId) }
 }
 
 export function fetchAddresses(): Promise<Address[]> {

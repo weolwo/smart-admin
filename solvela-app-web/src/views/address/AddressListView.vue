@@ -61,14 +61,14 @@ const pickedFromCommodity = computed<string | null>(() => {
 function onPick(address: Address): void {
   const commodityId = pickedFromCommodity.value
   if (!picking.value || commodityId === null) {
-    goEdit(address.id)
+    goEdit(address.addressId)
     return
   }
   // 用 replace：用户按返回该回到兑换页，而不是又落回地址簿
   void router.replace({
     name: 'redeem',
     params: { id: commodityId },
-    query: { ...routeQueryWithoutPick(), address: address.id },
+    query: { ...routeQueryWithoutPick(), address: address.addressId },
   })
 }
 
@@ -87,7 +87,7 @@ async function onSetDefault(address: Address): Promise<void> {
   busy.value = true
   hintText.value = ''
   try {
-    await setDefaultAddress(address.id)
+    await setDefaultAddress(address.addressId)
     // 重新拉而不是本地改：默认地址是「一个账号最多一个」的约束，
     // 由服务端保证。本地自己翻两条记录只是猜它做了什么
     await addresses.reload()
@@ -102,14 +102,14 @@ async function onDelete(address: Address): Promise<void> {
   if (busy.value) {
     return
   }
-  if (confirmingDelete.value !== address.id) {
-    confirmingDelete.value = address.id
+  if (confirmingDelete.value !== address.addressId) {
+    confirmingDelete.value = address.addressId
     return
   }
   busy.value = true
   hintText.value = ''
   try {
-    await deleteAddress(address.id)
+    await deleteAddress(address.addressId)
     await addresses.reload()
   } catch (error) {
     hintText.value = error instanceof ApiError ? error.message : '删除失败，请稍后再试'
@@ -135,7 +135,7 @@ async function onDelete(address: Address): Promise<void> {
       @retry="addresses.reload"
     >
       <div class="list">
-        <div v-for="item in addresses.data.value ?? []" :key="item.id" class="row">
+        <div v-for="item in addresses.data.value ?? []" :key="item.addressId" class="row">
           <button class="row__main" type="button" @click="onPick(item)">
             <span class="row__head">
               <span class="row__receiver">{{ item.receiverName }}</span>
@@ -155,7 +155,9 @@ async function onDelete(address: Address): Promise<void> {
             >
               设为默认
             </button>
-            <button v-if="picking" class="op" type="button" @click="goEdit(item.id)">编辑</button>
+            <button v-if="picking" class="op" type="button" @click="goEdit(item.addressId)">
+              编辑
+            </button>
             <!--
               两段式删除：第一次点变成「确定删除？」，再点一次才真删。
               比弹窗轻，也不用处理焦点陷阱。
@@ -167,7 +169,7 @@ async function onDelete(address: Address): Promise<void> {
               @click="onDelete(item)"
               @blur="confirmingDelete = null"
             >
-              {{ confirmingDelete === item.id ? '确定删除？' : '删除' }}
+              {{ confirmingDelete === item.addressId ? '确定删除？' : '删除' }}
             </button>
           </div>
         </div>
