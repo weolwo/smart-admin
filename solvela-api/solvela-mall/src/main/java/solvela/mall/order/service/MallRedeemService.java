@@ -91,9 +91,22 @@ public class MallRedeemService {
     private final AssetDebitApi assetDebitApi;
     private final ApplicationEventPublisher eventPublisher;
 
+    /**
+     * 兑换。
+     *
+     * <h3>🔴 读这段代码只需要认准一件事：{@code ofReject} 还是 {@code reject}</h3>
+     * 分水岭是「有没有开始写库」：
+     * <pre>
+     *   校验阶段失败 -> MallRedeemResult.ofReject(...)   什么都没写，普通返回
+     *   占了资源之后 -> reject(...)                      内部会 markRollbackOnly()
+     * </pre>
+     * 在中间插一条新的拒绝分支却用了 {@code ofReject}，后果是<b>库存扣了、限兑占了、
+     * 订单没落，用户什么都没拿到</b> —— 不报错、不打日志，只有库里那件商品少了一件。
+     * {@code MallRedeemServiceTest} 把每一条拒绝路径的回滚与否都钉住了。
+     */
     @Transactional(rollbackFor = Exception.class)
     public MallRedeemResult redeem(MallRedeemCmd cmd) {
-        int quantity = Math.min(Math.max(cmd.quantity() == null ? 1 : cmd.quantity(), 1), MAX_QUANTITY);
+        int quantity = clampQuantity(cmd.quantity());
 
         MallSku sku = mallSkuManager.getById(cmd.skuId());
         if (sku == null) {
@@ -105,81 +118,120 @@ public class MallRedeemService {
             return MallRedeemResult.ofReject(MallRedeemReason.COMMODITY_OFF);
         }
 
-        // 实物必须有地址，且必须是这个会员自己的
+        // ---------- 以下是校验阶段：还没写任何东西，拒绝一律用 ofReject ----------
         MallAddress address = null;
         if (isPhysical(commodity)) {
             if (cmd.addressId() == null) {
                 return MallRedeemResult.ofReject(MallRedeemReason.ADDRESS_REQUIRED);
             }
+            /*
+             * 🔴 必须重查，不能信任传进来的 id：支付期间用户可能把这条地址删了
+             *（DDL 里 address_id 是软引用，刻意不加外键）。查不到就拦下来让用户重选，
+             * 别拿着一个空地址去建履约单 —— 那张单子发不出去，而失败原因会指向仓库。
+             */
             address = mallAddressService.getOwned(cmd.addressId(), cmd.memberId());
             if (address == null) {
-                /*
-                 * 🔴 支付期间用户可能把这条地址删了（DDL 里 address_id 是软引用，
-                 * 刻意不加外键）。所以这里必须重查一次，查不到就拦下来让用户重选，
-                 * 不要拿着一个空地址去建履约单。
-                 */
                 return MallRedeemResult.ofReject(MallRedeemReason.ADDRESS_NOT_FOUND);
             }
         }
 
-        // ---- ① 占库存。条件 UPDATE，affected rows = 0 即失败 ----
         boolean hangs = MallPayTypeEnum.POINTS_CASH == commodity.getPayType();
-        int stockRows = hangs
-                ? mallSkuDao.lock(sku.getId(), quantity)
-                : mallSkuDao.sell(sku.getId(), quantity);
-        if (stockRows == 0) {
+        if (!reserveStock(sku, quantity, hangs)) {
+            // ① 本身失败 = 条件 UPDATE 影响 0 行 = 没扣成，没有任何东西需要撤销
             return MallRedeemResult.ofReject(MallRedeemReason.OUT_OF_STOCK);
         }
 
-        // ---- ② 占限兑额度 ----
-        Integer limitCount = commodity.getLimitCount();
-        if (limitCount != null && limitCount > 0) {
-            int limitRows = mallExchangeLimitDao.tryConsume(cmd.memberId(), commodity.getId(),
-                    commodity.getLimitPeriod(), quantity, limitCount);
-            if (limitRows == 0) {
-                // 抛出去让事务回滚，把 ① 占的库存一起撤掉 —— 手工回滚容易漏
-                return reject(MallRedeemReason.EXCHANGE_LIMITED);
-            }
+        // ---------- 从这里开始已经占了资源：每一条拒绝都必须走 reject ----------
+        if (!consumeExchangeLimit(cmd.memberId(), commodity, quantity)) {
+            return reject(MallRedeemReason.EXCHANGE_LIMITED);
         }
 
-        // ---- ③ 扣积分。订单号先生成，它同时是幂等键 ----
+        // 订单号先生成：它同时是扣积分的幂等键，必须在扣款之前就定下来
         String orderNo = generateOrderNo();
         int payPoints = resolvePoints(sku, commodity) * quantity;
-        if (payPoints > 0) {
-            AssetDebitResult debit = assetDebitApi.debit(new AssetDebitCmd(
-                    cmd.memberId(), "SCORE", BigDecimal.valueOf(payPoints),
-                    BIZ_TYPE, orderNo, "商城兑换 " + commodity.getCommodityName()));
-            if (!debit.accepted()) {
-                return reject(switch (debit.reason()) {
-                    case BALANCE_NOT_ENOUGH -> MallRedeemReason.POINTS_NOT_ENOUGH;
-                    case WALLET_UNAVAILABLE -> MallRedeemReason.WALLET_UNAVAILABLE;
-                    case CONCURRENT_CONFLICT -> MallRedeemReason.CONCURRENT_CONFLICT;
-                    // 会员不存在意味着调用方拿了个假 id —— 对用户是「服务出问题了」
-                    case MEMBER_NOT_FOUND, UNKNOWN -> MallRedeemReason.INTERNAL;
-                });
-            }
+        MallRedeemReason debitProblem = debitPoints(cmd.memberId(), commodity, orderNo, payPoints);
+        if (debitProblem != null) {
+            return reject(debitProblem);
         }
 
-        // ---- ④ 落订单。商品信息全部是快照，之后与商品表脱钩 ----
         MallOrder order = buildOrder(cmd, commodity, sku, quantity, orderNo, payPoints, hangs, address);
         mallOrderManager.save(order);
-
-        /*
-         * ---- ⑤ 发起履约。在事务里发事件，在 AFTER_COMMIT 里真正执行 ----
-         *
-         * 🔴 发布不等于执行：MallOrderFulfillListener 听的是 AFTER_COMMIT，
-         * 所以事务回滚时这个事件根本不会投递 ——
-         * “单没落成但货已经发出去”在这个形状下是不可能的。
-         *
-         * 只有待履约才发：payType=2 的单子落在 0-待支付，钱还没收，
-         * 现在发货就是白送。那条路要等支付回调把它推到 10，
-         * 而支付链路至今一行代码都没有。
-         */
-        if (MallOrderStatusEnum.PENDING == order.getStatus()) {
-            eventPublisher.publishEvent(new MallOrderPendingEvent(orderNo));
-        }
+        publishFulfillment(order);
 
         return MallRedeemResult.ofAccepted(orderNo, order.getStatus());
+    }
+
+    /** 一次最多兑几件。不封的话一个 {@code quantity=99999} 会把库存条件判断变成一次巨额扣减 */
+    private static int clampQuantity(Integer requested) {
+        return Math.min(Math.max(requested == null ? 1 : requested, 1), MAX_QUANTITY);
+    }
+
+    /**
+     * ① 占库存。条件 UPDATE，影响行数为 0 即失败。
+     *
+     * <p>积分+现金的单子钱还没收，只能<b>锁</b>住库存等支付回调；纯积分是同步扣的，
+     * 直接<b>卖</b>掉。两条路走的是不同的 SQL，锁了不卖的那部分由超时释放 job 收回。
+     */
+    private boolean reserveStock(MallSku sku, int quantity, boolean hangs) {
+        int rows = hangs ? mallSkuDao.lock(sku.getId(), quantity) : mallSkuDao.sell(sku.getId(), quantity);
+        return rows > 0;
+    }
+
+    /**
+     * ② 占限兑额度。没配限兑（null 或 0）视为不限，直接放行。
+     *
+     * <p>period_key 由 SQL 里的 {@code DATE_FORMAT(NOW(), ...)} 算 —— <b>数据库时钟</b>，
+     * 不是 JVM 时钟。用 JVM 时间在跨时区部署时日切点对不上，用户能在某个时段多兑一次。
+     */
+    private boolean consumeExchangeLimit(Long memberId, MallCommodity commodity, int quantity) {
+        Integer limitCount = commodity.getLimitCount();
+        if (limitCount == null || limitCount <= 0) {
+            return true;
+        }
+        return mallExchangeLimitDao.tryConsume(memberId, commodity.getId(),
+                commodity.getLimitPeriod(), quantity, limitCount) > 0;
+    }
+
+    /**
+     * ③ 扣积分。返回 null 表示成功，非 null 是<b>给用户看的</b>拒绝原因。
+     *
+     * <p>0 分商品直接跳过：0 是「免费兑换」的合法价格，不是「没设置」。
+     *
+     * <p>失败原因按 {@code AssetDebitReason} 逐个翻译，<b>不按 message 判</b> ——
+     * 文案改一个字就静默失配，而失配的表现是「余额不足」被显示成「操作失败，请稍后再试」。
+     */
+    private MallRedeemReason debitPoints(Long memberId, MallCommodity commodity, String orderNo, int payPoints) {
+        if (payPoints <= 0) {
+            return null;
+        }
+        AssetDebitResult debit = assetDebitApi.debit(new AssetDebitCmd(
+                memberId, "SCORE", BigDecimal.valueOf(payPoints),
+                BIZ_TYPE, orderNo, "商城兑换 " + commodity.getCommodityName()));
+        if (debit.accepted()) {
+            return null;
+        }
+        return switch (debit.reason()) {
+            case BALANCE_NOT_ENOUGH -> MallRedeemReason.POINTS_NOT_ENOUGH;
+            case WALLET_UNAVAILABLE -> MallRedeemReason.WALLET_UNAVAILABLE;
+            case CONCURRENT_CONFLICT -> MallRedeemReason.CONCURRENT_CONFLICT;
+            // 会员不存在意味着调用方拿了个假 id —— 对用户是「服务出问题了」，不是他的错
+            case MEMBER_NOT_FOUND, UNKNOWN -> MallRedeemReason.INTERNAL;
+        };
+    }
+
+    /**
+     * ⑤ 发起履约：在事务里<b>发事件</b>，在提交之后才真正执行。
+     *
+     * <p>🔴 发布不等于执行：{@code MallOrderFulfillListener} 听的是 AFTER_COMMIT，
+     * 事务回滚时这个事件根本不会投递 —— 「单没落成但货已经发出去」在这个形状下不可能发生。
+     *
+     * <p>只有待履约才发：payType=2 的单子落在 0-待支付，钱还没收，现在发货就是白送。
+     * 那条路要等支付回调把它推到 10，而支付链路至今一行代码都没有。
+     */
+    private void publishFulfillment(MallOrder order) {
+        if (MallOrderStatusEnum.PENDING == order.getStatus()) {
+            eventPublisher.publishEvent(new MallOrderPendingEvent(order.getOrderNo()));
+        }
     }
 
     /**
@@ -189,10 +241,34 @@ public class MallRedeemService {
      * 所以这里用 Spring 的编程式回滚标记：方法照常返回拒绝结果，但事务被标记为
      * rollback-only，出方法时统一回滚。
      */
-    private static MallRedeemResult reject(MallRedeemReason reason) {
+    private MallRedeemResult reject(MallRedeemReason reason) {
+        markRollbackOnly();
+        return MallRedeemResult.ofReject(reason);
+    }
+
+    /**
+     * 标记当前事务回滚。
+     *
+     * <h3>为什么单独抽一个方法，而不是把这一行写在 {@link #reject} 里</h3>
+     * 为了让它<b>能被断言</b>。「占了库存之后的每一次拒绝都必须回滚」这条不变量，
+     * 在此之前只写在注释里 —— 而 {@code TransactionAspectSupport.currentTransactionStatus()}
+     * 读的是 Spring 内部的 ThreadLocal，单测里没有活动事务，一调就抛
+     * {@code NoTransactionException}，于是所有拒绝分支<b>一条都测不了</b>。
+     * 抽成实例方法之后，测试 spy 掉它就能逐条验证「这一路拒绝有没有标回滚」。
+     *
+     * <p>🔴 用 {@code setRollbackOnly()} 而不是抛异常，是因为调用方要拿到<b>拒绝原因</b>
+     *（"积分不足" / "已达兑换上限"）。抛异常在方法内部 catch 掉不会触发回滚，
+     * 让它穿出去调用方就只剩一个异常类型。所以只能是「正常返回 + 标记回滚」这一种形状。
+     *
+     * <p>⚠️ 这依赖 {@code redeem} 是<b>最外层</b>事务：此时 {@code setRollbackOnly()}
+     * 置的是 local rollback-only，Spring 静默回滚，调用方照常拿到返回值。
+     * 一旦有谁给 {@code MallClientFacade.redeem} 或更上游加了 {@code @Transactional}，
+     * 它就变成 global rollback-only，外层边界会抛 {@code UnexpectedRollbackException} ——
+     * 表现是「积分不足」这类用户文案全变成 500。
+     */
+    protected void markRollbackOnly() {
         org.springframework.transaction.interceptor.TransactionAspectSupport
                 .currentTransactionStatus().setRollbackOnly();
-        return MallRedeemResult.ofReject(reason);
     }
 
     private static boolean isVisible(MallCommodity commodity) {
