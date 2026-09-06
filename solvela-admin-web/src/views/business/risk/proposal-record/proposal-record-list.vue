@@ -248,6 +248,31 @@
         <template v-if="column.dataIndex === 'assetType'">
           <a-tag :color="assetTypeOf(text).color">{{ assetTypeOf(text).desc }}</a-tag>
         </template>
+
+        <!--
+          只有 10-待一审 / 11-待二审 才给按钮。其余状态后端一律抛「当前状态不可审批」——
+          渲染出来只会让人点出一个红色报错，而终态（20/50/70/80）本来就不该再有出口
+        -->
+        <template v-if="column.dataIndex === 'action'">
+          <!--
+            v-privilege 挂在外层 div 上，不挂在两个按钮上：这个指令没权限时是
+            el.parentNode.removeChild(el)，挂在 a-popconfirm 里面的按钮上会把触发器摘走、
+            留下一个空的气泡容器。整块一起删才是干净的
+          -->
+          <div v-if="reviewable(record.status)" v-privilege="'proposalRecord:approve'" class="flex gap-1">
+            <a-popconfirm
+              :title="`确认通过 ${record.memberName} 的 ${record.amount} ${assetUnitOf(record.assetType)}？`"
+              ok-text="确认通过"
+              cancel-text="取消"
+              @confirm="doApprove(record)"
+            >
+              <a-button type="link" size="small" class="p-0">通过</a-button>
+            </a-popconfirm>
+            <a-divider type="vertical" class="mx-1" />
+            <a-button type="link" danger size="small" class="p-0" @click="openReject(record)">驳回</a-button>
+          </div>
+          <span v-else class="text-slate-300 text-xs">-</span>
+        </template>
       </template>
     </a-table>
     <!---------- 表格 end ----------->
@@ -267,10 +292,20 @@
         :show-total="(total) => `共${total}条`"
       />
     </div>
+
+    <a-modal v-model:open="rejectVisible" title="驳回提案" ok-text="确认驳回" cancel-text="取消" @ok="doReject">
+      <div v-if="rejectTarget" class="text-sm mb-3">
+        将驳回 <b>{{ rejectTarget.memberName }}</b> 的
+        <b>{{ rejectTarget.amount }} {{ assetUnitOf(rejectTarget.assetType) }}</b>
+        （单号 {{ rejectTarget.tradeNo }}）
+      </div>
+      <a-textarea v-model:value="rejectReason" :rows="3" placeholder="请填写驳回理由，将记入 review_comment 留痕" />
+    </a-modal>
   </a-card>
 </template>
 <script setup>
   import { computed, reactive, ref, watch, onMounted } from 'vue';
+  import { message } from 'ant-design-vue';
   import { DownOutlined, QuestionCircleOutlined, RightOutlined } from '@ant-design/icons-vue';
   import { proposalRecordApi } from '/src/api/business/risk/proposal-record-api';
   import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
@@ -281,6 +316,7 @@
   import {
     ASSET_TYPE_OPTIONS,
     PROPOSAL_SOURCE_TYPE_OPTIONS,
+    PROPOSAL_STATUS_ENUM,
     PROPOSAL_STATUS_OPTIONS,
     assetTypeOf,
     assetUnitOf,
@@ -402,6 +438,8 @@
       dataIndex: 'updateTime',
       ellipsis: true,
     },
+    // 固定在右侧：这张表列很多，横向滚到最右才能审批等于没有这个按钮
+    { title: '操作', dataIndex: 'action', width: 120, fixed: 'right' },
   ]);
 
   // ---------------------------- 查询数据表单和方法 ----------------------------
@@ -576,8 +614,65 @@
   /*
    * 增删改整组移除（v3.69.0）：提案只能由发奖链路创建，由审批与下发推进状态。
    * 后端 /proposalRecord 的 add / update / delete / batchDelete 四个接口也已经删掉，
-   * 留着按钮只会点出 404。审批相关的操作在上面的 approve / reject 里。
+   * 留着按钮只会点出 404。推进状态的出口是下面的 doApprove / doReject。
    */
+
+  // ---------------------------- 审批 ----------------------------
+
+  /*
+   * 这一组是 2026-09-05 补的。在此之前后端的 /proposalRecord/approve|reject 早就有了、
+   * 权限点 proposalRecord:approve 也在 t_menu 里，唯独前端没有任何入口 ——
+   * 表现是「提案停在待一审，页面上却没有任何按钮能推动它」，而顶部漏斗的
+   * 「待审积压」会一直涨。删增删改那次（v3.69.0）的注释写成了「审批操作在上面」，
+   * 实际一个字都没有，于是这个洞被那句注释盖了几个月。
+   */
+
+  const rejectVisible = ref(false);
+  const rejectTarget = ref(null);
+  const rejectReason = ref('');
+
+  /** 只有待一审 / 待二审能推进。其余状态后端会抛「当前状态不可审批」 */
+  function reviewable(status) {
+    return status === PROPOSAL_STATUS_ENUM.FIRST_REVIEW.value || status === PROPOSAL_STATUS_ENUM.SECOND_REVIEW.value;
+  }
+
+  async function doApprove(record) {
+    try {
+      await proposalRecordApi.approve(record.id);
+      // 刻意不说「已发放」：单审通过会立刻下发，双审通过只是转到二审，钱还没出去。
+      // 到底是哪种取决于 t_promotion_config.review_level，按钮这边看不出来，
+      // 所以只陈述这一步做了什么，剩下的让刷新后的状态列去说
+      message.success('已通过');
+      // 重新拉取而不是本地改状态：通过后可能已经走完下发链路（成功/失败都有可能），
+      // 必须以服务端为准。漏斗一起刷 —— 待审积压和到账率都跟着这一次审批变了
+      await reload();
+    } catch (e) {
+      solvelaSentry.captureError(e);
+    }
+  }
+
+  function openReject(record) {
+    rejectTarget.value = record;
+    rejectReason.value = '';
+    rejectVisible.value = true;
+  }
+
+  async function doReject() {
+    if (!rejectReason.value.trim()) {
+      // 服务端的 comment 是可选参数，这道校验只在前端 —— 驳回是「这笔钱不给了」，
+      // 空着的话 review_comment 为 null，事后没人答得上来为什么不给
+      message.error('请填写驳回理由');
+      return;
+    }
+    try {
+      await proposalRecordApi.reject(rejectTarget.value.id, rejectReason.value.trim());
+      message.success('已驳回');
+      rejectVisible.value = false;
+      await reload();
+    } catch (e) {
+      solvelaSentry.captureError(e);
+    }
+  }
 </script>
 
 <style lang="less" scoped>

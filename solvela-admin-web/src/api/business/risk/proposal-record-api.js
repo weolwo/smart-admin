@@ -25,6 +25,31 @@ export const proposalRecordApi = {
     return postRequest('/proposalRecord/funnel', param);
   },
 
+  /**
+   * 审批通过（财务视角：这笔钱该不该出）。
+   *
+   * 一审通过后落到哪里由 t_promotion_config.review_level 决定：单审直接转 30-待执行
+   * 并立即下发，双审转 11-待二审、此刻还不出钱。所以这个按钮点下去到底发不发钱，
+   * 看的是配置不是按钮 —— 成功提示因此只说「已通过」，不说「已发放」。
+   *
+   * 服务端用条件更新（WHERE status = 当前状态）做并发闸门，
+   * 两个人同时点，第二个会拿到「该提案已被处理，请刷新后重试」  @author  alaric
+   */
+  approve: (id, comment) => {
+    return getRequest(`/proposalRecord/approve/${id}`, { comment });
+  },
+
+  /**
+   * 审批驳回：一审/二审都可以驳，落 20-驳回（终态），不再下发。
+   *
+   * comment 在服务端是可选的，但前端强制填 —— 驳回是「这笔钱不给了」，
+   * 事后客诉或审计追过来，t_proposal_record.review_comment 是唯一能回答
+   * 「为什么不给」的地方，空着等于没留痕  @author  alaric
+   */
+  reject: (id, comment) => {
+    return getRequest(`/proposalRecord/reject/${id}`, { comment });
+  },
+
   /*
    * 不再封装增删改 —— 后端对应的四个接口已整组移除（v3.69.0）。
    *
