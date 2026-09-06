@@ -37,20 +37,7 @@
       <a-form-item label="任务状态" class="solvela-query-form-item">
         <a-select style="width: 200px" v-model:value="queryForm.status" :options="CONFIG_STATUS_OPTIONS" placeholder="全部" allowClear />
       </a-form-item>
-      <a-form-item class="solvela-query-form-item">
-        <a-button type="primary" @click="onSearch">
-          <template #icon>
-            <SearchOutlined />
-          </template>
-          查询
-        </a-button>
-        <a-button @click="resetQuery" class="solvela-margin-left10">
-          <template #icon>
-            <ReloadOutlined />
-          </template>
-          重置
-        </a-button>
-      </a-form-item>
+      <QueryActions @search="onSearch" @reset="resetQuery" />
     </a-row>
   </a-form>
   <!---------- 查询表单form end ----------->
@@ -119,21 +106,12 @@
     </a-table>
     <!---------- 表格 end ----------->
 
-    <div class="solvela-query-table-page">
-      <a-pagination
-        showSizeChanger
-        showQuickJumper
-        show-less-items
-        :pageSizeOptions="PAGE_SIZE_OPTIONS"
-        :defaultPageSize="queryForm.pageSize"
-        v-model:current="queryForm.pageNum"
-        v-model:pageSize="queryForm.pageSize"
-        :total="total"
-        @change="queryData"
-        @showSizeChange="queryData"
-        :show-total="(total) => `共${total}条`"
-      />
-    </div>
+    <TablePagination
+      v-model:pageNum="queryForm.pageNum"
+      v-model:pageSize="queryForm.pageSize"
+      :total="total"
+      @change="queryData"
+    />
 
     <!---------- 详情抽屉：只读，主表 + 奖励阶梯子表 ----------->
     <a-drawer :title="`任务详情 · ${detail.taskName || ''}`" :width="760" :open="detailVisible" @close="detailVisible = false">
@@ -197,7 +175,6 @@
   import { message, Modal } from 'ant-design-vue';
   import { SolvelaLoading } from '/@/components/framework/solvela-loading';
   import { taskConfigApi } from '/src/api/business/task/task-config-api';
-  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
   import { solvelaSentry } from '/@/lib/solvela-sentry';
   import TableOperator from '/@/components/support/table-operator/index.vue';
   import { TABLE_ID_CONST } from '/@/constants/support/table-id-const';
@@ -205,6 +182,8 @@
   import { taskPrizeMappingApi } from '/src/api/business/prize/task-prize-mapping-api';
   import { toEventOptions } from '../task-wizard/task-wizard-const';
   import { prizeModeOf } from '/src/constants/business/prize/task-prize-mapping-const';
+  import QueryActions from '/@/components/framework/query-actions/index.vue';
+  import TablePagination from '/@/components/framework/table-pagination/index.vue';
   import {
     CONFIG_STATUS_ENUM,
     CONFIG_STATUS_OPTIONS,

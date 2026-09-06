@@ -36,20 +36,7 @@
       <a-form-item label="登录时间" class="solvela-query-form-item">
         <a-range-picker v-model:value="createTime" :presets="defaultTimeRanges" style="width: 230px" @change="onChangeCreateTime" />
       </a-form-item>
-      <a-form-item class="solvela-query-form-item">
-        <a-button type="primary" @click="onSearch">
-          <template #icon>
-            <SearchOutlined />
-          </template>
-          查询
-        </a-button>
-        <a-button @click="resetQuery" class="solvela-margin-left10">
-          <template #icon>
-            <ReloadOutlined />
-          </template>
-          重置
-        </a-button>
-      </a-form-item>
+      <QueryActions @search="onSearch" @reset="resetQuery" />
     </a-row>
   </a-form>
   <!---------- 查询表单form end ----------->
@@ -116,21 +103,12 @@
       </template>
     </a-table>
 
-    <div class="solvela-query-table-page">
-      <a-pagination
-        showSizeChanger
-        showQuickJumper
-        show-less-items
-        :pageSizeOptions="PAGE_SIZE_OPTIONS"
-        :defaultPageSize="queryForm.pageSize"
-        v-model:current="queryForm.pageNum"
-        v-model:pageSize="queryForm.pageSize"
-        :total="total"
-        @change="queryData"
-        @showSizeChange="queryData"
-        :show-total="(total) => `共${total}条`"
-      />
-    </div>
+    <TablePagination
+      v-model:pageNum="queryForm.pageNum"
+      v-model:pageSize="queryForm.pageSize"
+      :total="total"
+      @change="queryData"
+    />
   </a-card>
 </template>
 
@@ -139,11 +117,12 @@
   import dayjs from 'dayjs';
   import { QuestionCircleOutlined } from '@ant-design/icons-vue';
   import { memberLoginLogApi } from '/@/api/business/member/member-login-log-api';
-  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
   import { defaultTimeRanges } from '/@/lib/default-time-ranges';
   import { DEVICE_TYPE_OPTIONS, LOGIN_STATUS_ENUM, LOGIN_STATUS_OPTIONS, metaOf } from '/@/constants/business/member/member-const';
   import { solvelaSentry } from '/@/lib/solvela-sentry';
   import TableOperator from '/@/components/support/table-operator/index.vue';
+  import QueryActions from '/@/components/framework/query-actions/index.vue';
+  import TablePagination from '/@/components/framework/table-pagination/index.vue';
 
   const DATE_FORMAT = 'YYYY-MM-DD';
 

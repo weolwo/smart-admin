@@ -89,20 +89,7 @@
       <a-form-item class="solvela-query-form-item">
         <a-checkbox v-model:checked="queryForm.onlyIssue" @change="onSearch">只看有体检告警的奖项</a-checkbox>
       </a-form-item>
-      <a-form-item class="solvela-query-form-item">
-        <a-button type="primary" @click="onSearch">
-          <template #icon>
-            <SearchOutlined />
-          </template>
-          查询
-        </a-button>
-        <a-button @click="resetQuery" class="solvela-margin-left10">
-          <template #icon>
-            <ReloadOutlined />
-          </template>
-          重置
-        </a-button>
-      </a-form-item>
+      <QueryActions @search="onSearch" @reset="resetQuery" />
     </a-row>
   </a-form>
   <!---------- 查询表单form end ----------->
@@ -213,21 +200,12 @@
       </template>
     </a-table>
 
-    <div class="solvela-query-table-page">
-      <a-pagination
-        showSizeChanger
-        showQuickJumper
-        show-less-items
-        :pageSizeOptions="PAGE_SIZE_OPTIONS"
-        :defaultPageSize="queryForm.pageSize"
-        v-model:current="queryForm.pageNum"
-        v-model:pageSize="queryForm.pageSize"
-        :total="total"
-        @change="queryData"
-        @showSizeChange="queryData"
-        :show-total="(total) => `共${total}条`"
-      />
-    </div>
+    <TablePagination
+      v-model:pageNum="queryForm.pageNum"
+      v-model:pageSize="queryForm.pageSize"
+      :total="total"
+      @change="queryData"
+    />
   </a-card>
 </template>
 <script setup>
@@ -235,9 +213,10 @@
   import { QuestionCircleOutlined } from '@ant-design/icons-vue';
   import { prizePoolItemApi } from '/src/api/business/draw/prize-pool-item-api';
   import { activityConfigApi } from '/src/api/business/activity/activity-config-api';
-  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
   import { solvelaSentry } from '/@/lib/solvela-sentry';
   import { prizeIcon } from '/@/constants/business/lottery/lottery-const';
+  import QueryActions from '/@/components/framework/query-actions/index.vue';
+  import TablePagination from '/@/components/framework/table-pagination/index.vue';
 
   // 与抽奖工作台同源：活动下拉只取抽奖类活动
   const ACTIVITY_TYPE_DRAW = 'DRAW';

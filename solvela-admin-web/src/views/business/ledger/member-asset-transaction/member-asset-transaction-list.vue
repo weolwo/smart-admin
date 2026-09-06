@@ -121,20 +121,7 @@
       <a-form-item label="创建时间" class="solvela-query-form-item">
         <a-range-picker v-model:value="queryForm.createTime" :presets="defaultTimeRanges" style="width: 200px" @change="onChangeCreateTime" />
       </a-form-item>
-      <a-form-item class="solvela-query-form-item">
-        <a-button type="primary" @click="onSearch">
-          <template #icon>
-            <SearchOutlined />
-          </template>
-          查询
-        </a-button>
-        <a-button @click="resetQuery" class="solvela-margin-left10">
-          <template #icon>
-            <ReloadOutlined />
-          </template>
-          重置
-        </a-button>
-      </a-form-item>
+      <QueryActions @search="onSearch" @reset="resetQuery" />
     </a-row>
   </a-form>
   <!---------- 查询表单form end ----------->
@@ -170,21 +157,12 @@
     </a-table>
     <!---------- 表格 end ----------->
 
-    <div class="solvela-query-table-page">
-      <a-pagination
-        showSizeChanger
-        showQuickJumper
-        show-less-items
-        :pageSizeOptions="PAGE_SIZE_OPTIONS"
-        :defaultPageSize="queryForm.pageSize"
-        v-model:current="queryForm.pageNum"
-        v-model:pageSize="queryForm.pageSize"
-        :total="total"
-        @change="queryData"
-        @showSizeChange="queryData"
-        :show-total="(total) => `共${total}条`"
-      />
-    </div>
+    <TablePagination
+      v-model:pageNum="queryForm.pageNum"
+      v-model:pageSize="queryForm.pageSize"
+      :total="total"
+      @change="queryData"
+    />
   </a-card>
 </template>
 <script setup>
@@ -193,11 +171,12 @@
   import { memberAssetTransactionApi } from '/src/api/business/ledger/member-asset-transaction-api';
   import StatPanel from '/@/components/business/stat-panel/index.vue';
   import { barPercent, money, num } from '/@/lib/stat-format';
-  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
   import { solvelaSentry } from '/@/lib/solvela-sentry';
   import TableOperator from '/@/components/support/table-operator/index.vue';
   import { TABLE_ID_CONST } from '/@/constants/support/table-id-const';
   import { defaultTimeRanges } from '/@/lib/default-time-ranges';
+  import QueryActions from '/@/components/framework/query-actions/index.vue';
+  import TablePagination from '/@/components/framework/table-pagination/index.vue';
   import {
     ASSET_TYPE_OPTIONS,
     TRANSACTION_TYPE_OPTIONS,

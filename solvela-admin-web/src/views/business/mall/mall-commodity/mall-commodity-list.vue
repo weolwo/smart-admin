@@ -27,20 +27,7 @@
       <a-form-item label="状态" class="solvela-query-form-item">
         <a-select style="width: 120px" v-model:value="queryForm.status" :options="COMMODITY_STATUS_OPTIONS" placeholder="全部" allow-clear />
       </a-form-item>
-      <a-form-item class="solvela-query-form-item">
-        <a-button type="primary" @click="onSearch">
-          <template #icon>
-            <SearchOutlined />
-          </template>
-          查询
-        </a-button>
-        <a-button @click="resetQuery" class="solvela-margin-left10">
-          <template #icon>
-            <ReloadOutlined />
-          </template>
-          重置
-        </a-button>
-      </a-form-item>
+      <QueryActions @search="onSearch" @reset="resetQuery" />
     </a-row>
   </a-form>
   <!---------- 查询表单form end ----------->
@@ -128,21 +115,12 @@
     </a-table>
     <!---------- 表格 end ----------->
 
-    <div class="solvela-query-table-page">
-      <a-pagination
-        showSizeChanger
-        showQuickJumper
-        show-less-items
-        :pageSizeOptions="PAGE_SIZE_OPTIONS"
-        :defaultPageSize="queryForm.pageSize"
-        v-model:current="queryForm.pageNum"
-        v-model:pageSize="queryForm.pageSize"
-        :total="total"
-        @change="queryData"
-        @showSizeChange="queryData"
-        :show-total="(total) => `共${total}条`"
-      />
-    </div>
+    <TablePagination
+      v-model:pageNum="queryForm.pageNum"
+      v-model:pageSize="queryForm.pageSize"
+      :total="total"
+      @change="queryData"
+    />
   </a-card>
 </template>
 <script setup>
@@ -152,7 +130,6 @@
   import { SolvelaLoading } from '/@/components/framework/solvela-loading';
   import { mallCommodityApi } from '/@/api/business/mall/mall-commodity-api';
   import { mallCategoryApi } from '/@/api/business/mall/mall-category-api';
-  import { PAGE_SIZE_OPTIONS } from '/@/constants/common-const';
   import {
     COMMODITY_STATUS_ENUM,
     COMMODITY_STATUS_OPTIONS,
@@ -163,6 +140,8 @@
   import { solvelaSentry } from '/@/lib/solvela-sentry';
   import TableOperator from '/@/components/support/table-operator/index.vue';
   import FileThumb from '/@/components/support/file-thumb/index.vue';
+  import QueryActions from '/@/components/framework/query-actions/index.vue';
+  import TablePagination from '/@/components/framework/table-pagination/index.vue';
 
   /** 编辑器的路由。它是一条隐藏菜单（visible_flag=0），列表是它唯一的入口 */
   const COMMODITY_EDITOR_PATH = '/mall/mall-commodity/editor';
