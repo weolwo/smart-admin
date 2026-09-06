@@ -26,61 +26,68 @@ public class MapperVariableService extends CodeGenerateBaseVariableService {
         return true;
     }
 
+    /**
+     * Mapper XML 的变量：每个查询字段在 where 里长什么样。
+     *
+     * <p>三种形态：模糊查询拼 {@code INSTR}（可跨多列 OR）、字典查询同样走 INSTR、
+     * 其余就是一个等值列名。
+     */
     @Override
     public Map<String, Object> getInjectVariablesMap(CodeGeneratorConfigForm form) {
-        Map<String, Object> variablesMap = new HashMap<>();
         List<Map<String, Object>> finalQueryFiledList = new ArrayList<>();
         for (CodeQueryField queryField : form.getQueryFields()) {
             Map<String, Object> fieldMap = SolvelaBeanUtil.beanToMap(queryField);
+            applyWhereFragment(form, queryField, fieldMap);
             finalQueryFiledList.add(fieldMap);
-
-            //模糊查询
-            if (CodeQueryFieldQueryTypeEnum.LIKE.getValue().equals(queryField.getQueryTypeEnum())) {
-                StringBuilder stringBuilder = new StringBuilder();
-                List<String> columnNameList = queryField.getColumnNameList();
-                if (columnNameList.size() == 1) {
-                    // AND INSTR(t_notice.title,#{query.keywords})
-                    stringBuilder.append("AND INSTR(")
-                            .append(form.getTableName()).append(".").append(queryField.getColumnNameList().get(0))
-                            .append(",#{queryForm.")
-                            .append(queryField.getFieldName())
-                            .append("})");
-                } else {
-                    for (int i = 0; i < columnNameList.size(); i++) {
-                        if (i == 0) {
-                            stringBuilder.append("AND (\n                  INSTR(")
-                                    .append(form.getTableName()).append(".").append(queryField.getColumnNameList().get(i))
-                                    .append(",#{queryForm.")
-                                    .append(queryField.getFieldName())
-                                    .append("})");
-                        } else {
-                            // OR INSTR(t_notice.author,#{query.keywords})
-                            stringBuilder.append("\n                  OR INSTR(")
-                                    .append(form.getTableName()).append(".").append(queryField.getColumnNameList().get(i))
-                                    .append(",#{queryForm.")
-                                    .append(queryField.getFieldName())
-                                    .append("})");
-                        }
-                    }
-                    stringBuilder.append("\n                )");
-                }
-                fieldMap.put("likeStr", stringBuilder.toString());
-            } else if (CodeQueryFieldQueryTypeEnum.DICT.equalsValue(queryField.getQueryTypeEnum())) {
-                String stringBuilder = "AND INSTR(" +
-                        form.getTableName() + "." + queryField.getColumnNameList().get(0) +
-                        ",#{queryForm." +
-                        queryField.getFieldName() +
-                        "})";
-                fieldMap.put("likeStr", stringBuilder);
-            }
-            else {
-                fieldMap.put("columnName", queryField.getColumnNameList().get(0));
-            }
         }
 
+        Map<String, Object> variablesMap = new HashMap<>();
         variablesMap.put("queryFields", finalQueryFiledList);
         variablesMap.put("daoClassName", form.getBasic().getJavaPackageName() + ".dao." + form.getBasic().getModuleName() + "Dao");
         return variablesMap;
+    }
+
+    private void applyWhereFragment(CodeGeneratorConfigForm form, CodeQueryField queryField,
+                                    Map<String, Object> fieldMap) {
+        if (CodeQueryFieldQueryTypeEnum.LIKE.getValue().equals(queryField.getQueryTypeEnum())) {
+            fieldMap.put("likeStr", likeFragment(form, queryField));
+            return;
+        }
+        if (CodeQueryFieldQueryTypeEnum.DICT.equalsValue(queryField.getQueryTypeEnum())) {
+            fieldMap.put("likeStr", instr(form, queryField, queryField.getColumnNameList().get(0)));
+            return;
+        }
+        fieldMap.put("columnName", queryField.getColumnNameList().get(0));
+    }
+
+    /**
+     * 模糊查询片段。多列时用 OR 串起来并整体括住。
+     *
+     * <p>🔴 那对括号不能省：{@code AND a OR b} 在 SQL 里会和前面的条件重新结合，
+     * 表现是「加了别的筛选条件之后，模糊搜索把不该出现的行也带出来了」。
+     *
+     * <p>用 {@code INSTR} 而不是 {@code LIKE '%x%'}：两者都用不上索引，
+     * 但 INSTR 不需要转义用户输入里的 {@code %} 和 {@code _}。
+     */
+    private String likeFragment(CodeGeneratorConfigForm form, CodeQueryField queryField) {
+        List<String> columnNameList = queryField.getColumnNameList();
+        if (columnNameList.size() == 1) {
+            return "AND " + instr(form, queryField, columnNameList.get(0));
+        }
+        StringBuilder sb = new StringBuilder("AND (\n                  ");
+        for (int i = 0; i < columnNameList.size(); i++) {
+            if (i > 0) {
+                sb.append("\n                  OR ");
+            }
+            sb.append(instr(form, queryField, columnNameList.get(i)));
+        }
+        return sb.append("\n                )").toString();
+    }
+
+    /** {@code INSTR(t_notice.title,#{queryForm.keywords})} */
+    private String instr(CodeGeneratorConfigForm form, CodeQueryField queryField, String columnName) {
+        return "INSTR(" + form.getTableName() + "." + columnName
+                + ",#{queryForm." + queryField.getFieldName() + "})";
     }
 
 }

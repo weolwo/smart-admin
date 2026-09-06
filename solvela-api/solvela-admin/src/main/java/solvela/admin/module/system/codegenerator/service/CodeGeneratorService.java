@@ -91,44 +91,38 @@ public class CodeGeneratorService {
      * @return
      */
     public TableConfigVO getTableConfig(String table) {
-
         TableConfigVO config = new TableConfigVO();
-
-        CodeGeneratorConfigEntity codeGeneratorConfigEntity = codeGeneratorConfigDao.selectById(table);
-        if (codeGeneratorConfigEntity == null) {
+        CodeGeneratorConfigEntity entity = codeGeneratorConfigDao.selectById(table);
+        if (entity == null) {
+            // 还没配过这张表：返回一个空壳而不是 null，前端拿到就是一张空白配置页
             return config;
         }
 
-        if (SolvelaStringUtil.isNotEmpty(codeGeneratorConfigEntity.getBasic())) {
-            CodeBasic basic = JsonUtils.parseObject(codeGeneratorConfigEntity.getBasic(), CodeBasic.class);
-            config.setBasic(basic);
+        /*
+         * 每一段都单独判空再解析。
+         *
+         * 🔴 不能省掉判空直接 parse：这几列是历史上分批加的，老配置里后加的那几列是 NULL，
+         * 而 JsonUtils.parseObject(null) 会抛。表现是「早期建的表一点配置就报错」，
+         * 报错信息还指向 JSON 解析，看不出是哪一列缺了。
+         */
+        if (SolvelaStringUtil.isNotEmpty(entity.getBasic())) {
+            config.setBasic(JsonUtils.parseObject(entity.getBasic(), CodeBasic.class));
         }
-
-        if (SolvelaStringUtil.isNotEmpty(codeGeneratorConfigEntity.getFields())) {
-            List<CodeField> fields = JsonUtils.parseList(codeGeneratorConfigEntity.getFields(), CodeField.class);
-            config.setFields(fields);
+        if (SolvelaStringUtil.isNotEmpty(entity.getFields())) {
+            config.setFields(JsonUtils.parseList(entity.getFields(), CodeField.class));
         }
-
-        if (SolvelaStringUtil.isNotEmpty(codeGeneratorConfigEntity.getInsertAndUpdate())) {
-            CodeInsertAndUpdate insertAndUpdate = JsonUtils.parseObject(codeGeneratorConfigEntity.getInsertAndUpdate(), CodeInsertAndUpdate.class);
-            config.setInsertAndUpdate(insertAndUpdate);
+        if (SolvelaStringUtil.isNotEmpty(entity.getInsertAndUpdate())) {
+            config.setInsertAndUpdate(JsonUtils.parseObject(entity.getInsertAndUpdate(), CodeInsertAndUpdate.class));
         }
-
-        if (SolvelaStringUtil.isNotEmpty(codeGeneratorConfigEntity.getDeleteInfo())) {
-            CodeDelete deleteInfo = JsonUtils.parseObject(codeGeneratorConfigEntity.getDeleteInfo(), CodeDelete.class);
-            config.setDeleteInfo(deleteInfo);
+        if (SolvelaStringUtil.isNotEmpty(entity.getDeleteInfo())) {
+            config.setDeleteInfo(JsonUtils.parseObject(entity.getDeleteInfo(), CodeDelete.class));
         }
-
-        if (SolvelaStringUtil.isNotEmpty(codeGeneratorConfigEntity.getQueryFields())) {
-            List<CodeQueryField> queryFields = JsonUtils.parseList(codeGeneratorConfigEntity.getQueryFields(), CodeQueryField.class);
-            config.setQueryFields(queryFields);
+        if (SolvelaStringUtil.isNotEmpty(entity.getQueryFields())) {
+            config.setQueryFields(JsonUtils.parseList(entity.getQueryFields(), CodeQueryField.class));
         }
-
-        if (SolvelaStringUtil.isNotEmpty(codeGeneratorConfigEntity.getTableFields())) {
-            List<CodeTableField> tableFields = JsonUtils.parseList(codeGeneratorConfigEntity.getTableFields(), CodeTableField.class);
-            config.setTableFields(tableFields);
+        if (SolvelaStringUtil.isNotEmpty(entity.getTableFields())) {
+            config.setTableFields(JsonUtils.parseList(entity.getTableFields(), CodeTableField.class));
         }
-
         return config;
     }
 
@@ -139,45 +133,60 @@ public class CodeGeneratorService {
      * @return
      */
     public synchronized void updateConfig(CodeGeneratorConfigForm form) {
-        long existCount = codeGeneratorDao.countByTableName(form.getTableName());
-        if (existCount == 0) {
+        if (codeGeneratorDao.countByTableName(form.getTableName()) == 0) {
             throw new BusinessException("表不存在，请联系后端查看下数据库");
         }
+        checkTableStructure(form);
 
-        CodeGeneratorConfigEntity codeGeneratorConfigEntity = codeGeneratorConfigDao.selectById(form.getTableName());
-        boolean updateFlag = true;
-        if (codeGeneratorConfigEntity == null) {
-            codeGeneratorConfigEntity = new CodeGeneratorConfigEntity();
-            updateFlag = false;
+        CodeGeneratorConfigEntity entity = codeGeneratorConfigDao.selectById(form.getTableName());
+        boolean updateFlag = entity != null;
+        if (!updateFlag) {
+            entity = new CodeGeneratorConfigEntity();
         }
+        fillConfigJson(entity, form);
 
-        // 校验假删，必须有 deleted_flag 字段
+        if (updateFlag) {
+            codeGeneratorConfigDao.updateById(entity);
+        } else {
+            codeGeneratorConfigDao.insert(entity);
+        }
+    }
+
+    /**
+     * 表结构必须撑得住这份配置，两条：
+     *
+     * <ul>
+     *   <li><b>选了假删就必须真有 deleted_flag 列</b> —— 没有的话生成的代码能编译、能跑，
+     *       但每次「删除」都是一条 update 一个不存在的列，运行期才炸；</li>
+     *   <li><b>表必须有主键</b> —— 没有主键的表生成不出可用的 CRUD，
+     *       这里拦下来好过让人拿着一份坏代码去查为什么编译不过。</li>
+     * </ul>
+     */
+    private void checkTableStructure(CodeGeneratorConfigForm form) {
         List<TableColumnVO> tableColumns = getTableColumns(form.getTableName());
-        if (null != form.getDeleteInfo() && form.getDeleteInfo().getIsSupportDelete() && !form.getDeleteInfo().getIsPhysicallyDeleted()) {
-            Optional<TableColumnVO> any = tableColumns.stream().filter(e -> e.getColumnName().equals(CodeGeneratorConstant.DELETED_FLAG)).findAny();
-            if (!any.isPresent()) {
-                throw new BusinessException("表结构中没有假删字段：" + CodeGeneratorConstant.DELETED_FLAG + ",请仔细排查");
-            }
+
+        CodeDelete deleteInfo = form.getDeleteInfo();
+        boolean logicalDelete = null != deleteInfo
+                && deleteInfo.getIsSupportDelete() && !deleteInfo.getIsPhysicallyDeleted();
+        if (logicalDelete && tableColumns.stream()
+                .noneMatch(e -> e.getColumnName().equals(CodeGeneratorConstant.DELETED_FLAG))) {
+            throw new BusinessException("表结构中没有假删字段：" + CodeGeneratorConstant.DELETED_FLAG + ",请仔细排查");
         }
 
-        // 校验表必须有主键
         if (tableColumns.stream().noneMatch(e -> COLUMN_PRIMARY_KEY.equalsIgnoreCase(e.getColumnKey()))) {
             throw new BusinessException("表必须有主键，请联系后端查看下数据库表结构");
         }
+    }
 
-        codeGeneratorConfigEntity.setTableName(form.getTableName());
-        codeGeneratorConfigEntity.setBasic(JsonUtils.toJson(form.getBasic()));
-        codeGeneratorConfigEntity.setFields(JsonUtils.toJson(form.getFields()));
-        codeGeneratorConfigEntity.setInsertAndUpdate(JsonUtils.toJson(form.getInsertAndUpdate()));
-        codeGeneratorConfigEntity.setDeleteInfo(JsonUtils.toJson(form.getDeleteInfo()));
-        codeGeneratorConfigEntity.setQueryFields(JsonUtils.toJson(form.getQueryFields()));
-        codeGeneratorConfigEntity.setTableFields(JsonUtils.toJson(form.getTableFields()));
-
-        if (updateFlag) {
-            codeGeneratorConfigDao.updateById(codeGeneratorConfigEntity);
-        } else {
-            codeGeneratorConfigDao.insert(codeGeneratorConfigEntity);
-        }
+    /** 配置的六段各自序列化成一列 JSON。分列存是为了让每一段能独立演进，见 getTableConfig 的判空 */
+    private void fillConfigJson(CodeGeneratorConfigEntity entity, CodeGeneratorConfigForm form) {
+        entity.setTableName(form.getTableName());
+        entity.setBasic(JsonUtils.toJson(form.getBasic()));
+        entity.setFields(JsonUtils.toJson(form.getFields()));
+        entity.setInsertAndUpdate(JsonUtils.toJson(form.getInsertAndUpdate()));
+        entity.setDeleteInfo(JsonUtils.toJson(form.getDeleteInfo()));
+        entity.setQueryFields(JsonUtils.toJson(form.getQueryFields()));
+        entity.setTableFields(JsonUtils.toJson(form.getTableFields()));
     }
 
     /**

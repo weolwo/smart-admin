@@ -40,87 +40,30 @@ public class QueryFormVariableService extends CodeGenerateBaseVariableService {
     }
 
 
+    /**
+     * 查询表单的字段与 import 列表。
+     *
+     * <p>每种查询方式（等值 / 日期 / 枚举 / 字典）决定了字段的 Java 类型、要加哪些注解、
+     * 以及要补哪些 import —— 三件事绑在一起，所以按查询方式分而不是按「类型/注解/import」分。
+     */
     public ImmutablePair<List<String>, List<Map<String, Object>>> getPackageListAndFields(CodeGeneratorConfigForm form) {
-
-        List<CodeQueryField> fields = form.getQueryFields();
-
         HashSet<String> packageList = new HashSet<>();
-
-        /**
-         * 1、LocalDate、LocalDateTime、BigDecimal 类型的包名
-         * 2、排序
-         */
-
         List<Map<String, Object>> finalFieldList = new ArrayList<>();
 
-        for (CodeQueryField field : fields) {
-
-            // CodeField 和 InsertAndUpdateField 合并
-            Map<String, Object> finalFieldMap = SolvelaBeanUtil.beanToMap(field);
-            finalFieldMap.putAll(SolvelaBeanUtil.beanToMap(field));
-
-            String queryTypeEnumStr = field.getQueryTypeEnum();
-            CodeQueryFieldQueryTypeEnum queryTypeEnum = SolvelaEnumUtil.getEnumByValue(queryTypeEnumStr, CodeQueryFieldQueryTypeEnum.class);
+        for (CodeQueryField field : form.getQueryFields()) {
+            CodeQueryFieldQueryTypeEnum queryTypeEnum =
+                    SolvelaEnumUtil.getEnumByValue(field.getQueryTypeEnum(), CodeQueryFieldQueryTypeEnum.class);
             if (queryTypeEnum == null) {
                 continue;
             }
 
-            String apiModelProperty = "@Schema(description = \"" + field.getLabel() + "\")";
-            finalFieldMap.put("apiModelProperty", apiModelProperty);
+            Map<String, Object> finalFieldMap = SolvelaBeanUtil.beanToMap(field);
+            finalFieldMap.put("apiModelProperty", "@Schema(description = \"" + field.getLabel() + "\")");
             packageList.add("import io.swagger.v3.oas.annotations.media.Schema;");
 
-            CodeField codeField = null;
-
-            switch (queryTypeEnum) {
-                case EQUAL:
-                    codeField = getCodeFieldByColumnName(field.getColumnNameList().get(0), form);
-                    if (codeField == null) {
-                        finalFieldMap.put("javaType", "String");
-                    } else {
-                        finalFieldMap.put("javaType", codeField.getJavaType());
-                    }
-                    break;
-                case DATE_RANGE:
-                case DATE:
-                    packageList.add("import java.time.LocalDate;");
-                    finalFieldMap.put("javaType", "LocalDate");
-                    break;
-                case ENUM:
-                    codeField = getCodeFieldByColumnName(field.getColumnNameList().get(0), form);
-                    if (codeField == null) {
-                        continue;
-                    }
-                    // 枚举类名未配置时降级为普通字段，避免拼出 import xxx.constant.null 和 null.class 导致生成代码无法编译
-                    if (SolvelaStringUtil.isEmpty(codeField.getEnumName())) {
-                        finalFieldMap.put("javaType", codeField.getJavaType());
-                        break;
-                    }
-
-                    packageList.add("import solvela.web.swagger.SchemaEnum;");
-                    packageList.add("import solvela.base.validation.enumeration.CheckEnum;");
-                    packageList.add("import " + form.getBasic().getJavaPackageName() + ".constant." + codeField.getEnumName() + ";");
-
-                    //enum check
-                    String checkEnum = "@CheckEnum(value = " + codeField.getEnumName() + ".class, message = \"" + codeField.getLabel() + " 错误\")";
-                    finalFieldMap.put("apiModelProperty", "@SchemaEnum(value = " + codeField.getEnumName() + ".class, desc = \"" + codeField.getLabel() + "\")");
-                    finalFieldMap.put("checkEnum", checkEnum);
-                    finalFieldMap.put("isEnum", true);
-
-                    finalFieldMap.put("javaType", codeField.getJavaType());
-                    break;
-                case DICT:
-                    codeField = getCodeFieldByColumnName(field.getColumnNameList().get(0), form);
-                    if (SolvelaStringUtil.isNotEmpty(codeField.getDict())) {
-                        finalFieldMap.put("dict", "\n    @JsonDeserialize(using = DictDataDeserializer.class)");
-                        packageList.add("import tools.jackson.databind.annotation.JsonDeserialize;");
-                        packageList.add("import solvela.base.json.deserializer.DictDataDeserializer;");
-                    }
-                    finalFieldMap.put("javaType", "String");
-                default:
-                    finalFieldMap.put("javaType", "String");
+            if (applyQueryType(queryTypeEnum, field, form, finalFieldMap, packageList)) {
+                finalFieldList.add(finalFieldMap);
             }
-
-            finalFieldList.add(finalFieldMap);
         }
 
         // lombok
@@ -129,6 +72,75 @@ public class QueryFormVariableService extends CodeGenerateBaseVariableService {
 
         List<String> packageNameList = packageList.stream().filter(Objects::nonNull).sorted().collect(Collectors.toList());
         return ImmutablePair.of(packageNameList, finalFieldList);
+    }
+
+    /**
+     * 按查询方式填好这一个字段。
+     *
+     * @return false 表示这个字段该整个跳过（枚举查询却找不到对应的列）
+     */
+    private boolean applyQueryType(CodeQueryFieldQueryTypeEnum queryTypeEnum, CodeQueryField field,
+                                   CodeGeneratorConfigForm form, Map<String, Object> finalFieldMap,
+                                   HashSet<String> packageList) {
+        switch (queryTypeEnum) {
+            case EQUAL -> {
+                CodeField codeField = getCodeFieldByColumnName(field.getColumnNameList().get(0), form);
+                // 找不到列就退化成 String：生成的代码仍然编译得过，运营改一下配置即可
+                finalFieldMap.put("javaType", codeField == null ? "String" : codeField.getJavaType());
+            }
+            case DATE_RANGE, DATE -> {
+                packageList.add("import java.time.LocalDate;");
+                finalFieldMap.put("javaType", "LocalDate");
+            }
+            case ENUM -> {
+                return applyEnum(field, form, finalFieldMap, packageList);
+            }
+            case DICT -> applyDict(field, form, finalFieldMap, packageList);
+            default -> finalFieldMap.put("javaType", "String");
+        }
+        return true;
+    }
+
+    /**
+     * 枚举查询：带上 {@code @SchemaEnum} 与 {@code @CheckEnum}。
+     *
+     * <p>🔴 枚举类名没配时<b>降级成普通字段</b>而不是照拼 —— 照拼会生成
+     * {@code import xxx.constant.null} 和 {@code null.class}，整个生成出来的模块编译不过，
+     * 而报错位置指向生成代码，看不出根因在配置上。
+     */
+    private boolean applyEnum(CodeQueryField field, CodeGeneratorConfigForm form,
+                              Map<String, Object> finalFieldMap, HashSet<String> packageList) {
+        CodeField codeField = getCodeFieldByColumnName(field.getColumnNameList().get(0), form);
+        if (codeField == null) {
+            return false;
+        }
+        finalFieldMap.put("javaType", codeField.getJavaType());
+        if (SolvelaStringUtil.isEmpty(codeField.getEnumName())) {
+            return true;
+        }
+
+        packageList.add("import solvela.web.swagger.SchemaEnum;");
+        packageList.add("import solvela.base.validation.enumeration.CheckEnum;");
+        packageList.add("import " + form.getBasic().getJavaPackageName() + ".constant." + codeField.getEnumName() + ";");
+
+        finalFieldMap.put("apiModelProperty",
+                "@SchemaEnum(value = " + codeField.getEnumName() + ".class, desc = \"" + codeField.getLabel() + "\")");
+        finalFieldMap.put("checkEnum",
+                "@CheckEnum(value = " + codeField.getEnumName() + ".class, message = \"" + codeField.getLabel() + " 错误\")");
+        finalFieldMap.put("isEnum", true);
+        return true;
+    }
+
+    /** 字典查询：字段类型是 String，值由 {@code DictDataDeserializer} 在反序列化时翻译 */
+    private void applyDict(CodeQueryField field, CodeGeneratorConfigForm form,
+                           Map<String, Object> finalFieldMap, HashSet<String> packageList) {
+        CodeField codeField = getCodeFieldByColumnName(field.getColumnNameList().get(0), form);
+        if (codeField != null && SolvelaStringUtil.isNotEmpty(codeField.getDict())) {
+            finalFieldMap.put("dict", "\n    @JsonDeserialize(using = DictDataDeserializer.class)");
+            packageList.add("import tools.jackson.databind.annotation.JsonDeserialize;");
+            packageList.add("import solvela.base.json.deserializer.DictDataDeserializer;");
+        }
+        finalFieldMap.put("javaType", "String");
     }
 
 }
