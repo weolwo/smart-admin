@@ -106,9 +106,36 @@ public class MemberAuthService implements MemberAuthApi {
             return MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
         }
 
-        // ---------- 账号状态 ----------
+        /*
+         * 三道闸，顺序即安全，返回非 null 即被挡下：
+         *   状态 -> 限制 -> 密码
+         * 每一道都必须排在密码比对之前，理由分别写在各自的方法上。
+         */
+        MemberAuthResult statusProblem = checkStatus(member, cmd);
+        if (statusProblem != null) {
+            return statusProblem;
+        }
+        MemberAuthResult limited = checkOperationLimit(member, cmd);
+        if (limited != null) {
+            return limited;
+        }
+        MemberAuthResult credentialProblem = verifyPassword(member, cmd);
+        if (credentialProblem != null) {
+            return credentialProblem;
+        }
+
+        operationLimitService.clearFail(member.getMemberId(), MemberOperationTypeEnum.LOGIN);
+        saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_SUCCESS, null);
+        return MemberAuthResult.ok(toIdentity(member));
+    }
+
+    /**
+     * 账号状态。<b>必须排在验密码之前</b> —— 被冻结的账号不该还能拿来试探密码对不对：
+     * 一个已被判定为高风险的账号，不该再提供任何「密码猜对了没有」的信号。
+     */
+    private MemberAuthResult checkStatus(Member member, MemberAuthCmd cmd) {
         if (member.getStatus() == MemberStatusEnum.CANCELLED) {
-            // 正常走不到：注销会把 phone_hash 置 NULL，上一步就查不到人。
+            // 正常走不到：注销会把 phone_hash 置 NULL，查人那一步就查不到了。
             // 留着是因为「查不到」依赖的是另一处代码写对，而这一行只值三行代价。
             return MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
         }
@@ -116,38 +143,49 @@ public class MemberAuthService implements MemberAuthApi {
             saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "账号已冻结");
             return MemberAuthResult.fail(AuthFailReason.ACCOUNT_FROZEN);
         }
+        return null;
+    }
 
-        // ---------- 风控：连续失败限制 ----------
-        // 会员端自己一套（t_member_operation_limit + Redis 计数），不走员工端的三级等保：
-        // 那套锁的是账号，而会员的手机号是可猜、可泄露的 —— 等于给了别人一个把你挡在门外的开关。
+    /**
+     * 连续失败限制。<b>同样必须排在验密码之前</b> —— 放到后面的话，被限期间每一次尝试
+     * 仍然会走一遍密码比对，限制就只剩一句提示语，拦不住任何东西。
+     *
+     * <p>会员端自成一套（{@code t_member_operation_limit} + Redis 计数），不走员工端的
+     * 三级等保：那套锁的是账号，而会员的手机号是可猜、可泄露的 ——
+     * 等于给了别人一个把你挡在门外的开关。
+     */
+    private MemberAuthResult checkOperationLimit(Member member, MemberAuthCmd cmd) {
         MemberOperationLimit activeLimit =
                 operationLimitService.getActiveLimit(member.getMemberId(), MemberOperationTypeEnum.LOGIN);
-        if (activeLimit != null) {
-            saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "登录已被限制");
-            return MemberAuthResult.limited(remainingSeconds(activeLimit));
+        if (activeLimit == null) {
+            return null;
         }
+        saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "登录已被限制");
+        return MemberAuthResult.limited(remainingSeconds(activeLimit));
+    }
 
-        // ---------- 验密码 ----------
+    /**
+     * 验密码。返回 null 表示通过。
+     *
+     * <p>「没设过密码」单独一个原因，不混进「密码错误」—— 混了的话用户会一直重试
+     * 一个他从来没设过的密码。
+     */
+    private MemberAuthResult verifyPassword(Member member, MemberAuthCmd cmd) {
         if (SolvelaStringUtil.isEmpty(member.getPassword())) {
             saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "未设置登录密码");
             return MemberAuthResult.fail(AuthFailReason.NO_PASSWORD);
         }
-        if (!PasswordCipher.matches(cmd.password(), member.getPassword())) {
-            MemberOperationLimit triggered = operationLimitService.recordFail(
-                    member.getMemberId(), MemberOperationTypeEnum.LOGIN, "连续登录失败");
-            saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "手机号或密码错误");
-            // triggered 非空表示这一次失败刚好把人限制住了，直接返回「还要等多久」，
-            // 而不是让他再点一次才发现被限 —— 后者是投诉的主要来源
-            if (triggered != null) {
-                return MemberAuthResult.limited(remainingSeconds(triggered));
-            }
-            return MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
+        if (PasswordCipher.matches(cmd.password(), member.getPassword())) {
+            return null;
         }
-
-        // ---------- 认证通过 ----------
-        operationLimitService.clearFail(member.getMemberId(), MemberOperationTypeEnum.LOGIN);
-        saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_SUCCESS, null);
-        return MemberAuthResult.ok(toIdentity(member));
+        MemberOperationLimit triggered = operationLimitService.recordFail(
+                member.getMemberId(), MemberOperationTypeEnum.LOGIN, "连续登录失败");
+        saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "手机号或密码错误");
+        // triggered 非空表示这一次失败刚好把人限制住了，直接返回「还要等多久」，
+        // 而不是让他再点一次才发现被限 —— 后者是投诉的主要来源
+        return triggered != null
+                ? MemberAuthResult.limited(remainingSeconds(triggered))
+                : MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
     }
 
     /**

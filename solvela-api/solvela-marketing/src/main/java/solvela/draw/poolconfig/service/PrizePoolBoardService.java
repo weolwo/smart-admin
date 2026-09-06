@@ -76,7 +76,25 @@ public class PrizePoolBoardService {
      * 也让「概览统计的是筛选后的全量」天然成立。
      */
     public PrizePoolBoardResultDTO board(PrizePoolConfigQuery queryForm) {
-        List<PrizePoolConfig> pools = prizePoolConfigManager.lambdaQuery()
+        List<PrizePoolConfig> pools = queryPools(queryForm);
+
+        Map<String, List<PoolPrizeMapping>> mappingByPool = loadMappingsByPool(pools);
+        Map<Long, PrizePoolItem> itemMap = loadItemMap(mappingByPool);
+        Map<String, ActivityConfig> activityMap = loadActivityMap(pools);
+
+        List<PrizePoolBoardDTO> all = new ArrayList<>();
+        for (PrizePoolConfig pool : pools) {
+            all.add(analyseOne(pool, activityMap, itemMap,
+                    mappingByPool.getOrDefault(pool.getPoolCode(), List.of())));
+        }
+
+        // 🔴 先过滤再排序，不能反过来：排序用的是 List.sort，而过滤那一步返回的
+        // 若是不可变列表（.toList()）就会当场抛 UnsupportedOperationException
+        return summarize(sortByPriority(filterIssues(all, queryForm)), queryForm);
+    }
+
+    private List<PrizePoolConfig> queryPools(PrizePoolConfigQuery queryForm) {
+        return prizePoolConfigManager.lambdaQuery()
                 .eq(StringUtils.isNotBlank(queryForm.getActivityCode()),
                         PrizePoolConfig::getActivityCode, queryForm.getActivityCode())
                 .eq(StringUtils.isNotBlank(queryForm.getPoolCode()),
@@ -85,57 +103,80 @@ public class PrizePoolBoardService {
                         PrizePoolConfig::getPoolName, queryForm.getPoolName())
                 .eq(queryForm.getStatus() != null, PrizePoolConfig::getStatus, queryForm.getStatus())
                 .list();
+    }
 
-        /*
-         * 下面三张表都只当查找表用（map.get），没有一处遍历全量 ——
-         * 所以只捞这一页引用到的行，与捞全表结果完全一致。
-         *
-         * 改造前是三次无条件 list()：配置表现在小，但那是线性劣化，
-         * 活动配到几百个时这个页面会跟着一起慢下来。
-         */
+    /*
+     * 下面三张表都只当查找表用（map.get），没有一处遍历全量 ——
+     * 所以只捞这一页引用到的行，与捞全表结果完全一致。
+     *
+     * 改造前是三次无条件 list()：配置表现在小，但那是线性劣化，
+     * 活动配到几百个时这个页面会跟着一起慢下来。
+     */
+
+    private Map<String, List<PoolPrizeMapping>> loadMappingsByPool(List<PrizePoolConfig> pools) {
         List<String> poolCodes = pools.stream().map(PrizePoolConfig::getPoolCode).toList();
-        Map<String, List<PoolPrizeMapping>> mappingByPool = poolCodes.isEmpty() ? Map.of()
-                : poolPrizeMappingManager.lambdaQuery()
-                        .in(PoolPrizeMapping::getPoolCode, poolCodes).list().stream()
-                        .collect(Collectors.groupingBy(PoolPrizeMapping::getPoolCode));
+        if (poolCodes.isEmpty()) {
+            return Map.of();
+        }
+        return poolPrizeMappingManager.lambdaQuery()
+                .in(PoolPrizeMapping::getPoolCode, poolCodes).list().stream()
+                .collect(Collectors.groupingBy(PoolPrizeMapping::getPoolCode));
+    }
 
+    private Map<Long, PrizePoolItem> loadItemMap(Map<String, List<PoolPrizeMapping>> mappingByPool) {
         List<Long> itemIds = mappingByPool.values().stream()
                 .flatMap(List::stream)
                 .map(PoolPrizeMapping::getPrizeItemId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, PrizePoolItem> itemMap = itemIds.isEmpty() ? Map.of()
-                : prizePoolItemManager.lambdaQuery().in(PrizePoolItem::getId, itemIds).list().stream()
-                        .collect(Collectors.toMap(PrizePoolItem::getId, Function.identity(), (a, b) -> a));
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        return prizePoolItemManager.lambdaQuery().in(PrizePoolItem::getId, itemIds).list().stream()
+                .collect(Collectors.toMap(PrizePoolItem::getId, Function.identity(), (a, b) -> a));
+    }
 
+    private Map<String, ActivityConfig> loadActivityMap(List<PrizePoolConfig> pools) {
         List<String> activityCodes = pools.stream()
                 .map(PrizePoolConfig::getActivityCode)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<String, ActivityConfig> activityMap = activityCodes.isEmpty() ? Map.of()
-                : activityConfigManager.lambdaQuery()
-                        .in(ActivityConfig::getActivityCode, activityCodes).list().stream()
-                        .collect(Collectors.toMap(ActivityConfig::getActivityCode, Function.identity(), (a, b) -> a));
-
-        List<PrizePoolBoardDTO> all = new ArrayList<>();
-        for (PrizePoolConfig pool : pools) {
-            all.add(analyseOne(pool, activityMap, itemMap,
-                    mappingByPool.getOrDefault(pool.getPoolCode(), List.of())));
+        if (activityCodes.isEmpty()) {
+            return Map.of();
         }
+        return activityConfigManager.lambdaQuery()
+                .in(ActivityConfig::getActivityCode, activityCodes).list().stream()
+                .collect(Collectors.toMap(ActivityConfig::getActivityCode, Function.identity(), (a, b) -> a));
+    }
 
-        if (Boolean.TRUE.equals(queryForm.getOnlyIssue())) {
-            all = all.stream().filter(v -> v.getDangerCount() > 0 || v.getWarnCount() > 0).collect(Collectors.toList());
+    /** 「只看有问题的」勾选时才过滤。返回可变列表，下一步要就地排序 */
+    private static List<PrizePoolBoardDTO> filterIssues(List<PrizePoolBoardDTO> all, PrizePoolConfigQuery queryForm) {
+        if (!Boolean.TRUE.equals(queryForm.getOnlyIssue())) {
+            return all;
         }
+        return all.stream().filter(v -> v.getDangerCount() > 0 || v.getWarnCount() > 0)
+                .collect(Collectors.toList());
+    }
 
-        // 排序即优先级：不能抽的排最前（配了却用不了最该先修），其次有告警的，最后按创建时间倒序
+    /** 排序即优先级：不能抽的排最前（配了却用不了最该先修），其次有告警的，最后按创建时间倒序 */
+    private static List<PrizePoolBoardDTO> sortByPriority(List<PrizePoolBoardDTO> all) {
         all.sort(Comparator
                 .comparing((PrizePoolBoardDTO v) -> Boolean.TRUE.equals(v.getDrawable()) ? 1 : 0)
                 .thenComparing(v -> v.getDangerCount() > 0 ? 0 : 1)
                 .thenComparing(PrizePoolBoardDTO::getCreateTime,
                         Comparator.nullsLast(Comparator.reverseOrder())));
+        return all;
+    }
 
+    /**
+     * 概览 + 这一页的明细。
+     *
+     * <p>概览统计的是<b>筛选后的全量</b>而不是当前页 —— 这正是分页放在内存里做的理由：
+     * 卡片上的「3 个池不可抽」和列表翻到第 2 页看到的东西必然对得上。
+     */
+    private static PrizePoolBoardResultDTO summarize(List<PrizePoolBoardDTO> all, PrizePoolConfigQuery queryForm) {
         PrizePoolBoardResultDTO result = new PrizePoolBoardResultDTO();
         result.setPoolCount(all.size());
         result.setDrawableCount((int) all.stream().filter(v -> Boolean.TRUE.equals(v.getDrawable())).count());

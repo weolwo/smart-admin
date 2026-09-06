@@ -30,38 +30,22 @@ public class Ip2RegionListener implements ApplicationListener<ApplicationEnviron
 
     private static final String LOG_DIRECTORY = "project.log-directory";
 
+    /**
+     * IP 归属地库要在<b>环境就绪、容器还没起</b>的这一刻初始化。
+     *
+     * <p>库文件打在 jar 里，而 ip2region 只能从真实文件路径加载，所以必须先落盘一次。
+     * 落到日志目录是因为那是唯一保证可写的目录；用完立刻删 ——
+     * {@code SolvelaIpUtil.init} 已经把内容读进内存了，留着只是多一份几 MB 的垃圾。
+     */
     @Override
     public void onApplicationEvent(ApplicationEnvironmentPreparedEvent applicationEvent) {
-
-        ConfigurableEnvironment environment = applicationEvent.getEnvironment();
-        String logDirectoryPath = environment.getProperty(LOG_DIRECTORY);
-        if (logDirectoryPath == null) {
-            throw new ExceptionInInitializerError("环境变量为空：" + LOG_DIRECTORY);
-        }
-        System.setProperty(LOG_DIRECTORY, logDirectoryPath);
-
-        // 1、从jar中的ip2region.xdb文件复制到服务器目录中
-        File logDirectoryFile = new File(logDirectoryPath);
-        if (!logDirectoryFile.exists()) {
-            logDirectoryFile.mkdirs();
-        }
-
-        String tempFilePath = null;
-        if (logDirectoryPath.endsWith("/")) {
-            tempFilePath = logDirectoryPath + IP_FILE_NAME;
-        } else {
-            tempFilePath = logDirectoryPath + "/" + IP_FILE_NAME;
-        }
-
-        File tempFile = new File(tempFilePath);
+        String logDirectoryPath = requireLogDirectory(applicationEvent.getEnvironment());
+        File tempFile = new File(resolveTempFilePath(logDirectoryPath));
         try {
             FileUtils.copyInputStreamToFile(new ClassPathResource(IP_FILE_NAME).getInputStream(), tempFile);
-
-            // 2、初始化
-            SolvelaIpUtil.init(tempFilePath);
-
-
+            SolvelaIpUtil.init(tempFile.getPath());
         } catch (IOException e) {
+            // 起不来好过起来了但每条登录日志的归属地都是空 —— 那种问题要等到有人查日志才发现
             log.error("无法复制ip数据文件 ip2region.xdb", e);
             throw new ExceptionInInitializerError("无法复制ip数据文件");
         } finally {
@@ -69,7 +53,31 @@ public class Ip2RegionListener implements ApplicationListener<ApplicationEnviron
                 tempFile.delete();
             }
         }
+    }
 
+    /**
+     * 取日志目录，顺带把它塞回 System properties。
+     *
+     * <p>塞回去是给 logback 用的：日志配置在 Spring 环境之前就要解析
+     * {@code ${project.log-directory}}，那时它只认 System properties。
+     */
+    private static String requireLogDirectory(ConfigurableEnvironment environment) {
+        String logDirectoryPath = environment.getProperty(LOG_DIRECTORY);
+        if (logDirectoryPath == null) {
+            throw new ExceptionInInitializerError("环境变量为空：" + LOG_DIRECTORY);
+        }
+        System.setProperty(LOG_DIRECTORY, logDirectoryPath);
+        File logDirectoryFile = new File(logDirectoryPath);
+        if (!logDirectoryFile.exists()) {
+            logDirectoryFile.mkdirs();
+        }
+        return logDirectoryPath;
+    }
+
+    private static String resolveTempFilePath(String logDirectoryPath) {
+        return logDirectoryPath.endsWith("/")
+                ? logDirectoryPath + IP_FILE_NAME
+                : logDirectoryPath + "/" + IP_FILE_NAME;
     }
 
 

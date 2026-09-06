@@ -119,21 +119,11 @@ public class MallRedeemService {
         }
 
         // ---------- 以下是校验阶段：还没写任何东西，拒绝一律用 ofReject ----------
-        MallAddress address = null;
-        if (isPhysical(commodity)) {
-            if (cmd.addressId() == null) {
-                return MallRedeemResult.ofReject(MallRedeemReason.ADDRESS_REQUIRED);
-            }
-            /*
-             * 🔴 必须重查，不能信任传进来的 id：支付期间用户可能把这条地址删了
-             *（DDL 里 address_id 是软引用，刻意不加外键）。查不到就拦下来让用户重选，
-             * 别拿着一个空地址去建履约单 —— 那张单子发不出去，而失败原因会指向仓库。
-             */
-            address = mallAddressService.getOwned(cmd.addressId(), cmd.memberId());
-            if (address == null) {
-                return MallRedeemResult.ofReject(MallRedeemReason.ADDRESS_NOT_FOUND);
-            }
+        AddressResolution addr = resolveAddress(cmd, commodity);
+        if (addr.problem() != null) {
+            return MallRedeemResult.ofReject(addr.problem());
         }
+        MallAddress address = addr.address();
 
         boolean hangs = MallPayTypeEnum.POINTS_CASH == commodity.getPayType();
         if (!reserveStock(sku, quantity, hangs)) {
@@ -159,6 +149,45 @@ public class MallRedeemService {
         publishFulfillment(order);
 
         return MallRedeemResult.ofAccepted(orderNo, order.getStatus());
+    }
+
+    /** 收货地址的解析结果。{@code problem != null} 即被拒，两者必有其一为 null */
+    private record AddressResolution(MallAddress address, MallRedeemReason problem) {
+
+        static AddressResolution notNeeded() {
+            return new AddressResolution(null, null);
+        }
+
+        static AddressResolution ok(MallAddress address) {
+            return new AddressResolution(address, null);
+        }
+
+        static AddressResolution rejected(MallRedeemReason problem) {
+            return new AddressResolution(null, problem);
+        }
+    }
+
+    /**
+     * 实物才需要收货地址，虚拟商品直接放行。
+     *
+     * <p>🔴 必须<b>重查</b>，不能信任传进来的 id：支付期间用户可能把这条地址删了
+     *（DDL 里 address_id 是软引用，刻意不加外键）。查不到就拦下来让用户重选，
+     * 别拿着一个空地址去建履约单 —— 那张单子发不出去，而失败原因会指向仓库。
+     *
+     * <p>查回来的地址要<b>带出去</b>而不是丢掉再查一次：这一步和落订单之间只隔几行，
+     * 查两遍除了多一次往返没有任何好处。
+     */
+    private AddressResolution resolveAddress(MallRedeemCmd cmd, MallCommodity commodity) {
+        if (!isPhysical(commodity)) {
+            return AddressResolution.notNeeded();
+        }
+        if (cmd.addressId() == null) {
+            return AddressResolution.rejected(MallRedeemReason.ADDRESS_REQUIRED);
+        }
+        MallAddress address = mallAddressService.getOwned(cmd.addressId(), cmd.memberId());
+        return address == null
+                ? AddressResolution.rejected(MallRedeemReason.ADDRESS_NOT_FOUND)
+                : AddressResolution.ok(address);
     }
 
     /** 一次最多兑几件。不封的话一个 {@code quantity=99999} 会把库存条件判断变成一次巨额扣减 */

@@ -65,6 +65,33 @@ final class CellCoercion {
         if (raw == null) {
             return null;
         }
+        Object number = toNumber(cell, raw, target);
+        if (number != null) {
+            return number;
+        }
+        Object temporal = toTemporal(cell, raw, target);
+        if (temporal != null) {
+            return temporal;
+        }
+        if (target == Boolean.class || target == boolean.class) {
+            return bool(cell, raw);
+        }
+        if (target.isEnum()) {
+            return Enum.valueOf((Class<? extends Enum>) target, raw);
+        }
+        // 认不出来就原样给字符串：Excel 导入的容错方向永远是「先别拦住用户」
+        return raw;
+    }
+
+    /**
+     * 数值家族。返回 null 表示 {@code target} 不是数值类型（调用方继续往下试）。
+     *
+     * <p>🔴 整型一律用 {@code xxxValueExact()}：{@code intValue()} 会把 3.7 悄悄截成 3、
+     * 把超出 int 范围的数字截成一个完全不相干的值 —— 导入一份数量填错的表格，
+     * 用户看到的是「导入成功」，而库里存的是被截断后的数。Exact 版本会抛，
+     * 抛出去才会变成那一行的导入错误提示。
+     */
+    private static Object toNumber(Cell cell, String raw, Class<?> target) {
         if (target == BigDecimal.class) {
             return number(cell, raw);
         }
@@ -80,18 +107,26 @@ final class CellCoercion {
         if (target == Byte.class || target == byte.class) {
             return number(cell, raw).byteValueExact();
         }
+        if (target == BigInteger.class) {
+            return number(cell, raw).toBigIntegerExact();
+        }
+        // 浮点没有 Exact 版本，本来就是有损的，用它就是接受了这一点
         if (target == Double.class || target == double.class) {
             return number(cell, raw).doubleValue();
         }
         if (target == Float.class || target == float.class) {
             return number(cell, raw).floatValue();
         }
-        if (target == BigInteger.class) {
-            return number(cell, raw).toBigIntegerExact();
-        }
-        if (target == Boolean.class || target == boolean.class) {
-            return bool(cell, raw);
-        }
+        return null;
+    }
+
+    /**
+     * 时间家族。返回 null 表示 {@code target} 不是时间类型。
+     *
+     * <p>四种目标类型都从同一个 {@code dateTime} 出发再降级，而不是各自解析一遍 ——
+     * 分开解析的话「只填了日期」和「只填了时间」这两种格子会走进不同的容错分支。
+     */
+    private static Object toTemporal(Cell cell, String raw, Class<?> target) {
         if (target == LocalDateTime.class) {
             return dateTime(cell, raw);
         }
@@ -104,10 +139,7 @@ final class CellCoercion {
         if (target == Date.class) {
             return Date.from(dateTime(cell, raw).atZone(ZoneId.systemDefault()).toInstant());
         }
-        if (target.isEnum()) {
-            return Enum.valueOf((Class<? extends Enum>) target, raw);
-        }
-        return raw;
+        return null;
     }
 
     /**

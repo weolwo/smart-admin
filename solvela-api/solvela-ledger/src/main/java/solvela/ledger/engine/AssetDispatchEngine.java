@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import solvela.dispatch.DispatchOutcome;
 import solvela.base.util.SolvelaStringUtil;
-import solvela.ledger.handler.IAssetHandler;
 import solvela.ledger.strategy.AssetStrategyFactory;
 import solvela.member.api.PrizeDispatchResultMessage;
 import solvela.risk.promotionconfig.dao.PromotionConfigDao;
@@ -62,7 +61,12 @@ public class AssetDispatchEngine implements AssetDispatcher {
     private static final int FAIL_REASON_MAX_LENGTH = 128;
 
     /**
-     * 核心执行入口 (支持异步调用)
+     * 核心执行入口：<b>抢闸门 → 扣预算 → 下发 → 落终态</b>，四步都在同一个 try 里。
+     *
+     * <p>🔴 try 必须罩住前两步，不能只罩下发：{@code updateStatus} 或
+     * {@code deductBudget} 自己抛异常时，提案要么还停在 30、要么已经进了 40，
+     * 不兜底就会永远卡在那里没人管。{@code budgetDeducted} 这个布尔量的全部作用
+     * 就是让兜底知道「该不该还预算」—— 还没扣就还，等于把没占用的额度凭空补进去。
      */
     @Override
     public void execute(ProposalRecord proposal, PromotionConfig config) {
@@ -72,47 +76,19 @@ public class AssetDispatchEngine implements AssetDispatcher {
         BigDecimal amount = proposal.getAmount() == null ? BigDecimal.ZERO : proposal.getAmount();
         // 数量参与 used_quota 扣减：券/实物靠它卡总量，值类资产恒为 1
         int quantity = proposal.getQuantity() == null ? DEFAULT_QUANTITY : proposal.getQuantity();
-        // 记录预算是否真的扣成功：异常兜底时只有扣过才允许回滚，否则会把没占用的预算凭空还回去
         boolean budgetDeducted = false;
 
         try {
-            // 30(待执行) -> 40(执行中)。这次条件更新就是并发闸门：抢不到说明别人已在执行或已完结，
-            // 直接退出而不是重试 —— 重试等于同一笔奖被发两次
-            int rows = proposalRecordDao.updateStatus(proposal.getId(), ProposalStatusEnum.PENDING_EXECUTE, ProposalStatusEnum.EXECUTING);
-            if (rows == 0) {
-                log.warn("【引擎拦截】提案正在执行中或已完结，忽略本次调用。提案ID: {}", proposal.getId());
+            if (!claimForExecution(proposal)) {
                 return;
             }
-
-            // 预算硬限流：把「够不够」压进 UPDATE 的 WHERE，一条 SQL 完成校验+扣减。
-            //    风控链上的 GlobalBudgetRiskFilter 是「先读后判」的弱校验，高并发下读到的余量早已过期，
-            //    真正防超发的是这里的条件更新。必须在动账之前扣，扣不动就别发。
-            if (promotionConfigDao.deductBudget(config.getId(), amount, quantity) == 0) {
-                log.warn("【预算不足】提案ID: {}, 优惠配置: {}, 申请额: {}, 数量: {}",
-                        proposal.getId(), config.getId(), amount, quantity);
+            if (!deductBudget(proposal, config, amount, quantity)) {
                 markFailed(proposal, "预算或发放数量已耗尽");
                 return;
             }
             budgetDeducted = true;
 
-            // 按**提案自带的**资产类型选执行策略。
-            //    以前是读 config.getPrizeType()，等于「为了知道发什么，先得加载预算配置」——
-            //    路由和预算是两件事，不该耦合。提案自带 assetType 后引擎自洽了。
-            IAssetHandler handler = strategyFactory.getHandler(proposal.getAssetType());
-
-            // 下发只管抛给下层：引擎不认识任何一种资产，加一种资产不用改这里
-            DispatchOutcome outcome = handler.dispatch(proposal);
-
-            // 闭环：无论成败都要落终态。失败原因写进 remark —— 运营和研发都只看得到提案列表，
-            // 不写的话「卡在哪」这个问题只能去翻日志
-            if (outcome.ok()) {
-                proposalRecordDao.updateStatusAndRemark(proposal.getId(), ProposalStatusEnum.SUCCESS, "资产下发成功");
-                syncPrizeLog(proposal, PrizeDispatchStatusEnum.SUCCESS, null);
-            } else {
-                // 没发出去就得把预算还回去，否则预算只减不加，跑一段时间水位就虚高到发不出奖
-                releaseBudgetQuietly(config, amount, quantity);
-                markFailed(proposal, "资产下发失败：" + outcome.failReason());
-            }
+            settle(proposal, config, amount, quantity, dispatch(proposal));
 
         } catch (Exception e) {
             log.error("【引擎致命异常】资产执行发生未知错误, 提案ID: {}", proposal.getId(), e);
@@ -122,6 +98,67 @@ public class AssetDispatchEngine implements AssetDispatcher {
             // 状态已经是 40(执行中)，不落终态就会永远卡住，必须兜底改成 70 让它可被排查/重试
             markFailed(proposal, "系统执行异常: " + e.getMessage());
         }
+    }
+
+    /**
+     * 抢执行权：30(待执行) -> 40(执行中)。
+     *
+     * <p>这次条件更新<b>就是</b>并发闸门。抢不到说明别人已在执行或已完结，
+     * 直接退出而不是重试 —— 重试等于同一笔奖被发两次。
+     */
+    private boolean claimForExecution(ProposalRecord proposal) {
+        int rows = proposalRecordDao.updateStatus(proposal.getId(),
+                ProposalStatusEnum.PENDING_EXECUTE, ProposalStatusEnum.EXECUTING);
+        if (rows == 0) {
+            log.warn("【引擎拦截】提案正在执行中或已完结，忽略本次调用。提案ID: {}", proposal.getId());
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 预算硬限流：把「够不够」压进 UPDATE 的 WHERE，一条 SQL 完成校验 + 扣减。
+     *
+     * <p>风控链上的 {@code GlobalBudgetRiskFilter} 是「先读后判」的弱校验，
+     * 高并发下读到的余量早已过期 —— <b>真正防超发的是这里的条件更新</b>。
+     * 必须在动账之前扣，扣不动就别发。
+     */
+    private boolean deductBudget(ProposalRecord proposal, PromotionConfig config,
+                                 BigDecimal amount, int quantity) {
+        if (promotionConfigDao.deductBudget(config.getId(), amount, quantity) > 0) {
+            return true;
+        }
+        log.warn("【预算不足】提案ID: {}, 优惠配置: {}, 申请额: {}, 数量: {}",
+                proposal.getId(), config.getId(), amount, quantity);
+        return false;
+    }
+
+    /**
+     * 下发。按<b>提案自带的</b>资产类型选策略，不读 {@code config.getPrizeType()} ——
+     * 那等于「为了知道发什么，先得加载预算配置」，把路由和预算耦在一起。
+     *
+     * <p>引擎不认识任何一种具体资产，加一种资产不用改这里。
+     */
+    private DispatchOutcome dispatch(ProposalRecord proposal) {
+        return strategyFactory.getHandler(proposal.getAssetType()).dispatch(proposal);
+    }
+
+    /**
+     * 闭环：无论成败都要落终态。
+     *
+     * <p>失败原因写进 remark —— 运营和研发都只看得到提案列表，不写的话
+     * 「卡在哪」这个问题只能去翻日志。失败还要把预算还回去，
+     * 否则预算只减不加，跑一段时间水位就虚高到发不出奖。
+     */
+    private void settle(ProposalRecord proposal, PromotionConfig config,
+                        BigDecimal amount, int quantity, DispatchOutcome outcome) {
+        if (outcome.ok()) {
+            proposalRecordDao.updateStatusAndRemark(proposal.getId(), ProposalStatusEnum.SUCCESS, "资产下发成功");
+            syncPrizeLog(proposal, PrizeDispatchStatusEnum.SUCCESS, null);
+            return;
+        }
+        releaseBudgetQuietly(config, amount, quantity);
+        markFailed(proposal, "资产下发失败：" + outcome.failReason());
     }
 
     /**

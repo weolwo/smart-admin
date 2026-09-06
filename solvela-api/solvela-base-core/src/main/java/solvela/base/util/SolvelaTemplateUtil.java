@@ -24,6 +24,9 @@ import java.util.Map;
  */
 public final class SolvelaTemplateUtil {
 
+    /** 预留一点余量：占位符展开后通常比模板本身长，省掉一两次扩容拷贝 */
+    private static final int EXTRA_CAPACITY = 32;
+
     private SolvelaTemplateUtil() {
     }
 
@@ -32,38 +35,59 @@ public final class SolvelaTemplateUtil {
             return template;
         }
 
-        StringBuilder out = new StringBuilder(template.length() + 32);
+        StringBuilder out = new StringBuilder(template.length() + EXTRA_CAPACITY);
         int index = 0;
         int length = template.length();
         while (index < length) {
-            char current = template.charAt(index);
-
-            // $${ 是转义：吐出字面量 ${，后面的内容按普通文本走
-            if (current == '$' && index + 2 < length
-                    && template.charAt(index + 1) == '$' && template.charAt(index + 2) == '{') {
+            if (isEscapedDollarBrace(template, index, length)) {
+                // $${ 是转义：吐出字面量 ${，后面的内容按普通文本走
                 out.append("${");
                 index += 3;
                 continue;
             }
 
-            if (current == '$' && index + 1 < length && template.charAt(index + 1) == '{') {
-                int close = template.indexOf('}', index + 2);
-                if (close > 0) {
-                    Object value = params == null ? null : params.get(template.substring(index + 2, close));
-                    if (value != null) {
-                        out.append(value);
-                    } else {
-                        // 解析不到就原样保留整个占位符，不能吞成空串
-                        out.append(template, index, close + 1);
-                    }
-                    index = close + 1;
-                    continue;
-                }
+            int consumed = appendPlaceholder(template, index, length, params, out);
+            if (consumed > 0) {
+                index += consumed;
+                continue;
             }
 
-            out.append(current);
+            out.append(template.charAt(index));
             index++;
         }
         return out.toString();
+    }
+
+    private static boolean isEscapedDollarBrace(String template, int index, int length) {
+        return template.charAt(index) == '$' && index + 2 < length
+                && template.charAt(index + 1) == '$' && template.charAt(index + 2) == '{';
+    }
+
+    /**
+     * 尝试把 {@code index} 处的一个 <code>${key}</code> 展开写进 {@code out}。
+     *
+     * <p>🔴 取不到值时<b>原样保留整个占位符</b>，不能吞成空串：模板多半是运营配的文案，
+     * 变量名打错时留着 <code>${nickname}</code> 一眼就能看出是哪里配错了，
+     * 而吞成空串只会让人以为「这个用户没有昵称」。
+     *
+     * @return 消耗掉的字符数；返回 0 表示这里不是一个完整的占位符，由调用方按普通字符处理
+     */
+    private static int appendPlaceholder(String template, int index, int length,
+                                         Map<String, ?> params, StringBuilder out) {
+        if (template.charAt(index) != '$' || index + 1 >= length || template.charAt(index + 1) != '{') {
+            return 0;
+        }
+        int close = template.indexOf('}', index + 2);
+        if (close <= 0) {
+            // 有 ${ 没有 } —— 不是占位符，是一段恰好长这样的普通文本
+            return 0;
+        }
+        Object value = params == null ? null : params.get(template.substring(index + 2, close));
+        if (value != null) {
+            out.append(value);
+        } else {
+            out.append(template, index, close + 1);
+        }
+        return close + 1 - index;
     }
 }

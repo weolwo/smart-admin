@@ -267,11 +267,9 @@ public class DrawExecuteService {
 
         PrizePoolConfig pool = prizePoolConfigManager.lambdaQuery()
                 .eq(PrizePoolConfig::getPoolCode, command.poolCode()).one();
-        if (pool == null || !command.activityCode().equals(pool.getActivityCode())) {
-            return new Preflight.Reject(DrawRejectReason.POOL_NOT_FOUND);
-        }
-        if (pool.getStatus() != PrizePoolStatusEnum.OPEN) {
-            return new Preflight.Reject(DrawRejectReason.POOL_CLOSED);
+        DrawRejectReason poolProblem = checkPool(pool, command);
+        if (poolProblem != null) {
+            return new Preflight.Reject(poolProblem);
         }
 
         List<PoolPrizeMapping> mappings = poolPrizeMappingManager.lambdaQuery()
@@ -284,9 +282,49 @@ public class DrawExecuteService {
         Map<Long, PrizePoolItem> itemMap = prizePoolItemManager.listByIds(itemIds).stream()
                 .collect(Collectors.toMap(PrizePoolItem::getId, Function.identity()));
 
-        // 配置读 DB，库存读 Redis；缓存未预热则回源并预热。
-        // 坑位顺序已由上面的 orderByAsc(sortWeight) 保证，这里不再排第二遍。
-        // 配置进 slots，库存进 remainStocks —— 两者从这里就是分开的
+        Slots built = buildSlots(command, mappings, itemMap);
+        if (built == null) {
+            return new Preflight.Reject(DrawRejectReason.POOL_BROKEN);
+        }
+
+        DrawBatch batch = new DrawBatch(command, memberName, itemMap, resolvePeriod(pool, itemMap));
+        return new Preflight.Ready(batch,
+                DrawPoolSnapshot.of(command.poolCode(), built.slots()),
+                LocalInventory.of(built.slots(), built.remainStocks()));
+    }
+
+    /**
+     * 奖池是否可用。返回 null 表示通过。
+     *
+     * <p>「池不属于这个活动」与「池不存在」给<b>同一个</b>原因：对调用方是同一件事，
+     * 而分开说等于告诉外面「这个 poolCode 是存在的，只是不在你那个活动下」。
+     */
+    private static DrawRejectReason checkPool(PrizePoolConfig pool, DrawExecuteCommand command) {
+        if (pool == null || !command.activityCode().equals(pool.getActivityCode())) {
+            return DrawRejectReason.POOL_NOT_FOUND;
+        }
+        if (pool.getStatus() != PrizePoolStatusEnum.OPEN) {
+            return DrawRejectReason.POOL_CLOSED;
+        }
+        return null;
+    }
+
+    /** 坑位配置与对应的剩余库存。两者<b>下标一一对应</b>，是 {@link LocalInventory} 的入参约定 */
+    private record Slots(List<DrawSlot> slots, int[] remainStocks) {
+    }
+
+    /**
+     * 把奖池映射摊成运行态的坑位。返回 null 表示<b>配置坏了</b>（映射指向的奖项已被删）。
+     *
+     * <p>配置读 DB，库存读 Redis（缓存未预热则回源并预热）。坑位顺序已由调用方的
+     * {@code orderByAsc(sortWeight)} 保证，这里不再排第二遍。
+     *
+     * <p>🔴 配置进 slots、库存进 remainStocks，<b>从这里就是分开的两样东西</b> ——
+     * 概率是配置（发布后不变），库存是运行态（每抽一次就变），混在一个对象里
+     * 会让「这次抽奖用的是哪份概率」变得说不清。
+     */
+    private Slots buildSlots(DrawExecuteCommand command, List<PoolPrizeMapping> mappings,
+                             Map<Long, PrizePoolItem> itemMap) {
         List<DrawSlot> slots = new ArrayList<>(mappings.size());
         int[] remainStocks = new int[mappings.size()];
         for (int i = 0; i < mappings.size(); i++) {
@@ -297,7 +335,7 @@ public class DrawExecuteService {
                 // 而这个返回值最终会走到 C 端；运维要的那个数在日志里查得到
                 log.error("[抽奖] 奖池配置异常：奖项已被删除, poolCode: {}, itemId: {}",
                         command.poolCode(), mapping.getPrizeItemId());
-                return new Preflight.Reject(DrawRejectReason.POOL_BROKEN);
+                return null;
             }
             DrawPrizeSnapshot prize = new DrawPrizeSnapshot(
                     item.getId(),
@@ -308,11 +346,7 @@ public class DrawExecuteService {
             slots.add(DrawSlot.ofPercent(prize, mapping.getProbability()));
             remainStocks[i] = resolveRemainStock(command.activityCode(), item);
         }
-
-        DrawBatch batch = new DrawBatch(command, memberName, itemMap, resolvePeriod(pool, itemMap));
-        return new Preflight.Ready(batch,
-                DrawPoolSnapshot.of(command.poolCode(), slots),
-                LocalInventory.of(slots, remainStocks));
+        return new Slots(slots, remainStocks);
     }
 
     /**

@@ -116,30 +116,7 @@ public class ProposalPrizeDispatcher {
             return DispatchOutcome.failed("奖品配置不存在");
         }
 
-        ProposalRecordAddCommand req = new ProposalRecordAddCommand();
-        req.setMemberId(prizeLog.getMemberId());
-        req.setPromotionConfigId(prizeConfig.getPromotionConfigId());
-        req.setAssetType(spec.assetType().name());
-        if (spec.instanceAsset()) {
-            /*
-             * 实例类资产：光有金额发不出来，必须指明发哪一张券 / 哪一件货。
-             *
-             * 当前传的是 prize_code 占位 —— 券模表与实物 SKU 映射建好之后改传各自的 id，
-             * 账务侧代码一行都不用动。
-             *
-             * assetName 同样由营销侧下传：账务侧发券时要落 t_member_coupon.coupon_name，
-             * 而它不能回头查 prize_log（依赖方向单向）。不传的话那边只能退而用 remark，
-             * 结果就是发出去的券全叫「提案生成成功」。
-             */
-            req.setAssetRef(prizeConfig.getPrizeCode());
-            req.setAssetName(prizeLog.getPrizeName());
-        }
-        req.setAmount(amount);
-        req.setQuantity(QUANTITY_PER_PRIZE);
-        req.setSourceType(proposalSourceResolver.resolve(prizeLog.getActivityType()));
-        // 极度关键：营销单号即跨域幂等键
-        req.setSourceBizId(prizeLog.getExternalBizNo());
-        req.setRemark(spec.remark().apply(prizeLog));
+        ProposalRecordAddCommand req = buildCommand(prizeLog, spec, amount, prizeConfig);
 
         try {
             ProposalResult result = memberProposalApi.createProposal(ProposalCmdMapper.toCmd(req));
@@ -154,5 +131,39 @@ public class ProposalPrizeDispatcher {
             log.warn("【发奖提案异常】LogId: {}, 原因: {}", prizeLog.getId(), e.getMessage());
             return DispatchOutcome.failed(e.getMessage());
         }
+    }
+
+    /**
+     * 把发奖流水翻译成提案指令 —— 这是<b>营销域 → 账务域</b>那条缝上的全部内容。
+     *
+     * <p>凡是账务侧需要而它自己查不到的东西，都必须从这里下传：依赖方向是单向的
+     *（营销 → 账务），账务侧不能回头查 {@code t_prize_log}。漏传一项的表现不是报错，
+     * 而是那边拿一个够得着的字段将就 —— 曾经就是这样让发出去的券全叫「提案生成成功」。
+     */
+    private ProposalRecordAddCommand buildCommand(PrizeLog prizeLog, PrizeSpec spec,
+                                                  BigDecimal amount, PrizeConfig prizeConfig) {
+        ProposalRecordAddCommand req = new ProposalRecordAddCommand();
+        req.setMemberId(prizeLog.getMemberId());
+        req.setPromotionConfigId(prizeConfig.getPromotionConfigId());
+        req.setAssetType(spec.assetType().name());
+        if (spec.instanceAsset()) {
+            /*
+             * 实例类资产：光有金额发不出来，必须指明发哪一张券 / 哪一件货。
+             *
+             * 当前传的是 prize_code 占位 —— 券模表与实物 SKU 映射建好之后改传各自的 id，
+             * 账务侧代码一行都不用动。
+             *
+             * assetName 同样由营销侧下传：账务侧发券时要落 t_member_coupon.coupon_name。
+             */
+            req.setAssetRef(prizeConfig.getPrizeCode());
+            req.setAssetName(prizeLog.getPrizeName());
+        }
+        req.setAmount(amount);
+        req.setQuantity(QUANTITY_PER_PRIZE);
+        req.setSourceType(proposalSourceResolver.resolve(prizeLog.getActivityType()));
+        // 极度关键：营销单号即跨域幂等键
+        req.setSourceBizId(prizeLog.getExternalBizNo());
+        req.setRemark(spec.remark().apply(prizeLog));
+        return req;
     }
 }

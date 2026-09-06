@@ -111,39 +111,44 @@ public class DataScopeSqlConfigService {
             return CREATE_USER_ID_EQUALS + employeeId;
         }
 
-        String joinSql = sqlConfigDTO.getJoinSql();
+        /*
+         * 🔴 每一条不确定的路径都返回空串，而不是「不加条件」。
+         * 空串会让调用方拼出一个查不到任何数据的 SQL —— 数据权限出问题时，
+         * <b>看不到本该看到的数据</b>是可以被发现并投诉的，
+         * 而「看到了本不该看到的数据」没有人会来报障。
+         */
+        return switch (sqlConfigDTO.getDataScopeWhereInType()) {
+            case CUSTOM_STRATEGY -> customStrategySql(paramMap, sqlConfigDTO, viewTypeEnum);
+            case EMPLOYEE -> inSql(sqlConfigDTO.getJoinSql(), EMPLOYEE_PARAM,
+                    dataScopeViewService.getCanViewEmployeeId(viewTypeEnum, employeeId));
+            case DEPARTMENT -> inSql(sqlConfigDTO.getJoinSql(), DEPARTMENT_PARAM,
+                    dataScopeViewService.getCanViewDepartmentId(viewTypeEnum, employeeId));
+            case null, default -> "";
+        };
+    }
 
-        if (DataScopeWhereInTypeEnum.CUSTOM_STRATEGY == sqlConfigDTO.getDataScopeWhereInType()) {
-            Class<?> strategyClass = sqlConfigDTO.getJoinSqlImplClazz();
-            if (strategyClass == null) {
-                log.warn("data scope custom strategy class is null");
-                return "";
-            }
-            AbstractDataScopeStrategy powerStrategy = (AbstractDataScopeStrategy) applicationContext.getBean(sqlConfigDTO.getJoinSqlImplClazz());
-            if (powerStrategy == null) {
-                log.warn("data scope custom strategy class：{} ,bean is null", sqlConfigDTO.getJoinSqlImplClazz());
-                return "";
-            }
-            return powerStrategy.getCondition(viewTypeEnum, paramMap, sqlConfigDTO);
+    /** 业务自定义的范围策略。Bean 拿不到就返回空串 —— 配错了要表现为「查不到」，不是「不限制」 */
+    private String customStrategySql(Map<String, Object> paramMap, DataScopeSqlConfig sqlConfigDTO,
+                                     DataScopeViewTypeEnum viewTypeEnum) {
+        Class<?> strategyClass = sqlConfigDTO.getJoinSqlImplClazz();
+        if (strategyClass == null) {
+            log.warn("data scope custom strategy class is null");
+            return "";
         }
-        if (DataScopeWhereInTypeEnum.EMPLOYEE == sqlConfigDTO.getDataScopeWhereInType()) {
-            List<Long> canViewEmployeeIds = dataScopeViewService.getCanViewEmployeeId(viewTypeEnum, employeeId);
-            if (SolvelaCollectionUtil.isEmpty(canViewEmployeeIds)) {
-                return "";
-            }
-            String employeeIds = StringUtils.join(canViewEmployeeIds, ",");
-            String sql = joinSql.replaceAll(EMPLOYEE_PARAM, employeeIds);
-            return sql;
+        AbstractDataScopeStrategy powerStrategy =
+                (AbstractDataScopeStrategy) applicationContext.getBean(strategyClass);
+        if (powerStrategy == null) {
+            log.warn("data scope custom strategy class：{} ,bean is null", strategyClass);
+            return "";
         }
-        if (DataScopeWhereInTypeEnum.DEPARTMENT == sqlConfigDTO.getDataScopeWhereInType()) {
-            List<Long> canViewDepartmentIds = dataScopeViewService.getCanViewDepartmentId(viewTypeEnum, employeeId);
-            if (SolvelaCollectionUtil.isEmpty(canViewDepartmentIds)) {
-                return "";
-            }
-            String departmentIds = StringUtils.join(canViewDepartmentIds, ",");
-            String sql = joinSql.replaceAll(DEPARTMENT_PARAM, departmentIds);
-            return sql;
+        return powerStrategy.getCondition(viewTypeEnum, paramMap, sqlConfigDTO);
+    }
+
+    /** 把可见 id 列表填进 joinSql 的占位符。可见范围为空时返回空串，同上 */
+    private static String inSql(String joinSql, String paramPlaceholder, List<Long> visibleIds) {
+        if (SolvelaCollectionUtil.isEmpty(visibleIds)) {
+            return "";
         }
-        return "";
+        return joinSql.replaceAll(paramPlaceholder, StringUtils.join(visibleIds, ","));
     }
 }

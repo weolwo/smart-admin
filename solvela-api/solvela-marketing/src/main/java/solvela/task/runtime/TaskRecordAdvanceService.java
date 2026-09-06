@@ -201,27 +201,15 @@ public class TaskRecordAdvanceService {
                 return finishAsDiscard(adv, code, reason);
             }
             case MetricPlan.Accumulate(BigDecimal amount) -> {
-                int rows = taskRecordDao.advanceMetric(record.getId(), amount);
-                if (rows == 0) {
+                change = accumulate(record, amount);
+                if (change == null) {
                     // rows=0 的语义是「记录已不可推进」（状态已流转），不是并发冲突，不需要重试
                     return finishAsDiscard(adv, TaskDiscardCode.RECORD_NOT_RUNNING,
                             "任务记录已不可推进（并发达标或已过期）");
                 }
-                // 重读权威值：条件更新拿不到结果值，且必须以 DB 为准。
-                // 我的 UPDATE 持有行锁，after 里已包含所有先于我提交的增量，
-                // 故 after - delta 恰好是「我这一笔之前」的值，并发下同样成立
-                BigDecimal after = currentMetricOf(record.getId());
-                change = new MetricChange(after.subtract(amount), after, amount);
             }
             case MetricPlan.Overwrite(BigDecimal metric, String progressJson, Integer expectedVersion) -> {
-                int rows = taskRecordDao.overwriteMetric(record.getId(), metric, progressJson, expectedVersion);
-                if (rows == 0) {
-                    throw new TaskConcurrentModifyException("STREAK 乐观锁冲突，recordId=" + record.getId()
-                            + ", version=" + expectedVersion);
-                }
-                BigDecimal before = record.getCurrentMetric() == null ? BigDecimal.ZERO : record.getCurrentMetric();
-                change = new MetricChange(before, metric, metric.subtract(before));
-                record.setProgressData(progressJson);
+                change = overwrite(record, metric, progressJson, expectedVersion);
             }
         }
 
@@ -233,6 +221,42 @@ public class TaskRecordAdvanceService {
         boolean completed = markCompletedIfReached(adv, record, change.after(), highestReached);
         finishFlow(adv.flow(), change);
         return new TaskAdvanceResult.Advanced(record.getId(), change.before(), change.after(), completed);
+    }
+
+    /**
+     * 累加型推进（COUNT / SUM）。返回 null 表示<b>这条记录已不可推进</b>，交由调用方作废本次。
+     *
+     * <p>🔴 推完要<b>重读一次权威值</b>：条件更新拿不到结果值，且必须以 DB 为准。
+     * 我的 UPDATE 持有行锁，读回的 after 里已经包含所有先于我提交的增量，
+     * 所以 {@code after - delta} 恰好是「我这一笔之前」的值 —— 并发下同样成立。
+     * 拿内存里的 currentMetric 当 before 则不然：那是本次事务开始前读到的快照。
+     */
+    private MetricChange accumulate(TaskRecord record, BigDecimal amount) {
+        if (taskRecordDao.advanceMetric(record.getId(), amount) == 0) {
+            return null;
+        }
+        BigDecimal after = currentMetricOf(record.getId());
+        return new MetricChange(after.subtract(amount), after, amount);
+    }
+
+    /**
+     * 覆盖型推进（STREAK 连续签到）。
+     *
+     * <p>连续天数不是累加出来的，是按 progress_data 里的历史重算出来的，所以只能整体覆盖；
+     * 覆盖没有条件更新可用，只能靠<b>乐观锁</b>。抢不到就抛
+     * {@link TaskConcurrentModifyException} 让上层重试 —— 这里与累加型不同，
+     * rows=0 真的是并发冲突，重试一次就能成功。
+     */
+    private MetricChange overwrite(TaskRecord record, BigDecimal metric,
+                                   String progressJson, Integer expectedVersion) {
+        int rows = taskRecordDao.overwriteMetric(record.getId(), metric, progressJson, expectedVersion);
+        if (rows == 0) {
+            throw new TaskConcurrentModifyException("STREAK 乐观锁冲突，recordId=" + record.getId()
+                    + ", version=" + expectedVersion);
+        }
+        BigDecimal before = record.getCurrentMetric() == null ? BigDecimal.ZERO : record.getCurrentMetric();
+        record.setProgressData(progressJson);
+        return new MetricChange(before, metric, metric.subtract(before));
     }
 
     /**

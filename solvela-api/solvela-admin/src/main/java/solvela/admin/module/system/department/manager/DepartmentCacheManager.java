@@ -131,47 +131,57 @@ public class DepartmentCacheManager {
      * [由于departmentDao中listAll给出数据根据Sort降序 所以同一层中Sort值较大的优先遍历]
      */
     private List<Long> recursiveBuildTree(List<DepartmentTreeVO> nodeList, List<DepartmentVO> allDepartmentList) {
-        int nodeSize = nodeList.size();
-        List<Long> childIdList = new ArrayList<>();
-        for (int i = 0; i < nodeSize; i++) {
-            int preIndex = i - 1;
-            int nextIndex = i + 1;
-            DepartmentTreeVO node = nodeList.get(i);
-            if (preIndex > -1) {
-                node.setPreId(nodeList.get(preIndex).getDepartmentId());
-            }
-            if (nextIndex < nodeSize) {
-                node.setNextId(nodeList.get(nextIndex).getDepartmentId());
-            }
-
-            List<DepartmentTreeVO> children = getChildren(node.getDepartmentId(), allDepartmentList);
-
-            List<Long> tempChildIdList = new ArrayList<>();
-            if (SolvelaCollectionUtil.isNotEmpty(children)) {
-                node.setChildren(children);
-                tempChildIdList = this.recursiveBuildTree(children, allDepartmentList);
-            }
-
-            if (SolvelaCollectionUtil.isEmpty(node.getSelfAndAllChildrenIdList())) {
-                node.setSelfAndAllChildrenIdList(
-                        new ArrayList<>()
-                );
-            }
-            node.getSelfAndAllChildrenIdList().add(node.getDepartmentId());
-
-            if (SolvelaCollectionUtil.isNotEmpty(tempChildIdList)) {
-                node.getSelfAndAllChildrenIdList().addAll(tempChildIdList);
-                childIdList.addAll(tempChildIdList);
-            }
-
+        List<Long> descendantIds = new ArrayList<>();
+        for (int i = 0; i < nodeList.size(); i++) {
+            linkSiblings(nodeList, i);
+            descendantIds.addAll(buildSubtree(nodeList.get(i), allDepartmentList));
         }
 
-        // 保证本层遍历顺序
-        for (int i = nodeSize - 1; i >= 0; i--) {
-            childIdList.add(0, nodeList.get(i).getDepartmentId());
+        // 本层的 id 整体插到最前面，从而得到「先本层、后下层」的层序结果
+        for (int i = nodeList.size() - 1; i >= 0; i--) {
+            descendantIds.add(0, nodeList.get(i).getDepartmentId());
+        }
+        return descendantIds;
+    }
+
+    /**
+     * 给节点挂上同层的前驱/后继 id。
+     *
+     * <p>前端的「上移/下移」直接用这两个字段，不必自己在数组里找位置 ——
+     * 它拿到的是一棵树而不是一个数组，找位置要先递归定位到本层。
+     */
+    private static void linkSiblings(List<DepartmentTreeVO> nodeList, int index) {
+        DepartmentTreeVO node = nodeList.get(index);
+        if (index - 1 > -1) {
+            node.setPreId(nodeList.get(index - 1).getDepartmentId());
+        }
+        if (index + 1 < nodeList.size()) {
+            node.setNextId(nodeList.get(index + 1).getDepartmentId());
+        }
+    }
+
+    /**
+     * 递归展开一个节点的子树，并在它身上填好 {@code selfAndAllChildrenIdList}。
+     *
+     * <p>那个字段是数据权限的核心：「本部门及下级」这条范围最终就是拿它去 IN 查询的，
+     * 少一个 id 就是少看见一整个分支的数据，而页面上不会有任何异常。
+     *
+     * @return 这个节点的<b>全部后代</b> id（不含它自己）
+     */
+    private List<Long> buildSubtree(DepartmentTreeVO node, List<DepartmentVO> allDepartmentList) {
+        List<DepartmentTreeVO> children = getChildren(node.getDepartmentId(), allDepartmentList);
+        List<Long> descendantIds = new ArrayList<>();
+        if (SolvelaCollectionUtil.isNotEmpty(children)) {
+            node.setChildren(children);
+            descendantIds = this.recursiveBuildTree(children, allDepartmentList);
         }
 
-        return childIdList;
+        if (SolvelaCollectionUtil.isEmpty(node.getSelfAndAllChildrenIdList())) {
+            node.setSelfAndAllChildrenIdList(new ArrayList<>());
+        }
+        node.getSelfAndAllChildrenIdList().add(node.getDepartmentId());
+        node.getSelfAndAllChildrenIdList().addAll(descendantIds);
+        return descendantIds;
     }
 
 

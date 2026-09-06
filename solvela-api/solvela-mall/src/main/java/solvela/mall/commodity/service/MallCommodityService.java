@@ -105,6 +105,25 @@ public class MallCommodityService {
             throw new BusinessException("商品不存在");
         }
 
+        MallCommodityDetailDTO vo = copyOwnColumns(commodity);
+
+        MallCategory category = mallCategoryManager.getById(commodity.getCategoryId());
+        vo.setCategoryName(category == null ? null : category.getCategoryName());
+
+        // 轮播图存在 t_file_relation 里（顺序即 sort），不是商品表的列
+        vo.setBannerFileIds(new ArrayList<>(fileAssetService.listBizFileIds(MallConst.BIZ_TYPE_BANNER, id)));
+        vo.setSkuList(listSkuVO(id));
+        return vo;
+    }
+
+    /**
+     * 逐列搬 t_mall_commodity 自己的字段。
+     *
+     * <p>刻意<b>不</b>用 BeanUtil 反射拷贝：这张表的列会随业务加，而反射拷贝在加了新列
+     * 却忘了加 DTO 字段时是<b>静默漏掉</b>的 —— 表现是编辑页少一个输入框，
+     * 保存一次就把那一列清空了。手写的话新列不出现在这里一眼就能看出来。
+     */
+    private static MallCommodityDetailDTO copyOwnColumns(MallCommodity commodity) {
         MallCommodityDetailDTO vo = new MallCommodityDetailDTO();
         vo.setId(commodity.getId());
         vo.setCommodityCode(commodity.getCommodityCode());
@@ -132,13 +151,6 @@ public class MallCommodityService {
         vo.setCreateTime(commodity.getCreateTime());
         vo.setUpdateBy(commodity.getUpdateBy());
         vo.setUpdateTime(commodity.getUpdateTime());
-
-        MallCategory category = mallCategoryManager.getById(commodity.getCategoryId());
-        vo.setCategoryName(category == null ? null : category.getCategoryName());
-
-        // 轮播图存在 t_file_relation 里（顺序即 sort），不是商品表的列
-        vo.setBannerFileIds(new ArrayList<>(fileAssetService.listBizFileIds(MallConst.BIZ_TYPE_BANNER, id)));
-        vo.setSkuList(listSkuVO(id));
         return vo;
     }
 

@@ -49,13 +49,31 @@ public class CouponAssetHandler implements IAssetHandler {
             return DispatchOutcome.failed("提案未指定券模，无法发券");
         }
 
+        try {
+            memberCouponDao.insert(buildCoupon(proposal, assetRef));
+            log.info(">>>> [发券成功] 提案ID: {}, 券模: {}", proposal.getId(), assetRef);
+            return DispatchOutcome.success();
+        } catch (DuplicateKeyException e) {
+            // 幂等：同一提案重复发券视为成功。判失败的话引擎会把预算还回去，
+            // 而券其实已经在上一次发出去了 —— 券发了、预算退了，两边永远对不平
+            log.warn("【防重拦截】该提案已发过券: {}", proposal.getId());
+            return DispatchOutcome.success();
+        }
+    }
+
+    /**
+     * 拼一张券。
+     *
+     * <p>🔴 {@code couponCode / couponType / validStartTime / validEndTime} 四列在 DDL 里
+     * 都是 NOT NULL 且无默认值：漏任意一个，MySQL 在严格模式下会以
+     * 「Field 'xxx' doesn't have a default value」整条拒绝，而那是运行期才炸的。
+     */
+    private MemberCoupon buildCoupon(ProposalRecord proposal, String assetRef) {
         MemberCoupon coupon = new MemberCoupon();
         coupon.setMemberId(proposal.getMemberId());
         // 展示快照直接沿用提案上的那一份，不再查会员表：提案落库时已经把「当时那个账号」记下来了
         coupon.setMemberName(proposal.getMemberName());
 
-        // 下面四项都是 NOT NULL 且无默认值的列：漏任意一个，MySQL 在严格模式下会以
-        // 「Field 'xxx' doesn't have a default value」整条拒绝
         coupon.setCouponCode(assetRef);
         coupon.setCouponType(DEFAULT_COUPON_TYPE);
         // 券名取提案自带的展示名（v3.45.0 起由营销侧下传），取不到才回退用券模编码。
@@ -74,17 +92,10 @@ public class CouponAssetHandler implements IAssetHandler {
         coupon.setValidStartTime(now);
         coupon.setValidEndTime(now.plusDays(DEFAULT_VALID_DAYS));
 
-        coupon.setSourceType(SOURCE_TYPE_PROPOSAL); // 来源是提案
-        coupon.setSourceBizId(proposal.getId().toString()); // 溯源提案ID
+        coupon.setSourceType(SOURCE_TYPE_PROPOSAL);
+        // 溯源提案ID：客服拿着一张券要回答「这是哪次活动发的」，靠的就是这一列
+        coupon.setSourceBizId(proposal.getId().toString());
         coupon.setStatus(CouponStatusEnum.UNUSED);
-
-        try {
-            memberCouponDao.insert(coupon);
-            log.info(">>>> [发券成功] 提案ID: {}, 券模: {}", proposal.getId(), coupon.getCouponCode());
-            return DispatchOutcome.success();
-        } catch (DuplicateKeyException e) {
-            log.warn("【防重拦截】该提案已发过券: {}", proposal.getId());
-            return DispatchOutcome.success(); // 幂等，视为成功
-        }
+        return coupon;
     }
 }

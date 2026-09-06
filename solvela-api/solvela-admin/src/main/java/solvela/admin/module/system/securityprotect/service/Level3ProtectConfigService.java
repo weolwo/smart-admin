@@ -26,6 +26,11 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class Level3ProtectConfigService {
 
+    private static final int SECONDS_PER_MINUTE = 60;
+
+    /** 「定期改密码」按月配、按天存。一个月按 30 天算 —— 这是合规要求的近似，不必按自然月 */
+    private static final int DAYS_PER_MONTH = 30;
+
     /**
      * 开启双因子登录，默认：开启
      * -- GETTER --
@@ -131,48 +136,61 @@ public class Level3ProtectConfigService {
      * 设置属性
      */
     private void setProp(Level3ProtectConfigForm configForm) {
-
-        if (configForm.getFileDetectFlag() != null) {
-            this.fileDetectFlag = configForm.getFileDetectFlag();
-        }
-
-        if (configForm.getMaxUploadFileSizeMb() != null) {
-            this.maxUploadFileSizeMb = configForm.getMaxUploadFileSizeMb();
-        }
-
-        if (configForm.getLoginFailMaxTimes() != null) {
-            this.loginFailMaxTimes = configForm.getLoginFailMaxTimes();
-        }
-
-        if (configForm.getLoginFailLockMinutes() != null) {
-            this.loginFailLockSeconds = configForm.getLoginFailLockMinutes() * 60;
-        }
-
-        if (configForm.getLoginActiveTimeoutMinutes() != null) {
-            this.loginActiveTimeoutSeconds = configForm.getLoginActiveTimeoutMinutes() * 60;
-            this.loginActiveTimeoutSeconds = loginActiveTimeoutSeconds > 0 ? loginActiveTimeoutSeconds : -1;
-        }
-
-        if (configForm.getPasswordComplexityEnabled() != null) {
-            this.passwordComplexityEnabled = configForm.getPasswordComplexityEnabled();
-        }
-
-        if (configForm.getRegularChangePasswordMonths() != null) {
-            this.regularChangePasswordDays = configForm.getRegularChangePasswordMonths() * 30;
-        }
-
-        if (configForm.getTwoFactorLoginEnabled() != null) {
-            this.twoFactorLoginEnabled = configForm.getTwoFactorLoginEnabled();
-        }
-
-        if (configForm.getRegularChangePasswordNotAllowRepeatTimes() != null) {
-            this.regularChangePasswordNotAllowRepeatTimes = configForm.getRegularChangePasswordNotAllowRepeatTimes();
-        }
+        applyFileProps(configForm);
+        applyLoginProps(configForm);
+        applyPasswordProps(configForm);
 
         // 把「最低活跃频率」推给令牌存储。这是数据库配置，改完必须<b>立刻</b>生效 ——
         // 原先是往 sa-token 的全局配置对象里塞值，等于隔着一个框架单例改状态；
         // 现在是一次显式的方法调用，能被测试直接验证
         tokenStore.setActiveTimeoutSeconds(getLoginActiveTimeoutSeconds());
+    }
+
+    /*
+     * 三组 apply 都遵守同一条：**只覆盖表单里明确给了值的项**。
+     * 表单是整份提交的，但 null 仍然要当「没提交这一项」看 —— 否则将来任何一个
+     * 只传部分字段的调用方（比如一个只改文件大小的接口）都会把其余项悄悄清成默认值。
+     */
+
+    private void applyFileProps(Level3ProtectConfigForm configForm) {
+        if (configForm.getFileDetectFlag() != null) {
+            this.fileDetectFlag = configForm.getFileDetectFlag();
+        }
+        if (configForm.getMaxUploadFileSizeMb() != null) {
+            this.maxUploadFileSizeMb = configForm.getMaxUploadFileSizeMb();
+        }
+    }
+
+    /** 登录相关。表单收的是<b>分钟</b>，字段存的是<b>秒</b>，换算只发生在这里 */
+    private void applyLoginProps(Level3ProtectConfigForm configForm) {
+        if (configForm.getTwoFactorLoginEnabled() != null) {
+            this.twoFactorLoginEnabled = configForm.getTwoFactorLoginEnabled();
+        }
+        if (configForm.getLoginFailMaxTimes() != null) {
+            this.loginFailMaxTimes = configForm.getLoginFailMaxTimes();
+        }
+        if (configForm.getLoginFailLockMinutes() != null) {
+            this.loginFailLockSeconds = configForm.getLoginFailLockMinutes() * SECONDS_PER_MINUTE;
+        }
+        if (configForm.getLoginActiveTimeoutMinutes() != null) {
+            int seconds = configForm.getLoginActiveTimeoutMinutes() * SECONDS_PER_MINUTE;
+            // 0 和负数一律归一成 -1 = 永不冻结。留着 0 的话「0 秒未操作即冻结」，
+            // 表现是登录后第一次点击就被踢下线
+            this.loginActiveTimeoutSeconds = seconds > 0 ? seconds : -1;
+        }
+    }
+
+    /** 密码相关。表单收的是<b>月</b>，字段存的是<b>天</b> */
+    private void applyPasswordProps(Level3ProtectConfigForm configForm) {
+        if (configForm.getPasswordComplexityEnabled() != null) {
+            this.passwordComplexityEnabled = configForm.getPasswordComplexityEnabled();
+        }
+        if (configForm.getRegularChangePasswordMonths() != null) {
+            this.regularChangePasswordDays = configForm.getRegularChangePasswordMonths() * DAYS_PER_MONTH;
+        }
+        if (configForm.getRegularChangePasswordNotAllowRepeatTimes() != null) {
+            this.regularChangePasswordNotAllowRepeatTimes = configForm.getRegularChangePasswordNotAllowRepeatTimes();
+        }
     }
 
     /**

@@ -60,33 +60,52 @@ public class LotteryDispatchBatchService {
             // prize_code 是核销时快照进记录的，这里不回查规则表 —— 规则可能已被改动
             PrizeConfig prize = prizeMap.get(record.getPrizeCode());
             if (prize == null) {
-                // 奖品被删：标记为投递失败而不是反复重试，让它在报表里可见
-                log.error("[彩票派奖] 奖品配置不存在，记录 {} 标记为投递失败：activityCode={}, prizeCode={}",
-                        record.getId(), config.getActivityCode(), record.getPrizeCode());
-                LotteryRecord fail = new LotteryRecord();
-                fail.setId(record.getId());
-                fail.setDispatchStatus(LotteryDispatchStatusEnum.FAILED);
-                lotteryRecordDao.updateById(fail);
+                markDispatchFailed(config, record);
                 continue;
             }
-            prizeEventPublisher.publish(UserPrizeEvent.builder()
-                    // 跨域幂等键：配合 t_prize_log.uk_external_biz，事件重投也不会重复发奖
-                    .sourceBizId(String.valueOf(record.getId()))
-                    .activityType(ActivityTypeEnum.LOTTERY.getValue())
-                    .activityCode(config.getActivityCode())
-                    .memberId(record.getMemberId())
-                    .memberName(record.getMemberName())
-                    .prizeCode(record.getPrizeCode())
-                    .prizeType(prize.getPrizeType())
-                    .prizeValue(prize.getPrizeValue() == null ? null : prize.getPrizeValue().toPlainString())
-                    .prizeName(prize.getPrizeName())
-                    .prizeLevel(record.getPrizeLevel())
-                    .build());
+            publishPrizeEvent(config, record, prize);
             dispatchedIds.add(record.getId());
         }
         if (!dispatchedIds.isEmpty()) {
             lotteryRecordDao.markDispatched(dispatchedIds);
         }
         return dispatchedIds.size();
+    }
+
+    /**
+     * 奖品配置被删：标记为投递失败，<b>不反复重试</b>。
+     *
+     * <p>重试解决不了「配置没了」这件事，只会让这条记录每一轮都被捞出来再失败一次。
+     * 标成失败它才会出现在报表里，运营补回配置之后可以人工重投。
+     */
+    private void markDispatchFailed(LotteryConfig config, LotteryRecord record) {
+        log.error("[彩票派奖] 奖品配置不存在，记录 {} 标记为投递失败：activityCode={}, prizeCode={}",
+                record.getId(), config.getActivityCode(), record.getPrizeCode());
+        LotteryRecord fail = new LotteryRecord();
+        fail.setId(record.getId());
+        fail.setDispatchStatus(LotteryDispatchStatusEnum.FAILED);
+        lotteryRecordDao.updateById(fail);
+    }
+
+    /**
+     * 发一条发奖事件。
+     *
+     * <p>奖品的静态信息（类型/名称/价值）取<b>配置</b>，中奖的动态信息（是谁、几等奖）
+     * 取<b>记录</b>。反过来取会把彩票按中奖等级算出的东西抹平成配置里的基准值。
+     */
+    private void publishPrizeEvent(LotteryConfig config, LotteryRecord record, PrizeConfig prize) {
+        prizeEventPublisher.publish(UserPrizeEvent.builder()
+                // 跨域幂等键：配合 t_prize_log.uk_external_biz，事件重投也不会重复发奖
+                .sourceBizId(String.valueOf(record.getId()))
+                .activityType(ActivityTypeEnum.LOTTERY.getValue())
+                .activityCode(config.getActivityCode())
+                .memberId(record.getMemberId())
+                .memberName(record.getMemberName())
+                .prizeCode(record.getPrizeCode())
+                .prizeType(prize.getPrizeType())
+                .prizeValue(prize.getPrizeValue() == null ? null : prize.getPrizeValue().toPlainString())
+                .prizeName(prize.getPrizeName())
+                .prizeLevel(record.getPrizeLevel())
+                .build());
     }
 }

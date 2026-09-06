@@ -386,6 +386,13 @@ public class SolvelaJobService {
     }
 
     private void checkParam(SolvelaJobAddForm form) {
+        checkTrigger(form);
+        SolvelaJobHandlerMeta meta = requireHandler(form.getHandlerName());
+        checkPresetAgainstHandler(form, meta);
+    }
+
+    /** 触发配置本身合不合法。cron 语法错、一次性任务的时间格式错，都要当场拒绝 */
+    private void checkTrigger(SolvelaJobAddForm form) {
         String triggerType = form.getTriggerType();
         String triggerValue = form.getTriggerValue();
         if (SolvelaJobTriggerTypeEnum.CRON.equalsValue(triggerType) && !SolvelaJobUtil.checkCron(triggerValue)) {
@@ -398,25 +405,41 @@ public class SolvelaJobService {
                 throw new BusinessException("一次性任务的触发时间格式错误，应为 yyyy-MM-dd HH:mm:ss");
             }
         }
-        // 🔴 校验执行器走的是运行期匹配用的同一份注册表。
-        //    原来这里是 Class.forName(全限定类名) —— 校验用原类名（必然通过），
-        //    运行期匹配用的却是被 CGLIB 代理后的类名（必然失败），
-        //    于是「保存成功 + 任务永不执行」，全程零报错
-        Optional<SolvelaJobHandlerMeta> metaOpt = handlerRegistry.getHandler(form.getHandlerName());
-        if (metaOpt.isEmpty()) {
-            throw new BusinessException("代码中不存在该执行器：" + form.getHandlerName());
-        }
-        SolvelaJobHandlerMeta meta = metaOpt.get();
+    }
 
-        // 🔴 档位必须与执行器声明的车道兼容：FAST 执行器只能选轻量档，
-        //    其余档位的超时都突破了快车道 30 秒的硬上限 —— 让它进来就等于毒死快车道
+    /**
+     * 执行器必须真实存在。
+     *
+     * <p>🔴 校验走的是<b>运行期匹配用的同一份注册表</b>。原来这里是
+     * {@code Class.forName(全限定类名)} —— 校验用原类名（必然通过），
+     * 运行期匹配用的却是被 CGLIB 代理后的类名（必然失败），
+     * 于是「保存成功 + 任务永不执行」，全程零报错。
+     */
+    private SolvelaJobHandlerMeta requireHandler(String handlerName) {
+        Optional<SolvelaJobHandlerMeta> metaOpt = handlerRegistry.getHandler(handlerName);
+        if (metaOpt.isEmpty()) {
+            throw new BusinessException("代码中不存在该执行器：" + handlerName);
+        }
+        return metaOpt.get();
+    }
+
+    /**
+     * 档位与执行器自身的声明必须兼容，两条：
+     *
+     * <ul>
+     *   <li>🔴 <b>车道</b>：FAST 执行器只能选轻量档 —— 其余档位的超时都突破了
+     *       快车道 30 秒的硬上限，让它进来就等于毒死快车道；</li>
+     *   <li>🔴 <b>幂等</b>：没声明幂等的执行器不许配重试 ——
+     *       自动重试等于把一次失败变成两次副作用。</li>
+     * </ul>
+     */
+    private void checkPresetAgainstHandler(SolvelaJobAddForm form, SolvelaJobHandlerMeta meta) {
         SolvelaJobPresetEnum preset = SolvelaJobPresetEnum.resolve(form.getPresetCode());
         if (!preset.matchLane(meta.lane())) {
             throw new BusinessException(String.format(
                     "执行器 %s 声明为 %s 车道，不能使用「%s」档位",
                     meta.name(), meta.lane().getDesc(), preset.getDesc()));
         }
-        // 🔴 不幂等的执行器不许配重试：自动重试等于把一次失败变成两次副作用
         int retryTimes = preset.isCustom()
                 ? (null == form.getRetryTimes() ? 0 : form.getRetryTimes())
                 : preset.getRetryTimes();

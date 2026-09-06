@@ -68,33 +68,9 @@ public class SchemaEnumPropertyCustomizer implements PropertyCustomizer {
      */
     private static String enumDoc(Class<? extends BaseEnum> clazz) {
         BaseEnum[] enums = clazz.getEnumConstants();
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("{\n");
+        StringBuilder sb = new StringBuilder("{\n");
         for (int i = 0; i < enums.length; i++) {
-            BaseEnum e = enums[i];
-            // 拼接外层的 Key (比如: NORMAL: { )
-            sb.append("\t").append(e.toString()).append(": {");
-
-            // 拼接 value (如果是字符串，包上单引号)
-            sb.append("value: ");
-            if (e.getValue() instanceof String) {
-                sb.append("'").append(e.getValue()).append("'");
-            } else {
-                sb.append(e.getValue());
-            }
-            sb.append(", ");
-
-            // 拼接 desc (描述通常都是字符串，包上单引号)
-            sb.append("desc: ");
-            if (e.getDesc() instanceof String) {
-                sb.append("'").append(e.getDesc()).append("'");
-            } else {
-                sb.append(e.getDesc());
-            }
-
-            sb.append("}");
-            // 如果不是最后一个，加个逗号
+            appendEntry(sb, enums[i]);
             if (i < enums.length - 1) {
                 sb.append(",");
             }
@@ -102,13 +78,24 @@ public class SchemaEnumPropertyCustomizer implements PropertyCustomizer {
         }
         sb.append("}");
 
-        // 还原他原本的 HTML 替换逻辑
-        String enumStr = sb.toString();
-        enumStr = enumStr.replace("\t", "&nbsp;&nbsp;");
-        enumStr = enumStr.replace("\n", "<br>");
+        String constName = SolvelaCaseFormat.UPPER_CAMEL.to(SolvelaCaseFormat.UPPER_UNDERSCORE, clazz.getSimpleName());
+        return "  <br>  export const " + constName + " = <br> " + toHtml(sb.toString()) + " <br>";
+    }
 
-        // 拼接 export const 开头
-        String prefix = "  <br>  export const " + SolvelaCaseFormat.UPPER_CAMEL.to(SolvelaCaseFormat.UPPER_UNDERSCORE, clazz.getSimpleName()) + " = <br> ";
-        return prefix + enumStr + " <br>";
+    /** 一个枚举项：<code>NORMAL: {value: 1, desc: '正常'}</code>。字符串要包单引号，数字不能包 */
+    private static void appendEntry(StringBuilder sb, BaseEnum e) {
+        sb.append("\t").append(e).append(": {");
+        sb.append("value: ").append(quoteIfString(e.getValue())).append(", ");
+        sb.append("desc: ").append(quoteIfString(e.getDesc()));
+        sb.append("}");
+    }
+
+    private static String quoteIfString(Object value) {
+        return value instanceof String ? "'" + value + "'" : String.valueOf(value);
+    }
+
+    /** swagger 的描述字段吃 HTML 不吃换行，所以缩进和换行都要换成标签 */
+    private static String toHtml(String text) {
+        return text.replace("\t", "&nbsp;&nbsp;").replace("\n", "<br>");
     }
 }

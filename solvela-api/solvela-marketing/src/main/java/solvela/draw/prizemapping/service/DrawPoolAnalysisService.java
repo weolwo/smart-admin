@@ -139,37 +139,55 @@ public class DrawPoolAnalysisService {
         Map<String, List<PoolPrizeMapping>> grouped = loadMappings(queryForm, poolMap).stream()
                 .collect(Collectors.groupingBy(PoolPrizeMapping::getPoolCode, LinkedHashMap::new, Collectors.toList()));
 
-        /*
-         * 后面三张表都只当查找表用（map.get），只捞引用到的行即可。
-         *
-         * ⚠️ 奖项要按 grouped 里<b>全部</b>映射的 id 来捞，不能只按现存奖池的 ——
-         * 孤儿映射（奖池已删）同样要逐坑分析，漏了它们那几行会变成「奖项不存在」的误报。
-         */
+        Map<Long, PrizePoolItem> itemMap = loadItemMap(grouped);
+        Map<String, PrizeConfig> prizeMap = loadPrizeMap(itemMap);
+        Map<String, ActivityConfig> activityMap = loadActivityMap(pools);
+
+        return new Materials(pools, poolMap, grouped, itemMap, prizeMap, activityMap,
+                loadCachedStocks(pools, grouped));
+    }
+
+    /*
+     * 下面三张表都只当查找表用（map.get），只捞引用到的行即可。
+     */
+
+    /**
+     * ⚠️ 奖项要按 grouped 里<b>全部</b>映射的 id 来捞，不能只按现存奖池的 ——
+     * 孤儿映射（奖池已删）同样要逐坑分析，漏了它们那几行会变成「奖项不存在」的误报。
+     */
+    private Map<Long, PrizePoolItem> loadItemMap(Map<String, List<PoolPrizeMapping>> grouped) {
         List<Long> itemIds = grouped.values().stream()
                 .flatMap(List::stream)
                 .map(PoolPrizeMapping::getPrizeItemId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
-        Map<Long, PrizePoolItem> itemMap = itemIds.isEmpty() ? Map.of()
-                : prizePoolItemManager.lambdaQuery().in(PrizePoolItem::getId, itemIds).list().stream()
-                        .collect(Collectors.toMap(PrizePoolItem::getId, Function.identity(), (a, b) -> a));
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        return prizePoolItemManager.lambdaQuery().in(PrizePoolItem::getId, itemIds).list().stream()
+                .collect(Collectors.toMap(PrizePoolItem::getId, Function.identity(), (a, b) -> a));
+    }
 
+    private Map<String, PrizeConfig> loadPrizeMap(Map<Long, PrizePoolItem> itemMap) {
         List<String> prizeCodes = itemMap.values().stream()
                 .map(PrizePoolItem::getPrizeCode).filter(Objects::nonNull).distinct().toList();
-        Map<String, PrizeConfig> prizeMap = prizeCodes.isEmpty() ? Map.of()
-                : prizeConfigManager.lambdaQuery().in(PrizeConfig::getPrizeCode, prizeCodes).list().stream()
-                        .collect(Collectors.toMap(PrizeConfig::getPrizeCode, Function.identity(), (a, b) -> a));
+        if (prizeCodes.isEmpty()) {
+            return Map.of();
+        }
+        return prizeConfigManager.lambdaQuery().in(PrizeConfig::getPrizeCode, prizeCodes).list().stream()
+                .collect(Collectors.toMap(PrizeConfig::getPrizeCode, Function.identity(), (a, b) -> a));
+    }
 
+    private Map<String, ActivityConfig> loadActivityMap(List<PrizePoolConfig> pools) {
         List<String> activityCodes = pools.stream()
                 .map(PrizePoolConfig::getActivityCode).filter(Objects::nonNull).distinct().toList();
-        Map<String, ActivityConfig> activityMap = activityCodes.isEmpty() ? Map.of()
-                : activityConfigManager.lambdaQuery()
-                        .in(ActivityConfig::getActivityCode, activityCodes).list().stream()
-                        .collect(Collectors.toMap(ActivityConfig::getActivityCode, Function.identity(), (a, b) -> a));
-
-        return new Materials(pools, poolMap, grouped, itemMap, prizeMap, activityMap,
-                loadCachedStocks(pools, grouped));
+        if (activityCodes.isEmpty()) {
+            return Map.of();
+        }
+        return activityConfigManager.lambdaQuery()
+                .in(ActivityConfig::getActivityCode, activityCodes).list().stream()
+                .collect(Collectors.toMap(ActivityConfig::getActivityCode, Function.identity(), (a, b) -> a));
     }
 
     /**

@@ -64,24 +64,31 @@ public class AdminAuthorizationInterceptor implements HandlerInterceptor {
 
         RequestEmployee employee = CurrentEmployee.orNull();
         if (employee == null) {
+            // 🔴 两种 401 要分开：过期让前端弹「长时间未操作」并跳登录，
+            // 无效令牌直接跳登录。合成一种的话用户被踢下线却不知道为什么
             throw new BusinessException(switch (AuthFailure.of(request)) {
                 case INACTIVE -> UserErrorCode.LOGIN_ACTIVE_TIMEOUT;
                 case INVALID -> UserErrorCode.LOGIN_STATE_INVALID;
             });
         }
 
+        checkPermission(method, employee);
+        return true;
+    }
+
+    /**
+     * 权限点校验。没标 {@code @RequiresPermission} 的接口只要求登录，不要求权限。
+     *
+     * <p>超管不校验：它的权限来自<b>身份</b>而不是配置 —— 否则给超管配漏一个权限点，
+     * 就等于把自己锁在系统外面，而修复动作本身也需要那个权限。
+     */
+    private void checkPermission(HandlerMethod method, RequestEmployee employee) {
         RequiresPermission required = method.getMethodAnnotation(RequiresPermission.class);
-        if (required == null) {
-            return true;
-        }
-        // 超管不校验权限点：它的权限来自身份而不是配置，
-        // 否则给超管配漏一个权限点就等于把自己锁在系统外面
-        if (Boolean.TRUE.equals(employee.getAdministratorFlag())) {
-            return true;
+        if (required == null || Boolean.TRUE.equals(employee.getAdministratorFlag())) {
+            return;
         }
         if (!loginManager.getUserPermission(employee.getUserId()).permissionList().contains(required.value())) {
             throw new BusinessException(UserErrorCode.NO_PERMISSION);
         }
-        return true;
     }
 }

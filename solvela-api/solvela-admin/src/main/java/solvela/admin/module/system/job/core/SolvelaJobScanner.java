@@ -153,17 +153,16 @@ public class SolvelaJobScanner {
     private void handleDueJob(SolvelaJobEntity job, LocalDateTime dbNow) {
         Optional<SolvelaJobHandlerMeta> handlerOpt = handlerRegistry.getHandler(job.getHandlerName());
         if (handlerOpt.isEmpty()) {
-            // 标记失联并让它退出调度：不标记的话每秒都会被扫到、每秒报一次错，刷屏还查不出所以然
-            log.error("==== SolvelaJob ==== 🔴 handler 在代码中不存在，任务已停止调度：job={} handler={}",
-                    job.getJobName(), job.getHandlerName());
-            jobRepository.getJobDao().updateHandlerMissing(job.getJobId(), true);
+            markHandlerMissing(job);
             return;
         }
         SolvelaJobHandlerMeta handler = handlerOpt.get();
 
-        // ① 节点级判据：本车道满了就跳过，不抢占。
-        //    任务原封不动留在库里，下一轮任何一个有空位的节点自然会接走 ——
-        //    这样「本该被别人执行的任务被就地误杀」根本不会发生
+        /*
+         * 节点级判据：本车道满了就跳过，且<b>不抢占</b>。
+         * 任务原封不动留在库里，下一轮任何一个有空位的节点自然会接走 ——
+         * 这样「本该被别人执行的任务被就地误杀」根本不会发生。
+         */
         if (!executePool.hasCapacity(handler.lane())) {
             log.debug("==== SolvelaJob ==== {} 车道已满，跳过（保留待抢）：{}",
                     handler.lane().getValue(), job.getJobName());
@@ -172,24 +171,44 @@ public class SolvelaJobScanner {
 
         LocalDateTime triggerTime = job.getNextTriggerTime();
         boolean misfired = this.isMisfired(job, triggerTime, dbNow);
-        SolvelaJobMisfireStrategyEnum misfireStrategy = SolvelaJobMisfireStrategyEnum.resolve(job.getMisfireStrategy());
 
-        // ② 抢占：推进时间。无论后面是否真的执行，时间轮都必须往前走
+        // 抢占：推进时间。无论后面是否真的执行，时间轮都必须往前走 ——
+        // 不推进的话这个任务下一秒会被再扫到一次，而且是被所有节点同时扫到
         if (!this.preempt(job, dbNow)) {
             return;
         }
 
-        // 错过且策略为跳过：只记录，不执行。
-        // 🔴 「跳过」必须留痕 ——「跳过了」和「从来没触发过」在运营那儿是两件事
-        if (misfired && misfireStrategy == SolvelaJobMisfireStrategyEnum.SKIP) {
-            log.warn("==== SolvelaJob ==== 错过调度已跳过：job={} 原定={} 现在={}",
-                    job.getJobName(), triggerTime, dbNow);
-            this.saveTerminalLog(job, triggerTime, dbNow, SolvelaJobExecuteStatusEnum.MISFIRE,
-                    "错过调度窗口，按 SKIP 策略跳过。原定触发 " + triggerTime);
+        if (misfired && SolvelaJobMisfireStrategyEnum.SKIP == SolvelaJobMisfireStrategyEnum.resolve(job.getMisfireStrategy())) {
+            skipMisfired(job, triggerTime, dbNow);
             return;
         }
 
         this.dispatch(job, handler, triggerTime, dbNow);
+    }
+
+    /**
+     * 执行器失联：标记并让它<b>退出调度</b>。
+     *
+     * <p>不标记的话它每秒都会被扫到、每秒报一次同样的错 —— 日志被刷屏，
+     * 而真正的问题（某个类被改名了）反而淹在里面看不见。
+     */
+    private void markHandlerMissing(SolvelaJobEntity job) {
+        log.error("==== SolvelaJob ==== 🔴 handler 在代码中不存在，任务已停止调度：job={} handler={}",
+                job.getJobName(), job.getHandlerName());
+        jobRepository.getJobDao().updateHandlerMissing(job.getJobId(), true);
+    }
+
+    /**
+     * 错过调度且策略是 SKIP：只留痕，不执行。
+     *
+     * <p>🔴 必须落一条 MISFIRE 日志 —— 「跳过了」和「从来没触发过」在运营那儿是两件事，
+     * 而如果什么都不写，这两种情况在后台看起来一模一样。
+     */
+    private void skipMisfired(SolvelaJobEntity job, LocalDateTime triggerTime, LocalDateTime dbNow) {
+        log.warn("==== SolvelaJob ==== 错过调度已跳过：job={} 原定={} 现在={}",
+                job.getJobName(), triggerTime, dbNow);
+        this.saveTerminalLog(job, triggerTime, dbNow, SolvelaJobExecuteStatusEnum.MISFIRE,
+                "错过调度窗口，按 SKIP 策略跳过。原定触发 " + triggerTime);
     }
 
     /**

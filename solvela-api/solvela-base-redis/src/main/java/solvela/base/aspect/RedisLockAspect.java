@@ -65,43 +65,60 @@ public class RedisLockAspect {
         RLock lock = redissonClient.getLock(lockKey);
         boolean isLocked = false;
         try {
-            long waitTime = annotation.waitTime();
-            long leaseTime = annotation.leaseTime();
-            // 1. 尝试加锁 (支持自定义等待时间，完美兼容 Fail-fast 和 阻塞等待 两种场景)
-            try {
-                if (leaseTime == -1) {
-                    // 激活看门狗
-                    isLocked = lock.tryLock(waitTime, annotation.unit());
-                } else {
-                    // 自定义租期
-                    isLocked = lock.tryLock(waitTime, leaseTime, annotation.unit());
-                }
-            } catch (InterruptedException e) {
-                // 2. 响应中断，恢复线程状态，并抛出业务异常
-                Thread.currentThread().interrupt();
-                log.error("尝试获取分布式锁时线程被中断，Key: {}", lockKey, e);
-                throw new RuntimeException("系统繁忙，请稍后再试");
-            }
-
+            isLocked = tryLock(lock, annotation, lockKey);
             if (!isLocked) {
                 log.warn("获取分布式锁失败，阻止了并发操作。Key: {}", lockKey);
                 throw new RuntimeException("操作太频繁，请稍后再试");
             }
-
-            // 3. 执行核心业务
             return joinPoint.proceed();
 
         } finally {
-            // 去掉了冗余的 lock.isLocked() 减少一次 Redis IO
-            if (isLocked && lock.isHeldByCurrentThread()) {
-                try {
-                    lock.unlock();
-                    log.debug("释放分布式锁成功，Key: {}", lockKey);
-                } catch (Exception e) {
-                    //防止解锁时的网络抖动掩盖了正常业务结果或导致事务意外回滚
-                    log.error("释放分布式锁出现异常，Key: {} (可能 Redis 连接异常或锁已过期自动释放)", lockKey, e);
-                }
-            }
+            unlockQuietly(lock, isLocked, lockKey);
+        }
+    }
+
+    /**
+     * 抢锁。{@code leaseTime == -1} 时<b>激活看门狗</b>（Redisson 自动续租，
+     * 业务跑多久锁就续多久），否则按注解给的固定租期 —— 到点自动释放，
+     * 用于「宁可放开也不能一直锁着」的场景。
+     *
+     * <p>被中断时要<b>恢复中断标记再抛</b>：吞掉标记的话上层线程池不知道自己该停，
+     * 而这类问题只在关机/取消时暴露，平时怎么测都测不出来。
+     */
+    private boolean tryLock(RLock lock, RedisLock annotation, String lockKey) {
+        try {
+            long waitTime = annotation.waitTime();
+            long leaseTime = annotation.leaseTime();
+            return leaseTime == -1
+                    ? lock.tryLock(waitTime, annotation.unit())
+                    : lock.tryLock(waitTime, leaseTime, annotation.unit());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("尝试获取分布式锁时线程被中断，Key: {}", lockKey, e);
+            throw new RuntimeException("系统繁忙，请稍后再试");
+        }
+    }
+
+    /**
+     * 释放锁，失败只记日志不抛。
+     *
+     * <p>🔴 两道判断都不能省：{@code isLocked} 排除「压根没抢到」，
+     * {@code isHeldByCurrentThread} 排除「租期已到、锁被别人拿走了」——
+     * 无条件 unlock 会把别人正持着的锁释放掉。
+     *
+     * <p>解锁本身的异常必须吞：让一次网络抖动盖掉正常的业务返回值、
+     * 甚至把外层事务带得回滚，代价远大于一把迟早会自己过期的锁。
+     */
+    private void unlockQuietly(RLock lock, boolean isLocked, String lockKey) {
+        // 去掉了冗余的 lock.isLocked() 减少一次 Redis IO
+        if (!isLocked || !lock.isHeldByCurrentThread()) {
+            return;
+        }
+        try {
+            lock.unlock();
+            log.debug("释放分布式锁成功，Key: {}", lockKey);
+        } catch (Exception e) {
+            log.error("释放分布式锁出现异常，Key: {} (可能 Redis 连接异常或锁已过期自动释放)", lockKey, e);
         }
     }
 

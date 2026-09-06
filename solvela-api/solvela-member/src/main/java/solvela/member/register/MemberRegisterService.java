@@ -105,6 +105,18 @@ public class MemberRegisterService {
         }
 
         // ---------- 建号 ----------
+        return createMember(cmd, phone, phoneHashHex);
+    }
+
+    /**
+     * 真正建号。返回结果而不是抛异常，理由见 {@link RegisterFailReason}。
+     *
+     * <p>刻意<b>不</b>写 {@code t_member_login_log}：注册这件事已经完整记在 t_member 的
+     * {@code create_time / register_ip / register_source} 三列上，那正是 DDL 给它们的用途。
+     * 再写一条 LOGIN_SUCCESS 只是让登录轨迹里多一条语义不同的行，
+     * 查一个人「什么时候登过」时反而要先把它剔掉。
+     */
+    private MemberRegisterResult createMember(MemberRegisterCmd cmd, String phone, String phoneHashHex) {
         long memberId = memberIdAllocator.nextMemberId();
         String memberName = MEMBER_NAME_PREFIX + memberId;
         String nickname = DEFAULT_NICKNAME_PREFIX + memberId;
@@ -127,19 +139,14 @@ public class MemberRegisterService {
                     registerSource,
                     cmd.clientIp());
         } catch (DuplicateKeyException e) {
-            // 闭合上面那个查重窗口：两个请求同时注册同一个号时，
+            // 闭合查重与插入之间那个窗口：两个请求同时注册同一个号时，
             // 一个成功一个撞唯一约束。撞了就是「已被注册」，对用户是同一件事。
             // 🔴 别把它当成意外抛出去 —— 那会变成 500，而这是一个完全预期内的结果
             log.info("【会员注册】手机号并发重复注册，已被唯一约束拦下, memberId: {}", memberId);
             return MemberRegisterResult.fail(RegisterFailReason.PHONE_TAKEN);
         }
 
-        // 刻意【不】写 t_member_login_log：注册这件事已经完整记在
-        // t_member 的 create_time / register_ip / register_source 三列上，
-        // 那正是 DDL 给它们的用途。再写一条 LOGIN_SUCCESS 只是让登录轨迹里多一条
-        // 语义不同的行，查一个人「什么时候登过」时反而要先把它剔掉。
         log.info("【会员注册】成功, memberId: {}, source: {}, ip: {}", memberId, registerSource, cmd.clientIp());
-
         return MemberRegisterResult.ok(new MemberIdentity(
                 memberId, memberName, nickname, null, GenderEnum.UNKNOWN));
     }

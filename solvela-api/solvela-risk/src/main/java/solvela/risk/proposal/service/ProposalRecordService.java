@@ -478,10 +478,19 @@ public class ProposalRecordService {
      * 流程与一致性体检。
      */
     private List<String> checkup(StatRow row, long unknownSourceCount, long blockAttention) {
+        Checkup checkup = new Checkup();
+        addFlowIssues(checkup, row);
+        addReviewIssues(checkup, row, blockAttention);
+        addDataIntegrityIssues(checkup, row, unknownSourceCount);
+        return checkup.issues();
+    }
+
+    /** 钱卡在半路：卡单、积压、发放异常 —— 这三类都意味着<b>用户现在就没拿到东西</b> */
+    private void addFlowIssues(Checkup checkup, StatRow row) {
         long failed = row.count("failedCount");
         long partial = row.count("partialCount");
         long oldestMinutes = row.count("pendingReviewOldestMinutes");
-        return new Checkup()
+        checkup
                 .countIf(row.count("stuckDispatchCount"),
                         "有 {} 条提案卡在「待执行/执行中」超过 30 分钟：下发是在提案事务提交后"
                                 + "同步调起的，进程中途退出就没有第二次机会，而工程里没有任何重试/补偿任务 —— "
@@ -492,7 +501,12 @@ public class ProposalRecordService {
                 .when(failed > 0 || partial > 0,
                         "有 {} 条彻底失败、{} 条部分成功：部分成功意味着奖只发出去一半，"
                                 + "用户拿到的与承诺的不一致，需要人工补齐。失败原因见每条提案的备注",
-                        failed, partial)
+                        failed, partial);
+    }
+
+    /** 审批这道防线还在不在：同人双审、驳回没理由，以及被防刷淹没的那两类拦截 */
+    private void addReviewIssues(Checkup checkup, StatRow row, long blockAttention) {
+        checkup
                 .countIf(blockAttention,
                         "有 {} 条拦截属于「单次金额超限」或「预算已耗尽」："
                                 + "前者是系统兜底真的被触发了（上游算出了超过配置上限的金额），"
@@ -501,20 +515,27 @@ public class ProposalRecordService {
                 .countIf(row.count("sameReviewerCount"),
                         "有 {} 条提案的一审人与二审人是同一个人：审批接口不校验这一点，"
                                 + "双层审批变成同一个人点两次，这道防线只剩形式")
+                .countIf(row.count("rejectNoCommentCount"),
+                        "有 {} 条驳回没有填写理由：事后说不清为什么不给这个人发，"
+                                + "客诉与审计时都拿不出依据");
+    }
+
+    /**
+     * 数据本身对不对得上。这三类不影响用户当下拿不拿得到奖，但会让<b>报表和审计说谎</b> ——
+     * 而报表说谎是最难发现的一类问题：没有报错，只有结论悄悄错了。
+     */
+    private void addDataIntegrityIssues(Checkup checkup, StatRow row, long unknownSourceCount) {
+        checkup
                 .countIf(row.count("waitingCount"),
                         "有 {} 条提案停在「等待中」：正常链路只会落 待一审/待执行/风控拦截 三种初始状态，"
                                 + "出现 0 说明这些记录是绕过提案链路直接写进来的（后台「新建」按钮就能做到），"
                                 + "它们不会被任何流程推进")
-                .countIf(row.count("rejectNoCommentCount"),
-                        "有 {} 条驳回没有填写理由：事后说不清为什么不给这个人发，"
-                                + "客诉与审计时都拿不出依据")
                 .countIf(row.count("reviewerNoTimeCount"),
                         "有 {} 条提案有审批人却没有审批时间：这两个字段是同一条 SQL 一起写的，"
                                 + "只有一半说明该行被人工改过")
                 .countIf(unknownSourceCount,
                         "有 {} 条提案的来源不在字典内（TASK/DRAW/LOTTERY/MANUAL）："
                                 + "历史上四个发奖 handler 都硬编码写了 LOTTERY_DRAW，任务发的奖也被记成彩票抽奖，"
-                                + "这批数据按来源统计时会被算错")
-                .issues();
+                                + "这批数据按来源统计时会被算错");
     }
 }

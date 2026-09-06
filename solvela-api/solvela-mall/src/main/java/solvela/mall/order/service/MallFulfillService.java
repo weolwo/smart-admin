@@ -77,7 +77,8 @@ public class MallFulfillService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void fulfill(String orderNo) {
-        // ---- ① 抢闸门。抢不到说明别人在做，或者已经做过 ----
+        // 抢闸门：markFulfilling 是 WHERE status=10 的条件更新，抢不到说明别人在做或已经做过。
+        // t_member_coupon 上没有唯一键，重复发券在库那层拦不住 —— 这次 CAS 是唯一的闸门
         if (mallOrderDao.markFulfilling(orderNo) == 0) {
             log.debug("【商城履约】{} 不在待履约状态，跳过", orderNo);
             return;
@@ -90,31 +91,46 @@ public class MallFulfillService {
             return;
         }
 
-        /*
-         * ---- ② 发放 ----
-         *
-         * 🔴 BALANCE 在这里挡下，不是漏了。
-         * DDL 至今没给「面额」一个归宿：t_mall_commodity 上 points_price 是<b>要花的</b>积分、
-         * cash_price 是<b>要付的</b>现金、original_price 是划线展示价，
-         * 没有一列是「兑到手多少钱」。asset_ref 那行注释写的「BALANCE 存面额来源标识」
-         * 是个占位，从来没定过。
-         *
-         * 拿 original_price 顶替是能跑，但那等于让「前端划线展示的价格」决定真实发多少钱 ——
-         * 运营改一次展示文案就是一次资损。所以宁可发不出去、留一条运营看得懂的失败原因，
-         * 也不猜。定下来之后：商品表加一列面额 → 下单时快照进订单 → 这里传给 amount。
-         */
-        if (ASSET_TYPE_BALANCE.equals(order.getCommodityType())) {
-            String reason = "现金/红包商品尚不支持履约：商品表还没有「兑到手面额」这一列，"
-                    + "请勿把商品配成 BALANCE 类型";
-            mallOrderDao.markFailed(orderNo, StringUtils.abbreviate(reason, FAIL_REASON_MAX));
-            log.error("【商城履约失败】{} 商品[{}] 被配成了 BALANCE，而面额无处可取",
-                    orderNo, order.getCommodityCode());
+        if (rejectIfBalanceCommodity(orderNo, order)) {
             return;
         }
 
-        AssetGrantResult result = assetGrantApi.grant(buildCmd(order));
+        settle(orderNo, order, assetGrantApi.grant(buildCmd(order)));
+    }
 
-        // ---- ③ 回执 ----
+    /**
+     * BALANCE 类商品当场标失败。<b>这是挡下，不是漏了。</b>
+     *
+     * <p>DDL 至今没给「面额」一个归宿：{@code t_mall_commodity} 上 points_price 是
+     * <b>要花的</b>积分、cash_price 是<b>要付的</b>现金、original_price 是划线展示价，
+     * 没有一列是「兑到手多少钱」。asset_ref 那行注释写的「BALANCE 存面额来源标识」
+     * 是个占位，从来没定过。
+     *
+     * <p>拿 original_price 顶替能跑，但那等于让「前端划线展示的价格」决定真实发多少钱 ——
+     * 运营改一次展示文案就是一次资损。宁可发不出去、留一条运营看得懂的失败原因，也不猜。
+     * 定下来之后：商品表加一列面额 → 下单时快照进订单 → 这里传给 amount。
+     *
+     * @return true 表示已经标失败并处理完毕，调用方应当停止
+     */
+    private boolean rejectIfBalanceCommodity(String orderNo, MallOrder order) {
+        if (!ASSET_TYPE_BALANCE.equals(order.getCommodityType())) {
+            return false;
+        }
+        String reason = "现金/红包商品尚不支持履约：商品表还没有「兑到手面额」这一列，"
+                + "请勿把商品配成 BALANCE 类型";
+        mallOrderDao.markFailed(orderNo, StringUtils.abbreviate(reason, FAIL_REASON_MAX));
+        log.error("【商城履约失败】{} 商品[{}] 被配成了 BALANCE，而面额无处可取",
+                orderNo, order.getCommodityCode());
+        return true;
+    }
+
+    /**
+     * 回执落库：20-履约中 → 30-已完成 / 60-履约失败。
+     *
+     * <p>🔴 <b>失败不退积分</b> —— 东西还欠着用户，不是没买。退了等于把一次
+     * 「我们没发出去」变成「这单不算数」，而用户那边看到的是积分回来了、东西没了。
+     */
+    private void settle(String orderNo, MallOrder order, AssetGrantResult result) {
         if (result.accepted()) {
             mallOrderDao.markFinished(orderNo, result.fulfillRefId());
             log.info(">>>> [商城履约完成] {} {} -> {}", orderNo, order.getCommodityType(), result.fulfillRefId());

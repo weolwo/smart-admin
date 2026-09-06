@@ -73,6 +73,15 @@ public class LoginService {
 
     /** 邮箱验证码 redis key 的业务前缀 */
     private static final String EMAIL_CODE_KEY_PREFIX = "login:verification-code:";
+
+    /** 验证码位数。四位是权衡：短信/邮件里好念好输，而 5 分钟有效期内穷举 1 万种也够呛 */
+    private static final int EMAIL_CODE_LENGTH = 4;
+
+    /** 验证码有效期（秒）。太短用户来不及切到邮箱，太长等于给暴力破解更多时间 */
+    private static final int EMAIL_CODE_TTL_SECONDS = 300;
+
+    /** 重发冷却（毫秒）。挡的是连点，也顺带挡住拿这个接口当免费邮件发射器 */
+    private static final long EMAIL_CODE_RESEND_INTERVAL_MILLIS = 60_000L;
     // 注入你刚写的配置，默认设为 true 防翻车
     @Resource
     private EmployeeService employeeService;
@@ -298,58 +307,77 @@ public class LoginService {
 
 
     /**
-     * 发送 邮箱 验证码
+     * 发送邮箱验证码。
+     *
+     * <p>校验 -> 限频 -> 生成并发送。中间任何一步不通过都直接抛，只有一处例外：
+     * <b>账号不存在时静默返回</b>，见 {@link #requireSendableEmployee}。
      */
     public void sendEmailCode(String loginName) {
-
-        // 开启双因子登录
         if (!level3ProtectConfigService.isTwoFactorLoginEnabled()) {
             throw new BusinessException("无需使用邮箱验证码");
         }
 
-        // 验证登录名
-        EmployeeEntity employeeEntity = employeeService.getByLoginName(loginName);
-        if (null == employeeEntity) {
-            // 账号不存在也当作成功：区分「有没有这个账号」等于送出一个账号枚举接口
+        EmployeeEntity employee = requireSendableEmployee(loginName);
+        if (employee == null) {
             return;
         }
 
-        // 验证账号状态
-        if (employeeEntity.getDeletedFlag()) {
+        String codeKey = emailCodeKey(employee.getEmployeeId());
+        requireCooldownElapsed(codeKey);
+        sendAndRemember(employee, codeKey);
+    }
+
+    /**
+     * 取一个「能收验证码」的员工。<b>账号不存在时返回 null 让调用方静默成功</b> ——
+     * 区分「有没有这个账号」等于对外送出一个账号枚举接口。
+     *
+     * <p>已删除/已禁用/没配邮箱则如实抛：这三种情况用户已经通过了「账号存在」这一关，
+     * 含糊其辞只会让他反复重试一件永远不会成功的事。
+     */
+    private EmployeeEntity requireSendableEmployee(String loginName) {
+        EmployeeEntity employee = employeeService.getByLoginName(loginName);
+        if (null == employee) {
+            return null;
+        }
+        if (employee.getDeletedFlag()) {
             throw new BusinessException("您的账号已被删除,请联系工作人员！");
         }
-
-        if (employeeEntity.getDisabledFlag()) {
+        if (employee.getDisabledFlag()) {
             throw new BusinessException("您的账号已被禁用,请联系工作人员！");
         }
-
-        String mail = employeeEntity.getEmail();
-        if (SolvelaStringUtil.isBlank(mail)) {
+        if (SolvelaStringUtil.isBlank(employee.getEmail())) {
             throw new BusinessException("您暂未配置邮箱地址，请联系管理员配置邮箱");
         }
+        return employee;
+    }
 
-        // 校验验证码发送时间，60秒内不能重复发生
-        String redisVerificationCodeKey = emailCodeKey(employeeEntity.getEmployeeId());
-        String emailCode = redisService.get(redisVerificationCodeKey);
-        long sendCodeTimeMills = -1;
-        if (!SolvelaStringUtil.isEmpty(emailCode)) {
-            sendCodeTimeMills = Long.parseLong(emailCode.split(StringConst.UNDERLINE)[1]);
-        }
-
-        if (System.currentTimeMillis() - sendCodeTimeMills < 60 * 1000) {
+    /**
+     * 60 秒内不许重发。
+     *
+     * <p>发送时间是<b>拼在验证码值里</b>的（{@code 验证码_毫秒}），不另存一个键 ——
+     * 两个键会各自过期，出现「码还在、时间戳没了」这种半个状态。
+     */
+    private void requireCooldownElapsed(String codeKey) {
+        String stored = redisService.get(codeKey);
+        long sentAt = SolvelaStringUtil.isEmpty(stored)
+                ? -1
+                : Long.parseLong(stored.split(StringConst.UNDERLINE)[1]);
+        if (System.currentTimeMillis() - sentAt < EMAIL_CODE_RESEND_INTERVAL_MILLIS) {
             throw new BusinessException("邮箱验证码已发送，一分钟内请勿重复发送");
         }
+    }
 
-        //生成验证码
-        long currentTimeMillis = System.currentTimeMillis();
-        String verificationCode = SolvelaRandomUtil.secureRandomNumbers(4);
-        redisService.set(redisVerificationCodeKey, verificationCode + StringConst.UNDERLINE + currentTimeMillis, 300);
+    /** 生成、存 Redis、发邮件。存的值是 {@code 验证码_发送毫秒}，重发限频靠它 */
+    private void sendAndRemember(EmployeeEntity employee, String codeKey) {
+        String verificationCode = SolvelaRandomUtil.secureRandomNumbers(EMAIL_CODE_LENGTH);
+        redisService.set(codeKey,
+                verificationCode + StringConst.UNDERLINE + System.currentTimeMillis(),
+                EMAIL_CODE_TTL_SECONDS);
 
-        // 发送邮件验证码
         HashMap<String, Object> mailParams = new HashMap<>();
         mailParams.put("code", verificationCode);
         mailService.sendMail(MailTemplateCodeEnum.LOGIN_VERIFICATION_CODE, mailParams,
-                Collections.singletonList(employeeEntity.getEmail()));
+                Collections.singletonList(employee.getEmail()));
     }
 
 

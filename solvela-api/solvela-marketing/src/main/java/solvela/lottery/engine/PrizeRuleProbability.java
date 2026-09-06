@@ -121,14 +121,9 @@ public final class PrizeRuleProbability {
         if (self.never()) {
             return BigDecimal.ZERO;
         }
-        // 只有「能命中」的更高奖级才会抢走票，永不命中的那些不参与
-        List<RuleMask> higher = new ArrayList<>();
-        for (int i = 0; i < index; i++) {
-            if (!masks.get(i).never()) {
-                higher.add(masks.get(i));
-            }
-        }
+        List<RuleMask> higher = claimantsAbove(masks, index);
         if (higher.size() > MAX_EXACT_LEVELS) {
+            // 子集数是 2^n，再多就不是「算得慢」而是算不完 —— 返回 null 让上层显示「无法精确计算」
             return null;
         }
 
@@ -137,10 +132,37 @@ public final class PrizeRuleProbability {
             return self0;
         }
 
-        /*
-         * 容斥：P(自己 ∩ 任一更高奖级) = Σ_{非空子集T} (-1)^(|T|+1) · P(自己 ∩ ∩T)
-         * 净中奖率 = P(自己) − 上式
-         */
+        BigDecimal net = self0.subtract(overlapWithHigher(self, higher, numberLength));
+        // 容斥结果理论上不会为负；真为负说明掩码模型与实际规则语义脱节，宁可归零也不吐负数
+        return net.signum() < 0 ? BigDecimal.ZERO : net;
+    }
+
+    /**
+     * 排在它前面、且<b>真的可能命中</b>的那些奖级 —— 只有它们会先把票抢走。
+     *
+     * <p>永不命中的规则（{@code never()}）不参与：把它们算进来只会让子集数翻倍，
+     * 而每一项的贡献都是 0。
+     */
+    private static List<RuleMask> claimantsAbove(List<RuleMask> masks, int index) {
+        List<RuleMask> higher = new ArrayList<>();
+        for (int i = 0; i < index; i++) {
+            if (!masks.get(i).never()) {
+                higher.add(masks.get(i));
+            }
+        }
+        return higher;
+    }
+
+    /**
+     * 容斥求「自己与任一更高奖级同时命中」的概率：
+     * <pre>
+     *   P(自己 ∩ 任一更高奖级) = Σ_{非空子集T} (-1)^(|T|+1) · P(自己 ∩ ∩T)
+     * </pre>
+     *
+     * <p>不能简单地把各更高奖级的概率相加：它们彼此之间也会重叠，
+     * 直接相加会把重叠部分多减几次，净中奖率算出来偏低甚至为负。
+     */
+    private static BigDecimal overlapWithHigher(RuleMask self, List<RuleMask> higher, int numberLength) {
         BigDecimal overlap = BigDecimal.ZERO;
         int n = higher.size();
         for (int bits = 1; bits < (1 << n); bits++) {
@@ -156,9 +178,7 @@ public final class PrizeRuleProbability {
             BigDecimal term = pow10Negative(covered(subset, numberLength));
             overlap = (size % 2 == 1) ? overlap.add(term) : overlap.subtract(term);
         }
-        BigDecimal net = self0.subtract(overlap);
-        // 容斥结果理论上不会为负；真为负说明掩码模型与实际规则语义脱节，宁可归零也不吐负数
-        return net.signum() < 0 ? BigDecimal.ZERO : net;
+        return overlap;
     }
 
     /**

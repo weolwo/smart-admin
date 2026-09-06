@@ -136,31 +136,46 @@ public class SolvelaJobHandlerRegistry implements SmartInitializingSingleton {
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        // ① 库里配了、代码没有 —— 这些任务永远跑不起来，必须 ERROR
+        boolean anyMissing = reportMissingHandlers(dbJobList);
+        boolean anyUnmounted = reportUnmountedHandlers(dbNames);
+        if (!anyMissing && !anyUnmounted) {
+            log.info("==== SolvelaJob ==== 启动对账通过，配置与代码完全一致");
+        }
+    }
+
+    /**
+     * 库里配了、代码里没有 —— <b>这些任务永远跑不起来</b>，所以是 ERROR 不是 WARN。
+     *
+     * <p>最常见的成因是执行器类被改名或删掉，而任务配置留在库里。它不会有任何运行期报错，
+     * 表现是「这个任务好像从来没跑过」，而没人知道该去哪查。
+     */
+    private boolean reportMissingHandlers(List<SolvelaJobEntity> dbJobList) {
         List<SolvelaJobEntity> missing = dbJobList.stream()
                 .filter(e -> !Boolean.TRUE.equals(e.getDeletedFlag()))
                 .filter(e -> null == e.getHandlerName() || !handlerMap.containsKey(e.getHandlerName()))
                 .toList();
-        if (!missing.isEmpty()) {
-            String detail = missing.stream()
-                    .map(e -> e.getJobName() + "(handler=" + e.getHandlerName() + ")")
-                    .collect(Collectors.joining(", "));
-            log.error("==== SolvelaJob ==== 🔴 有 {} 个任务的 handler 在代码中不存在，它们不会被执行：{}",
-                    missing.size(), detail);
+        if (missing.isEmpty()) {
+            return false;
         }
+        String detail = missing.stream()
+                .map(e -> e.getJobName() + "(handler=" + e.getHandlerName() + ")")
+                .collect(Collectors.joining(", "));
+        log.error("==== SolvelaJob ==== 🔴 有 {} 个任务的 handler 在代码中不存在，它们不会被执行：{}",
+                missing.size(), detail);
+        return true;
+    }
 
-        // ② 代码有、库里没配 —— 只是还没挂上，提示即可
+    /** 代码里有、库里没配 —— 只是还没挂上，提示即可，不是错误 */
+    private boolean reportUnmountedHandlers(Set<String> dbNames) {
         List<String> unmounted = handlerMap.keySet().stream()
                 .filter(name -> !dbNames.contains(name))
                 .toList();
-        if (!unmounted.isEmpty()) {
-            log.warn("==== SolvelaJob ==== 有 {} 个 handler 尚未挂载任务（可在后台新增）：{}",
-                    unmounted.size(), unmounted);
+        if (unmounted.isEmpty()) {
+            return false;
         }
-
-        if (missing.isEmpty() && unmounted.isEmpty()) {
-            log.info("==== SolvelaJob ==== 启动对账通过，配置与代码完全一致");
-        }
+        log.warn("==== SolvelaJob ==== 有 {} 个 handler 尚未挂载任务（可在后台新增）：{}",
+                unmounted.size(), unmounted);
+        return true;
     }
 
     /**

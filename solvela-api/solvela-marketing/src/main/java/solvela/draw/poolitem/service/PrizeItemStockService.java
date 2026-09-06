@@ -87,31 +87,9 @@ public class PrizeItemStockService {
                         PrizePoolItem::getActivityCode, queryForm.getActivityCode())
                 .list();
 
-        /*
-         * 下面三张表都只当查找表用（map.get），所以只捞这一页引用到的行 ——
-         * 与捞全表结果完全一致，但不会随着配置变多而线性变慢。
-         */
-        List<String> prizeCodes = items.stream()
-                .map(PrizePoolItem::getPrizeCode).filter(Objects::nonNull).distinct().toList();
-        Map<String, PrizeConfig> prizeMap = prizeCodes.isEmpty() ? Map.of()
-                : prizeConfigManager.lambdaQuery().in(PrizeConfig::getPrizeCode, prizeCodes).list().stream()
-                        .collect(Collectors.toMap(PrizeConfig::getPrizeCode, Function.identity(), (a, b) -> a));
-
-        List<String> activityCodes = items.stream()
-                .map(PrizePoolItem::getActivityCode).filter(Objects::nonNull).distinct().toList();
-        Map<String, ActivityConfig> activityMap = activityCodes.isEmpty() ? Map.of()
-                : activityConfigManager.lambdaQuery()
-                        .in(ActivityConfig::getActivityCode, activityCodes).list().stream()
-                        .collect(Collectors.toMap(ActivityConfig::getActivityCode, Function.identity(), (a, b) -> a));
-
-        // 一个奖项被哪些奖池引用 —— 库存跨池共享，这是「另一个池的奖怎么也没了」的答案
-        List<Long> itemIds = items.stream().map(PrizePoolItem::getId).toList();
-        Map<Long, List<String>> poolsByItem = itemIds.isEmpty() ? Map.of()
-                : poolPrizeMappingManager.lambdaQuery()
-                        .in(PoolPrizeMapping::getPrizeItemId, itemIds).list().stream()
-                        .collect(Collectors.groupingBy(PoolPrizeMapping::getPrizeItemId,
-                                Collectors.mapping(PoolPrizeMapping::getPoolCode, Collectors.toList())));
-
+        Map<String, PrizeConfig> prizeMap = loadPrizeMap(items);
+        Map<String, ActivityConfig> activityMap = loadActivityMap(items);
+        Map<Long, List<String>> poolsByItem = loadPoolsByItem(items);
         // Redis 剩余量一把取回。逐行取的话一页 200 行就是 200 次串行往返
         Map<String, Map<Long, Integer>> cachedStocks = loadCachedStocks(items);
 
@@ -120,17 +98,74 @@ public class PrizeItemStockService {
             all.add(analyseOne(item, prizeMap, activityMap, poolsByItem, cachedStocks));
         }
 
-        if (Boolean.TRUE.equals(queryForm.getOnlyIssue())) {
-            all = all.stream().filter(v -> !v.getIssueList().isEmpty()).collect(Collectors.toList());
-        }
+        // 🔴 先过滤再排序，不能反过来：排序用的是 List.sort，而过滤那一步返回的
+        // 若是不可变列表（.toList()）就会当场抛 UnsupportedOperationException
+        return summarize(sortByPriority(filterIssues(all, queryForm)), queryForm);
+    }
 
-        // 排序即优先级：有危险告警的（含口径漂移）置顶，其次消耗率高的 —— 快抽空的先看见
+    /*
+     * 下面三张表都只当查找表用（map.get），所以只捞这一页引用到的行 ——
+     * 与捞全表结果完全一致，但不会随着配置变多而线性变慢。
+     */
+
+    private Map<String, PrizeConfig> loadPrizeMap(List<PrizePoolItem> items) {
+        List<String> prizeCodes = items.stream()
+                .map(PrizePoolItem::getPrizeCode).filter(Objects::nonNull).distinct().toList();
+        if (prizeCodes.isEmpty()) {
+            return Map.of();
+        }
+        return prizeConfigManager.lambdaQuery().in(PrizeConfig::getPrizeCode, prizeCodes).list().stream()
+                .collect(Collectors.toMap(PrizeConfig::getPrizeCode, Function.identity(), (a, b) -> a));
+    }
+
+    private Map<String, ActivityConfig> loadActivityMap(List<PrizePoolItem> items) {
+        List<String> activityCodes = items.stream()
+                .map(PrizePoolItem::getActivityCode).filter(Objects::nonNull).distinct().toList();
+        if (activityCodes.isEmpty()) {
+            return Map.of();
+        }
+        return activityConfigManager.lambdaQuery()
+                .in(ActivityConfig::getActivityCode, activityCodes).list().stream()
+                .collect(Collectors.toMap(ActivityConfig::getActivityCode, Function.identity(), (a, b) -> a));
+    }
+
+    /** 一个奖项被哪些奖池引用 —— 库存跨池共享，这是「另一个池的奖怎么也没了」的答案 */
+    private Map<Long, List<String>> loadPoolsByItem(List<PrizePoolItem> items) {
+        List<Long> itemIds = items.stream().map(PrizePoolItem::getId).toList();
+        if (itemIds.isEmpty()) {
+            return Map.of();
+        }
+        return poolPrizeMappingManager.lambdaQuery()
+                .in(PoolPrizeMapping::getPrizeItemId, itemIds).list().stream()
+                .collect(Collectors.groupingBy(PoolPrizeMapping::getPrizeItemId,
+                        Collectors.mapping(PoolPrizeMapping::getPoolCode, Collectors.toList())));
+    }
+
+    /** 「只看有问题的」勾选时才过滤。返回可变列表，下一步要就地排序 */
+    private static List<PrizeItemStockDTO> filterIssues(List<PrizeItemStockDTO> all, PrizePoolItemQuery queryForm) {
+        if (!Boolean.TRUE.equals(queryForm.getOnlyIssue())) {
+            return all;
+        }
+        return all.stream().filter(v -> !v.getIssueList().isEmpty()).collect(Collectors.toList());
+    }
+
+    /** 排序即优先级：有危险告警的（含口径漂移）置顶，其次消耗率高的 —— 快抽空的先看见 */
+    private static List<PrizeItemStockDTO> sortByPriority(List<PrizeItemStockDTO> all) {
         all.sort(Comparator
                 .comparing((PrizeItemStockDTO v) -> v.getIssueList().stream()
                         .anyMatch(HealthIssue::isDanger) ? 0 : 1)
                 .thenComparing(v -> v.getUsedRate() == null ? BigDecimal.ZERO : v.getUsedRate(),
                         Comparator.reverseOrder()));
+        return all;
+    }
 
+    /**
+     * 概览 + 这一页的明细。
+     *
+     * <p>概览统计的是<b>筛选后的全量</b>而不是当前页 —— 卡片上的「12 个奖项已抽空」
+     * 和列表翻到第 3 页看到的东西必然对得上。
+     */
+    private static PrizeItemStockResultDTO summarize(List<PrizeItemStockDTO> all, PrizePoolItemQuery queryForm) {
         PrizeItemStockResultDTO result = new PrizeItemStockResultDTO();
         result.setItemCount(all.size());
         result.setSoldOutCount((int) all.stream()

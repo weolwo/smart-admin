@@ -168,20 +168,9 @@ public class MallClientFacade implements MallApi {
             // 不存在与已下架返回同一个值：翻译成什么状态码由网关决定
             return null;
         }
-        List<MallSku> skus = mallSkuManager.lambdaQuery()
-                .eq(MallSku::getCommodityId, commodityId)
-                .eq(MallSku::getSkuStatus, EnableStatusEnum.ENABLED)
-                .orderByAsc(MallSku::getSort)
-                .orderByAsc(MallSku::getId)
-                .list();
-
-        int stock = skus.stream().mapToInt(s -> nullToZero(s.getAvailableStock())).sum();
-        boolean favorite = !favoriteIds(memberId, List.of(commodityId)).isEmpty();
+        List<MallSku> skus = listOnSaleSkus(commodityId);
 
         /*
-         * 主图、轮播图、各 SKU 的图<b>一起换</b> —— 详情页的 SKU 常有十几个，
-         * 加上几张轮播图，一个一个换就是二十次查询，而它们本来可以是一次。
-         *
          * 🔴 轮播图的 biz_type 是 MALL_COMMODITY_BANNER，<b>不是</b> MALL_COMMODITY。
          * mall.sql 里那句「复用 t_file_relation(biz_type='MALL_COMMODITY')」写漏了后缀：
          * 后台保存时把封面登记成 MALL_COMMODITY、把轮播图登记成 MALL_COMMODITY_BANNER
@@ -189,11 +178,33 @@ public class MallClientFacade implements MallApi {
          */
         List<Long> bannerIds = fileAssetService.listBizFileIds(
                 MallConst.BIZ_TYPE_BANNER, commodity.getId());
-        List<Long> imageIds = new java.util.ArrayList<>(bannerIds);
-        imageIds.add(commodity.getCoverFileId());
-        skus.forEach(sku -> imageIds.add(sku.getSkuCoverFileId()));
-        Map<Long, String> images = urlsOf(imageIds);
 
+        return toDetailView(commodity, skus, bannerIds,
+                loadAllImages(commodity, skus, bannerIds),
+                !favoriteIds(memberId, List.of(commodityId)).isEmpty(),
+                remainingCount(commodity, memberId));
+    }
+
+    /** 在售 SKU，按运营配的 sort 排；sort 相同按 id 兜底，保证两次请求顺序一致 */
+    private List<MallSku> listOnSaleSkus(Long commodityId) {
+        return mallSkuManager.lambdaQuery()
+                .eq(MallSku::getCommodityId, commodityId)
+                .eq(MallSku::getSkuStatus, EnableStatusEnum.ENABLED)
+                .orderByAsc(MallSku::getSort)
+                .orderByAsc(MallSku::getId)
+                .list();
+    }
+
+    /**
+     * 组装详情视图。
+     *
+     * <p>总库存是<b>各在售 SKU 之和</b>，不读商品表 —— 商品表上没有这个数，
+     * 而「有货没货」这个判断只有 SKU 说了算。
+     */
+    private MallCommodityDetailView toDetailView(MallCommodity commodity, List<MallSku> skus,
+                                                 List<Long> bannerIds, Map<Long, String> images,
+                                                 boolean favorite, Integer remaining) {
+        int stock = skus.stream().mapToInt(s -> nullToZero(s.getAvailableStock())).sum();
         return new MallCommodityDetailView(
                 commodity.getId(), commodity.getCommodityCode(), commodity.getCategoryId(),
                 commodity.getCommodityType(), commodity.getCommodityName(),
@@ -209,8 +220,21 @@ public class MallClientFacade implements MallApi {
                         .filter(java.util.Objects::nonNull).toList(),
                 commodity.getDetailContent(), commodity.getExchangeNotice(),
                 commodity.getLimitPeriod(), commodity.getLimitCount(),
-                remainingCount(commodity, memberId),
+                remaining,
                 skus.stream().map(sku -> toSkuView(sku, images)).toList());
+    }
+
+    /**
+     * 主图、轮播图、各 SKU 的图<b>一次全换成 URL</b>。
+     *
+     * <p>详情页的 SKU 常有十几个，加上几张轮播图，一个一个换就是二十次查询 ——
+     * 而它们本来可以是一次。这个页面是 C 端点击最密集的地方之一。
+     */
+    private Map<Long, String> loadAllImages(MallCommodity commodity, List<MallSku> skus, List<Long> bannerIds) {
+        List<Long> imageIds = new java.util.ArrayList<>(bannerIds);
+        imageIds.add(commodity.getCoverFileId());
+        skus.forEach(sku -> imageIds.add(sku.getSkuCoverFileId()));
+        return urlsOf(imageIds);
     }
 
     /**
