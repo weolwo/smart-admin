@@ -1,4 +1,4 @@
-package solvela.member.session;
+package solvela.auth.member;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -25,6 +25,17 @@ import java.time.Duration;
  * <p>2026-08-30 从 {@code solvela.app.auth} 搬过来。搬的原因不是洁癖：
  * 后台冻结会员时要吊销他的全部会话，而冻结发生在会员域 ——
  * 会话存储留在网关里，会员域就够不着它，于是「冻结即时生效」这件事一直没人实现。
+ *
+ * <h3>🔴 配置键仍是 {@code solvela.member.session}，与本类所在的包不一致</h3>
+ * 2026-09-07 本类随模块从 {@code solvela.member.session} 搬到了 {@code solvela.auth.member}
+ * （为容纳设备令牌），但<b>配置键刻意没跟着改</b>。
+ *
+ * <p>因为改键要 8 个 application.yaml 与配置中心、环境变量的所有覆盖<b>同时</b>改对，
+ * 而漏掉任何一处的表现是：应用照常启动、接口照常响应，令牌有效期静默回落到下面的默认值。
+ * 一个 7 天 TTL 的环境会悄悄变成 30 天，没有任何报错 —— 正是本仓一直在防的那类故障。
+ *
+ * <p>所以这是个有意保留的不一致，<b>不要顺手「对齐」它</b>。真要改，
+ * 得先确认配置中心里没有任何覆盖，并且和运维同一批次发布。
  */
 @Data
 @Component

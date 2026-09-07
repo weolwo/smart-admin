@@ -64,7 +64,7 @@
             <artifactId>solvela-prize</artifactId>
             <version>3.0.0</version>
         </dependency>
-        <!-- 会员域。含 solvela.member.session —— 会话签发在网关，
+        <!-- 会员域。经它传递到 solvela-auth —— 会话签发在网关，
              吊销在这里（后台冻结会员时要当场断掉他的全部令牌） -->
         <dependency>
             <groupId>solvela</groupId>

@@ -12,8 +12,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import solvela.enums.MemberStatusEnum;
 import solvela.member.auth.MemberAuthService;
 import solvela.member.service.MemberService;
-import solvela.member.session.MemberAccessToken;
-import solvela.member.session.MemberTokenStore;
+import solvela.auth.member.MemberAccessToken;
+import solvela.auth.member.MemberTokenStore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

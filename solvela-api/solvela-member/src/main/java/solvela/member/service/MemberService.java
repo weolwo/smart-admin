@@ -14,7 +14,7 @@ import solvela.member.constant.MemberConst;
 import solvela.member.dao.MemberDao;
 import solvela.member.Member;
 import solvela.member.manager.MemberManager;
-import solvela.member.session.MemberTokenStore;
+import solvela.auth.member.MemberTokenStore;
 import solvela.member.domain.query.MemberQuery;
 import solvela.member.domain.dto.MemberDTO;
 
@@ -79,7 +79,7 @@ public class MemberService {
      * 而网关那边的注释却写着「冻结时会 revokeAll 掉全部令牌」。
      * 注释描述了一个不存在的机制，且没有任何测试盯着它。
      *
-     * <p>为此把会话存储从网关下沉到了会员域（{@code solvela.member.session}）：
+     * <p>为此把会话存储从网关下沉到了独立模块（{@code solvela.auth.member}）：
      * 冻结发生在这里，会话存储就得在这里够得着。
      *
      * <h3>吊销放在事务【内】</h3>

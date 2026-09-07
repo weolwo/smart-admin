@@ -1,4 +1,4 @@
-package solvela.member.session;
+package solvela.auth.member;
 
 import java.time.Duration;
 

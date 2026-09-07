@@ -27,7 +27,7 @@ import org.springframework.context.annotation.ComponentScan;
  * <ul>
  *   <li>{@code solvela.app} —— 本模块；</li>
  *   <li>{@code solvela.base} —— 基础设施（数据源、Redis、缓存、加解密、Excel）；</li>
- *   <li>{@code solvela.member.session} —— 会话存储（令牌的签发/解析/吊销）。
+ *   <li>{@code solvela.auth} —— 凭证：会员令牌的签发/解析/吊销。
  *       <b>只用 Redis，不带 JDBC</b> —— 它被单独拆成一个模块正是为了这一点。</li>
  * </ul>
  *
@@ -74,7 +74,7 @@ import org.springframework.context.annotation.ComponentScan;
 // 从前写 "solvela.base" 是「扫全世界再靠 Maven 减掉」—— 而 solvela.base.config
 // 这个包同时属于 base-core / base-redis / base-data / base-file 四个模块，
 // 精确到子包也挡不住 base-data 的 MybatisPlusConfig。现在这行清单就是全部真相。
-@ComponentScan({"solvela.app", "solvela.member.session"})
+@ComponentScan({"solvela.app", "solvela.auth"})
 @ConfigurationPropertiesScan("solvela.app")
 @SpringBootApplication
 public class AppApplication {

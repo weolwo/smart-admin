@@ -84,8 +84,13 @@ import solvela.base.listener.Ip2RegionListener;
         "solvela.consumer",
         // PII 加解密（散落在 model 里的 @Component）
         "solvela.crypto",
-        // 会员域（含 solvela.member.session：会话签发在网关，吊销在这里）
+        // 会员域
         "solvela.member",
+        // 凭证。🔴 必须显式列出：它在 solvela.auth 下，"solvela.member" 覆盖不到。
+        // 2026-09-07 从 solvela.member.session 搬过来时正是这一行差点漏掉 ——
+        // 漏了的表现是本进程启动即失败（MemberService 注不到 MemberTokenStore），
+        // 由 FreezeRevokesSessionTest 兜着。签发在网关，吊销在这里。
+        "solvela.auth",
         // 资产域 + 风控与提案。⚠️ 见类注释：这是将来要拆出去的那一半，
         // 边界靠 LedgerBoundaryTest 守，不是靠这里
         "solvela.ledger", "solvela.risk"

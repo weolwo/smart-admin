@@ -110,7 +110,7 @@
         <!-- 会话：签发/解析/吊销令牌。只用 Redis，不带 JDBC —— 这正是它被拆出来的原因 -->
         <dependency>
             <groupId>solvela</groupId>
-            <artifactId>solvela-member-session</artifactId>
+            <artifactId>solvela-auth</artifactId>
             <version>3.0.0</version>
         </dependency>
 

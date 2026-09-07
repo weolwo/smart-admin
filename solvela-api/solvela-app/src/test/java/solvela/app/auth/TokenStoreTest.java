@@ -5,8 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import solvela.member.session.MemberAccessToken;
-import solvela.member.session.MemberTokenStore;
+import solvela.auth.member.MemberAccessToken;
+import solvela.auth.member.MemberTokenStore;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

@@ -1,0 +1,86 @@
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>solvela</groupId>
+        <artifactId>solvela-parent</artifactId>
+        <version>3.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>solvela</groupId>
+    <artifactId>solvela-auth</artifactId>
+    <version>3.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>solvela-auth</name>
+    <description>凭证机制：令牌的签发、解析、吊销。只用 Redis，不碰数据库。</description>
+
+    <!--
+    <h3>本模块只放「凭证机制」</h3>
+    收的是<b>令牌本身</b>的签发、解析、吊销：
+    <ul>
+      <li>{@code solvela.auth.member} —— 会员令牌（不透明令牌 + Redis）；</li>
+      <li>{@code solvela.auth.device} —— 设备令牌（自包含 HMAC，连 Redis 都不用）。</li>
+    </ul>
+
+    <h3>🔴 不收的三样，以及为什么</h3>
+    <ul>
+      <li><b>Filter / CurrentXxx / PrincipalLoader</b> —— 那是 HTTP 接入层，属于端。
+          界线见 {@code AuthProperties} 的类注释：「令牌放哪个头、带不带前缀」属于端，
+          「活多久、能有几个」属于域。收进来就要拖 spring-web 和缓存配置；</li>
+      <li><b>管理端那套</b>（{@code solvela.admin.auth}）—— 名字像，语义不是一回事：
+          它的 lookup 返回 sealed 三态（等保三级要区分「活跃超时」和「未知令牌」，错误码不同）、
+          TTL 可运行时调、还有超级密码。强行统一只会把每一处有理由的差异揉成可选字段。
+          更要紧的是它的依赖链上挂着 solvela-web（sa-token 在那儿），
+          一旦经本模块传递到网关，AppBoundaryTest 那两条断言当场红；</li>
+      <li><b>任何 Dao</b> —— 见下。</li>
+    </ul>
+
+    <h3>🔴 不许往这里加 Dao</h3>
+    本模块有两个使用者，依赖诉求相反：
+    <ul>
+      <li><b>网关</b>：每个请求都要解析令牌，登录时要签发。它的目标是
+          「classpath 上连 mysql 驱动都没有」；</li>
+      <li><b>会员服务</b>：后台冻结会员时要吊销该会员的全部会话。</li>
+    </ul>
+    2026-08-30 先把会话从网关下沉到了 solvela-member（为了让冻结能吊销令牌），
+    但那个模块带着 MyBatis Dao —— 网关依赖它就等于把 JDBC 拖回来了。
+    所以拆出本模块：<b>只用 Redis</b>。
+
+    <p>加了 Dao 就等于把 JDBC 还给网关，而 AppBoundaryTest 里那条
+    「mysql 驱动不在 classpath 上」的断言会当场失败 —— 那条断言存在的意义正是拦住这件事。
+
+    <p>⚠️ 2026-09-07 从 solvela-member-session 改名为 solvela-auth（为容纳设备令牌）。
+    <b>改名之后这段注释比从前更要紧</b>：{@code member-session} 这个名字本身就在拒绝 Dao，
+    而 {@code auth} 不会 —— 它是个会吸引一切的名字。执法者始终是 AppBoundaryTest，
+    但理由得留在这里给下一个想往里塞东西的人看。
+    -->
+    <dependencies>
+
+        <!-- 🔴 只要 Spring Data Redis 本身，不要 solvela-base-redis。
+             2026-09-01 核对：会员令牌那四个文件的 import 里，来自 base 的<b>一个都没有</b> ——
+             只用到 StringRedisTemplate，那是 Spring Boot 自动配置给的。
+             此前声明 base-redis 是纯白嫖，代价是把 Redisson + 9 个 netty 传递给每个
+             依赖会话存储的进程，其中包括刻意保持轻量的网关。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+</project>

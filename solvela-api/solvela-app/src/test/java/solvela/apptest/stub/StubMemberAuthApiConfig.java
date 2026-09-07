@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 可数调用次数的 {@link MemberAuthApi} 桩，供需要"验证回源发生了几次"的测试用。
  *
  * <h3>🔴 为什么这个类不能待在 {@code solvela.app} 包下</h3>
- * {@code AppApplication} 的 {@code @ComponentScan({"solvela.app", "solvela.member.session"})}
+ * {@code AppApplication} 的 {@code @ComponentScan({"solvela.app", "solvela.auth"})}
  * 是<b>显式列出的第二个 {@code @ComponentScan}</b>（与 {@code @SpringBootApplication}
  * 自带的那个并存）。Boot 的 {@code TestTypeExcludeFilter} 只保证「当前测试类自己的
  * {@code @TestConfiguration}」不会被它自身触发的扫描重复拾取——它<b>不会</b>排除
@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 本包下的 {@link ApiContractDownstreamStub}，两边才都清净。
  *
  * <p>所以这类"打算被别的测试复用"的桩，必须放在 {@code solvela.app} 与
- * {@code solvela.member.session} 两个前缀<b>都覆盖不到</b>的包里——本类所在的
+ * {@code solvela.auth} 两个前缀<b>都覆盖不到</b>的包里——本类所在的
  * {@code solvela.apptest.*} 满足这一点（Spring 的包扫描按目录段前缀匹配，
  * {@code solvela/apptest/...} 不是 {@code solvela/app/...} 的子目录）。
  */

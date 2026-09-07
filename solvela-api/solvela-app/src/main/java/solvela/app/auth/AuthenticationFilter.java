@@ -9,7 +9,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
-import solvela.member.session.MemberTokenStore;
+import solvela.auth.member.MemberTokenStore;
 
 import java.io.IOException;
 

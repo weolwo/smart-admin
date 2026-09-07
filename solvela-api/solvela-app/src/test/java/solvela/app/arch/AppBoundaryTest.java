@@ -31,7 +31,7 @@ class AppBoundaryTest {
                 """
                         网关的 classpath 上又出现了 mysql 驱动。
                         多半是有人给 solvela-app 加了一个带 Dao 的模块 —— 常见的是某个域实现模块，
-                        或者往 solvela-member-session 里加了 Dao。
+                        或者往 solvela-auth 里加了 Dao。
 
                         网关只做转发与组装，域数据一律经 HTTP 向 member(1027) / marketing(1026) 要。
                         它一旦能直连数据库，「绕过下游服务直接查一下」就会变成随手可做的事，

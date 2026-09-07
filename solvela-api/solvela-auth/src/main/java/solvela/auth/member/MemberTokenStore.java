@@ -1,4 +1,4 @@
-package solvela.member.session;
+package solvela.auth.member;
 
 /**
  * <b>会员</b>令牌的签发、解析与吊销。

@@ -1,4 +1,4 @@
-package solvela.member.session;
+package solvela.auth.member;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

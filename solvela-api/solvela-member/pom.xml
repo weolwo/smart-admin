@@ -54,7 +54,7 @@
              因为网关也要用它而网关不能有 JDBC -->
         <dependency>
             <groupId>solvela</groupId>
-            <artifactId>solvela-member-session</artifactId>
+            <artifactId>solvela-auth</artifactId>
             <version>3.0.0</version>
         </dependency>
 

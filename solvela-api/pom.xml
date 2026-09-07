@@ -23,7 +23,7 @@
              只依赖 contract 与 spring-web，排在 base 之前正是因为它们连基础设施都不需要 -->
         <module>solvela-member-api</module>
         <!-- 会话只用 Redis，单独一块：网关要它（每个请求解析令牌），但网关不能有 JDBC -->
-        <module>solvela-member-session</module>
+        <module>solvela-auth</module>
         <module>solvela-marketing-api</module>
         <!-- 技术底座，2026-08-30 拆成四块（+ mq / web 两块给端用）：
              谁都能依赖 core，而 data 意味着 classpath 上有 JDBC 驱动。
