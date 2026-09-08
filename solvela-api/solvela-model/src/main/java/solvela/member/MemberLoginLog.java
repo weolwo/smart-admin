@@ -58,6 +58,17 @@ public class MemberLoginLog {
     private String browserName;
 
     /**
+     * 设备号，关联 t_device.device_id。
+     *
+     * <p><b>为空是正常的</b>：设备身份 2026-09 才上线，之前的登录没有这个信息；
+     * 灰度期间老客户端也还没带设备令牌。查询侧不要把 NULL 当异常。
+     *
+     * <p>这一列的用途是<b>事后关联</b>：「一台设备碰过哪些账号」「这批号是不是
+     * 同一批设备注册的」—— 它是将来判断「要不要买厂商指纹」的唯一依据。
+     */
+    private String deviceId;
+
+    /**
      * 状态：0-失败, 1-成功, 2-登出。⚠️与t_login_log.login_result取值相反
      */
     private LoginLogResultEnum status;

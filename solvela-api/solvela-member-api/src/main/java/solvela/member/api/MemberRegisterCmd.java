@@ -22,11 +22,15 @@ package solvela.member.api;
  * @param deviceType     设备端 APP/H5/WECHAT/PC，为空按 H5 记
  * @param clientIp       客户端 IP，落 register_ip 并作为限频键
  * @param registerSource 注册来源渠道，落 {@code t_member.register_source}；为空按 UNKNOWN 记
+ * @param deviceId       验签通过的设备号，允许为 null（老客户端）。
+ *                       它是【比 IP 更硬的一个限频维度】：IP 走代理池就换，
+ *                       设备号得先过一次签发限频才拿得到
  */
 public record MemberRegisterCmd(
         String phone,
         String password,
         String deviceType,
         String clientIp,
-        String registerSource) {
+        String registerSource,
+        String deviceId) {
 }

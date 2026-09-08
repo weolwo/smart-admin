@@ -38,7 +38,18 @@ public enum RegisterFailReason {
     /**
      * 同一 IP 短时间内注册请求过多。剩余秒数见 {@link MemberRegisterResult#retryAfterSeconds()}。
      *
-     * <p>⚠️ 这是<b>目前唯一</b>拦批量注册的东西 —— 本项目还没有短信验证码。
+     * <p>⚠️ 2026-09-09 之前这是<b>唯一</b>拦批量注册的东西 —— 本项目还没有短信验证码。
+     * 现在多了 {@link #DEVICE_LIMITED} 这一维，但两者都只能压速率，
+     * <b>拦不住定向占号</b>（拿别人手机号抢注只需要成功一次），那仍然只有验证码能解。
      */
-    TOO_MANY_ATTEMPTS
+    TOO_MANY_ATTEMPTS,
+
+    /**
+     * 同一台<b>设备</b>短时间内注册过多。剩余秒数同样见 {@code retryAfterSeconds()}。
+     *
+     * <p>与 {@link #TOO_MANY_ATTEMPTS} 是<b>两个维度</b>，不是同一件事的两种说法：
+     * IP 走代理池就换，而设备号得先过一次签发限频才拿得到 —— 后者贵得多。
+     * 一个批量注册脚本可以轻易绕开前者，绕后者就得先攒够设备身份。
+     */
+    DEVICE_LIMITED
 }

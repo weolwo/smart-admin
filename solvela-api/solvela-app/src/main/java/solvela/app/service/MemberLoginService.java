@@ -3,6 +3,7 @@ package solvela.app.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import solvela.app.auth.CurrentDevice;
 import solvela.app.auth.MemberPrincipal;
 import solvela.app.auth.MemberPrincipalLoader;
 import solvela.auth.member.MemberAccessToken;
@@ -56,6 +57,12 @@ public class MemberLoginService {
 
     private static final String REGISTER_LIMITED_MSG = "注册过于频繁，请 %d 分钟后重试";
 
+    /**
+     * 设备维度被限的措辞。<b>刻意不说「你的账号」</b> —— 被限的是这台设备，
+     * 换个账号登录仍然会被限，说成账号问题只会让用户去做无效的事（找回密码）。
+     */
+    private static final String DEVICE_LIMITED_MSG = "当前设备操作过于频繁，请 %d 分钟后重试";
+
     /** 不传 deviceType 时的兜底，与 MemberAuthCmd 的约定一致 */
     private static final String DEFAULT_DEVICE_TYPE = "H5";
 
@@ -79,7 +86,9 @@ public class MemberLoginService {
                 : request.deviceType();
 
         MemberRegisterResult result = memberAuthApi.register(new MemberRegisterCmd(
-                request.phone(), request.password(), deviceType, ip, deviceType));
+                request.phone(), request.password(), deviceType, ip, deviceType,
+                // 灰度期间可能为 null（老客户端还没带设备令牌），域里会直接放行
+                CurrentDevice.deviceIdOrNull()));
         if (!result.success()) {
             throw translateRegister(result);
         }
@@ -91,7 +100,8 @@ public class MemberLoginService {
 
     public MemberResult login(MemberLoginRequest request, String ip) {
         MemberAuthResult result = memberAuthApi.authenticate(new MemberAuthCmd(
-                request.phone(), request.password(), request.deviceType(), ip));
+                request.phone(), request.password(), request.deviceType(), ip,
+                CurrentDevice.deviceIdOrNull()));
         if (!result.success()) {
             throw translate(result);
         }
@@ -110,7 +120,7 @@ public class MemberLoginService {
      */
     public void logout(String tokenValue, Long memberId, String ip) {
         tokenStore.revoke(tokenValue);
-        memberAuthApi.recordLogout(new MemberLogoutCmd(memberId, ip));
+        memberAuthApi.recordLogout(new MemberLogoutCmd(memberId, ip, CurrentDevice.deviceIdOrNull()));
     }
 
     /**
@@ -126,6 +136,10 @@ public class MemberLoginService {
             case ACCOUNT_FROZEN -> new ApiException(ApiErrors.ACCOUNT_DISABLED, "账号已被冻结，请联系客服");
             case NO_PASSWORD -> new ApiException(ApiErrors.BAD_CREDENTIALS, "该账号未设置密码，请使用短信验证码登录");
             case OPERATION_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED, lockedMessage(result.lockedSeconds()));
+            // 同为 429，但措辞完全不同：账号被限说「连续登录失败」，设备被限说「当前设备」——
+            // 合并文案会让被设备维度限住的用户一直去找回密码，而那解决不了他的问题
+            case DEVICE_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED,
+                    String.format(DEVICE_LIMITED_MSG, minutes(result.lockedSeconds())));
         };
     }
 
@@ -148,11 +162,23 @@ public class MemberLoginService {
             case WEAK_PASSWORD -> new ApiException(ApiErrors.INVALID_ARGUMENT, MemberPasswordPolicy.HINT);
             case TOO_MANY_ATTEMPTS ->
                     new ApiException(ApiErrors.OPERATION_LIMITED, registerLimitedMessage(result.retryAfterSeconds()));
+            case DEVICE_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED,
+                    String.format(DEVICE_LIMITED_MSG, minutes(result.retryAfterSeconds())));
         };
     }
 
     private static String registerLimitedMessage(long retryAfterSeconds) {
-        return String.format(REGISTER_LIMITED_MSG, Math.max(1, (long) Math.ceil(retryAfterSeconds / 60.0)));
+        return String.format(REGISTER_LIMITED_MSG, minutes(retryAfterSeconds));
+    }
+
+    /**
+     * 秒 → 分钟，向上取整且至少 1。
+     *
+     * <p>抽出来是因为现在有四处在用同一个换算 —— 散着写迟早有一处忘了取整，
+     * 表现是「请 0 分钟后重试」，比不说还糟。
+     */
+    private static long minutes(long seconds) {
+        return Math.max(1, (long) Math.ceil(seconds / 60.0));
     }
 
     /**
@@ -161,6 +187,6 @@ public class MemberLoginService {
      * <p>向上取整到分钟：剩 10 秒时说「请 0 分钟后重试」比不说还糟。
      */
     private static String lockedMessage(long lockedSeconds) {
-        return String.format(LOCKED_MSG, Math.max(1, (long) Math.ceil(lockedSeconds / 60.0)));
+        return String.format(LOCKED_MSG, minutes(lockedSeconds));
     }
 }

@@ -22,6 +22,9 @@ import solvela.member.MemberOperationLimit;
 import solvela.member.api.AuthFailReason;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
+import solvela.member.device.DeviceGuard;
+import solvela.member.device.DeviceGuardRule;
+import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.loginlog.dao.MemberLoginLogDao;
 import solvela.member.operationlimit.service.MemberOperationLimitService;
 import solvela.member.register.MemberRegisterService;
@@ -73,6 +76,7 @@ class MemberAuthServiceTest {
     private static final String PHONE = "13800000000";
     private static final String PHONE_HASH = "ABCDEF";
     private static final String RAW_PASSWORD = "Passw0rd!";
+    private static final String DEVICE_ID = "0123456789abcdef0123456789abcdef";
 
     @Mock
     private MemberAuthDao memberAuthDao;
@@ -84,6 +88,8 @@ class MemberAuthServiceTest {
     private MemberOperationLimitService operationLimitService;
     @Mock
     private PiiHasher piiHasher;
+    @Mock
+    private DeviceGuard deviceGuard;
 
     @InjectMocks
     private MemberAuthService service;
@@ -102,6 +108,9 @@ class MemberAuthServiceTest {
         when(piiHasher.hash(PHONE)).thenReturn(PHONE_HASH);
         when(memberAuthDao.selectForLogin(PHONE_HASH)).thenReturn(member);
         when(operationLimitService.getActiveLimit(anyLong(), any())).thenReturn(null);
+        // 默认设备闸放行：绝大多数用例关心的是它【之后】的分支顺序
+        when(deviceGuard.checkLogin(any())).thenReturn(DeviceGuardVerdict.pass());
+        when(deviceGuard.checkMemberFanout(any(), any())).thenReturn(DeviceGuardVerdict.pass());
     }
 
     // ------------------------------------------------------------------ 正常路径
@@ -268,7 +277,7 @@ class MemberAuthServiceTest {
     @Test
     @DisplayName("设备类型缺省成 H5，客户端 IP 原样落库")
     void 日志字段缺省() {
-        service.authenticate(new MemberAuthCmd(PHONE, RAW_PASSWORD, null, "10.0.0.7"));
+        service.authenticate(new MemberAuthCmd(PHONE, RAW_PASSWORD, null, "10.0.0.7", DEVICE_ID));
 
         MemberLoginLog log = savedLog();
         assertEquals("H5", log.getDeviceType());
@@ -302,7 +311,7 @@ class MemberAuthServiceTest {
     }
 
     private MemberAuthCmd cmd(String phone, String password) {
-        return new MemberAuthCmd(phone, password, "H5", "127.0.0.1");
+        return new MemberAuthCmd(phone, password, "H5", "127.0.0.1", DEVICE_ID);
     }
 
     private MemberOperationLimit limitExpiringIn(long seconds) {
@@ -316,5 +325,53 @@ class MemberAuthServiceTest {
         ArgumentCaptor<MemberLoginLog> captor = ArgumentCaptor.forClass(MemberLoginLog.class);
         verify(memberLoginLogDao).insert(captor.capture());
         return captor.getValue();
+    }
+
+    // ------------------------------------------------------------------ 设备闸
+
+    @Test
+    @DisplayName("🔴 设备闸拦下时，压根不去查会员 —— 否则登录接口就成了手机号枚举器")
+    void 设备被限时不查会员() {
+        when(deviceGuard.checkLogin(DEVICE_ID))
+                .thenReturn(DeviceGuardVerdict.hit(DeviceGuardRule.LOGIN_TOO_MANY, 600L, false));
+
+        MemberAuthResult result = service.authenticate(cmd(PHONE, RAW_PASSWORD));
+
+        assertFalse(result.success());
+        assertEquals(AuthFailReason.DEVICE_LIMITED, result.reason());
+        assertEquals(600L, result.lockedSeconds());
+        verify(memberAuthDao, never()).selectForLogin(any());
+        verify(memberLoginLogDao, never()).insert(any(MemberLoginLog.class));
+    }
+
+    @Test
+    @DisplayName("设备闸命中但 dry-run 放行 → 登录照常成功")
+    void dryRun命中不影响登录() {
+        when(deviceGuard.checkLogin(DEVICE_ID))
+                .thenReturn(DeviceGuardVerdict.hit(DeviceGuardRule.LOGIN_TOO_MANY, 600L, true));
+
+        assertTrue(service.authenticate(cmd(PHONE, RAW_PASSWORD)).success(),
+                "dry-run 期间命中了也必须放行 —— 否则这一档没有存在的意义");
+    }
+
+    @Test
+    @DisplayName("密码错时，账号锁与设备失败计数【两边都要记】")
+    void 密码错两边都记() {
+        service.authenticate(cmd(PHONE, "WrongPassword9"));
+
+        verify(operationLimitService).recordFail(eq(MEMBER_ID), any(), any());
+        verify(deviceGuard).recordLoginFailure(DEVICE_ID);
+    }
+
+    @Test
+    @DisplayName("一机多号被拦 → 密码验过了也不放行，并记一条失败日志")
+    void 一机多号拦在成功之后() {
+        when(deviceGuard.checkMemberFanout(DEVICE_ID, MEMBER_ID))
+                .thenReturn(DeviceGuardVerdict.hit(DeviceGuardRule.MEMBER_FANOUT, 3600L, false));
+
+        MemberAuthResult result = service.authenticate(cmd(PHONE, RAW_PASSWORD));
+
+        assertFalse(result.success());
+        assertEquals(AuthFailReason.DEVICE_LIMITED, result.reason());
     }
 }

@@ -18,6 +18,8 @@ import solvela.member.api.MemberRegisterCmd;
 import solvela.member.api.MemberRegisterResult;
 import solvela.member.api.RegisterFailReason;
 import solvela.member.id.MemberIdAllocator;
+import solvela.member.device.DeviceGuard;
+import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.util.MemberPhoneUtil;
 
 /**
@@ -65,6 +67,7 @@ public class MemberRegisterService {
     private final RedisService redisService;
     private final PiiHasher piiHasher;
     private final PiiCipher piiCipher;
+    private final DeviceGuard deviceGuard;
 
     /**
      * 注册。
@@ -89,6 +92,15 @@ public class MemberRegisterService {
         // ---------- 密码强度 ----------
         if (!MemberPasswordPolicy.isValid(cmd.password())) {
             return MemberRegisterResult.fail(RegisterFailReason.WEAK_PASSWORD);
+        }
+
+        // ---------- 设备限频 ----------
+        // 与下面的 IP 限频是【两个维度】，都要过：IP 走代理池就换，
+        // 而设备号得先过一次签发限频才拿得到 —— 后者贵得多。
+        // 排在 IP 之前：设备维度更硬，先用硬的那把筛
+        DeviceGuardVerdict deviceVerdict = deviceGuard.checkRegister(cmd.deviceId());
+        if (!deviceVerdict.allowed()) {
+            return MemberRegisterResult.deviceLimited(deviceVerdict.retryAfterSeconds());
         }
 
         // ---------- IP 限频 ----------

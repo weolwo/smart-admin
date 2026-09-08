@@ -12,10 +12,19 @@ package solvela.member.api;
  * 它走 MDC（{@code solvela.base.trace.Trace}）—— 今天是同进程的 ThreadLocal，
  * 拆分后由服务端 Filter 把 {@code traceId} 请求头放进 MDC，域里那行读取代码两种场景都对。
  *
+ * <h3>deviceId 与 deviceType 是两回事</h3>
+ * deviceType 是客户端<b>自报</b>的端（可以撒谎，但只能在几个已知取值里撒）；
+ * deviceId 是服务端<b>签发并验签</b>过的设备号 —— 网关那一层已经确认它是我们发的，
+ * 所以域里可以拿它做限流判断。反过来 deviceType 只配用于展示与分类。
+ *
+ * <p>允许为 null：灰度期间老客户端还没带设备令牌（见 {@code DeviceAuthProperties.Mode}）。
+ * 🔴 <b>为 null 时不要当成「可疑」处理</b> —— 那会在 enforce 之前就把老版本用户全挡在外面。
+ *
  * @param phone      用户输入的手机号，任意格式，域内会规范化
  * @param password   用户输入的明文密码
  * @param deviceType 设备端 APP/H5/WECHAT/PC，为空按 H5 记
  * @param clientIp   客户端 IP，允许为 null
+ * @param deviceId   验签通过的设备号，允许为 null（老客户端）
  */
-public record MemberAuthCmd(String phone, String password, String deviceType, String clientIp) {
+public record MemberAuthCmd(String phone, String password, String deviceType, String clientIp, String deviceId) {
 }

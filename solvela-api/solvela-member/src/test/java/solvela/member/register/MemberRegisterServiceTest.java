@@ -13,12 +13,16 @@ import org.springframework.dao.DuplicateKeyException;
 import solvela.base.module.redis.RedisService;
 import solvela.crypto.PiiCipher;
 import solvela.crypto.PiiHasher;
+import solvela.member.device.DeviceGuard;
+import solvela.member.device.DeviceGuardRule;
+import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.api.MemberRegisterCmd;
 import solvela.member.api.MemberRegisterResult;
 import solvela.member.api.RegisterFailReason;
 import solvela.member.id.MemberIdAllocator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -60,6 +64,7 @@ class MemberRegisterServiceTest {
     private static final String STRONG_PASSWORD = "Passw0rd!";
     private static final String CLIENT_IP = "10.0.0.7";
     private static final long MEMBER_ID = 900001L;
+    private static final String DEVICE_ID = "0123456789abcdef0123456789abcdef";
 
     @Mock
     private MemberRegisterDao memberRegisterDao;
@@ -71,6 +76,8 @@ class MemberRegisterServiceTest {
     private PiiHasher piiHasher;
     @Mock
     private PiiCipher piiCipher;
+    @Mock
+    private DeviceGuard deviceGuard;
 
     private MemberRegisterProperties properties;
     private MemberRegisterService service;
@@ -79,7 +86,7 @@ class MemberRegisterServiceTest {
     void setUp() {
         properties = new MemberRegisterProperties();
         service = new MemberRegisterService(memberRegisterDao, memberIdAllocator, properties,
-                redisService, piiHasher, piiCipher);
+                redisService, piiHasher, piiCipher, deviceGuard);
 
         when(piiHasher.hash(PHONE)).thenReturn(PHONE_HASH);
         when(piiCipher.encrypt(PHONE)).thenReturn("加密后的号");
@@ -88,6 +95,8 @@ class MemberRegisterServiceTest {
         when(memberRegisterDao.insertMember(anyLong(), anyString(), anyString(), anyInt(),
                 anyString(), anyString(), anyString(), anyInt(), anyString(), anyString())).thenReturn(1);
         when(redisService.generateRedisKey(anyString(), anyString())).thenReturn("k");
+        // 默认设备闸放行：本类关心的是格式 → 强度 → 限频 → 查重这条顺序
+        when(deviceGuard.checkRegister(any())).thenReturn(DeviceGuardVerdict.pass());
         // 默认放行：第 1 次尝试，上限 10
         when(redisService.increment(anyString(), anyLong())).thenReturn(1L);
     }
@@ -118,7 +127,7 @@ class MemberRegisterServiceTest {
     @Test
     @DisplayName("注册来源缺省不为空：留空的话来源统计从第一天起就是错的")
     void 来源缺省() {
-        service.register(new MemberRegisterCmd(PHONE, STRONG_PASSWORD, "H5", CLIENT_IP, null));
+        service.register(new MemberRegisterCmd(PHONE, STRONG_PASSWORD, "H5", CLIENT_IP, null, DEVICE_ID));
 
         verify(memberRegisterDao).insertMember(anyLong(), anyString(), anyString(), anyInt(),
                 anyString(), anyString(), anyString(), anyInt(),
@@ -209,7 +218,7 @@ class MemberRegisterServiceTest {
     @DisplayName("🔴 拿不到客户端 IP 时放行，不是一律拒绝")
     void 没有IP时放行() {
         MemberRegisterResult result =
-                service.register(new MemberRegisterCmd(PHONE, STRONG_PASSWORD, "H5", null, "APP"));
+                service.register(new MemberRegisterCmd(PHONE, STRONG_PASSWORD, "H5", null, "APP", DEVICE_ID));
 
         // 一律拒绝会让任何一次取 IP 失败变成「全站注册不可用」，那种故障比放过几个注册严重得多
         assertTrue(result.success());
@@ -242,6 +251,35 @@ class MemberRegisterServiceTest {
     }
 
     private MemberRegisterCmd cmd(String phone, String password) {
-        return new MemberRegisterCmd(phone, password, "H5", CLIENT_IP, "APP");
+        return new MemberRegisterCmd(phone, password, "H5", CLIENT_IP, "APP", DEVICE_ID);
+    }
+
+    // ------------------------------------------------------------------ 设备闸
+
+    @Test
+    @DisplayName("🔴 设备闸拦下时，不消耗 IP 配额、不查重、不建号")
+    void 设备被限时什么都不做() {
+        when(deviceGuard.checkRegister(DEVICE_ID))
+                .thenReturn(DeviceGuardVerdict.hit(DeviceGuardRule.REGISTER_TOO_MANY, 7200L, false));
+
+        MemberRegisterResult result = service.register(cmd(PHONE, STRONG_PASSWORD));
+
+        assertFalse(result.success());
+        assertEquals(RegisterFailReason.DEVICE_LIMITED, result.reason());
+        assertEquals(7200L, result.retryAfterSeconds());
+        verify(redisService, never()).increment(anyString(), anyLong());
+        verify(memberRegisterDao, never()).countByPhoneHash(any());
+    }
+
+    @Test
+    @DisplayName("设备闸排在 IP 限频【之前】—— 更硬的那把先筛")
+    void 设备闸在IP限频之前() {
+        when(deviceGuard.checkRegister(DEVICE_ID))
+                .thenReturn(DeviceGuardVerdict.hit(DeviceGuardRule.REGISTER_TOO_MANY, 7200L, false));
+
+        service.register(cmd(PHONE, STRONG_PASSWORD));
+
+        // IP 计数一次都没走：反过来的话，一台设备能把它所在 IP 的配额顺手烧光
+        verify(redisService, never()).increment(anyString(), anyLong());
     }
 }

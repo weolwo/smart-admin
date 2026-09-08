@@ -25,6 +25,8 @@ import solvela.member.api.MemberRegisterResult;
 import solvela.member.register.MemberRegisterService;
 import solvela.member.loginlog.dao.MemberLoginLogDao;
 import solvela.member.operationlimit.service.MemberOperationLimitService;
+import solvela.member.device.DeviceGuard;
+import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.util.MemberPhoneUtil;
 
 import java.time.Duration;
@@ -71,6 +73,7 @@ public class MemberAuthService implements MemberAuthApi {
     private final MemberLoginLogDao memberLoginLogDao;
     private final MemberOperationLimitService operationLimitService;
     private final PiiHasher piiHasher;
+    private final DeviceGuard deviceGuard;
 
     /**
      * 手机号 + 密码注册。逻辑全在 {@link MemberRegisterService}，本方法只是契约的落点。
@@ -95,6 +98,15 @@ public class MemberAuthService implements MemberAuthApi {
         String phone = MemberPhoneUtil.normalize(cmd.phone());
         if (phone == null) {
             return MemberAuthResult.fail(AuthFailReason.BAD_PHONE_FORMAT);
+        }
+
+        // ---------- 设备闸 ----------
+        // 🔴 排在【查会员之前】：被限的设备不该还能拿登录接口去试探「这个号注册过没有」——
+        //    那正是 BAD_CREDENTIALS 合并三种失败原因要堵的口子。
+        //    deviceId 为 null（老客户端）时 checkLogin 直接放行，见 DeviceGuard 类注释。
+        DeviceGuardVerdict deviceVerdict = deviceGuard.checkLogin(cmd.deviceId());
+        if (!deviceVerdict.allowed()) {
+            return MemberAuthResult.deviceLimited(deviceVerdict.retryAfterSeconds());
         }
 
         // ---------- 按摘要找人 ----------
@@ -125,6 +137,15 @@ public class MemberAuthService implements MemberAuthApi {
         }
 
         operationLimitService.clearFail(member.getMemberId(), MemberOperationTypeEnum.LOGIN);
+
+        // 一机多号只能在这里判 —— 在此之前拿不到 memberId。
+        // 关联关系无论放不放行都要记下：dry-run 期间要的正是这份数据
+        DeviceGuardVerdict fanout = deviceGuard.checkMemberFanout(cmd.deviceId(), member.getMemberId());
+        if (!fanout.allowed()) {
+            saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "同一设备关联账号过多");
+            return MemberAuthResult.deviceLimited(fanout.retryAfterSeconds());
+        }
+
         saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_SUCCESS, null);
         return MemberAuthResult.ok(toIdentity(member));
     }
@@ -140,6 +161,9 @@ public class MemberAuthService implements MemberAuthApi {
             return MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
         }
         if (member.getStatus() == MemberStatusEnum.FROZEN) {
+            // 冻结账号被反复尝试，同样是设备侧的异常信号：一台机器挨个试一批
+            // 已被封的号，账号锁那一侧完全看不见（每个号各锁各的）
+            deviceGuard.recordLoginFailure(cmd.deviceId());
             saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "账号已冻结");
             return MemberAuthResult.fail(AuthFailReason.ACCOUNT_FROZEN);
         }
@@ -180,6 +204,9 @@ public class MemberAuthService implements MemberAuthApi {
         }
         MemberOperationLimit triggered = operationLimitService.recordFail(
                 member.getMemberId(), MemberOperationTypeEnum.LOGIN, "连续登录失败");
+        // 设备维度也记一次。两者互不替代：账号锁挡的是「这个号被爆破」，
+        // 设备计数挡的是「这台机器在挨个试不同的号」—— 后者账号锁完全看不见
+        deviceGuard.recordLoginFailure(cmd.deviceId());
         saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "手机号或密码错误");
         // triggered 非空表示这一次失败刚好把人限制住了，直接返回「还要等多久」，
         // 而不是让他再点一次才发现被限 —— 后者是投诉的主要来源
@@ -215,7 +242,7 @@ public class MemberAuthService implements MemberAuthApi {
      */
     @Override
     public void recordLogout(MemberLogoutCmd cmd) {
-        saveLoginLog(cmd.memberId(), cmd.clientIp(), null, LoginLogResultEnum.LOGIN_OUT, null);
+        saveLoginLog(cmd.memberId(), cmd.clientIp(), null, cmd.deviceId(), LoginLogResultEnum.LOGIN_OUT, null);
     }
 
     private static MemberIdentity toIdentity(Member member) {
@@ -233,7 +260,7 @@ public class MemberAuthService implements MemberAuthApi {
     }
 
     private void saveLoginLog(Long memberId, MemberAuthCmd cmd, LoginLogResultEnum status, String remark) {
-        saveLoginLog(memberId, cmd.clientIp(), cmd.deviceType(), status, remark);
+        saveLoginLog(memberId, cmd.clientIp(), cmd.deviceType(), cmd.deviceId(), status, remark);
     }
 
     /**
@@ -250,7 +277,7 @@ public class MemberAuthService implements MemberAuthApi {
      * <p>⚠️ 日志失败绝不能影响认证本身 —— 「登不上去是因为日志表满了」这种事排查极其费劲，
      * 而登录日志的价值再高也高不过登录本身。
      */
-    private void saveLoginLog(Long memberId, String clientIp, String deviceType,
+    private void saveLoginLog(Long memberId, String clientIp, String deviceType, String deviceId,
                               LoginLogResultEnum status, String remark) {
         try {
             MemberLoginLog loginLog = new MemberLoginLog();
@@ -258,6 +285,9 @@ public class MemberAuthService implements MemberAuthApi {
             loginLog.setClientIp(clientIp);
             loginLog.setIpRegion(SolvelaIpUtil.getRegion(clientIp));
             loginLog.setDeviceType(SolvelaStringUtil.isEmpty(deviceType) ? DEFAULT_DEVICE_TYPE : deviceType);
+            // 🔴 允许为 null，而且【为空是正常的】：灰度期间老客户端还没带设备令牌。
+            // 查询侧要认这一点，别把 NULL 当异常 —— 它的语义是「设备身份上线前的登录」
+            loginLog.setDeviceId(deviceId);
             // os_name / browser_name 暂不填：后端没有 UA 解析库，
             // 与其用几个 indexOf 猜出一堆不可信的值，不如留空 —— 空值至少不会被拿去做统计。
             loginLog.setStatus(status);

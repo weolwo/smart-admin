@@ -8,7 +8,8 @@ package solvela.member.api;
  *
  * @param identity      成功时的会员身份；失败时为 null
  * @param reason        失败原因；成功时为 null
- * @param lockedSeconds 被限制的剩余秒数，仅 {@link AuthFailReason#OPERATION_LIMITED} 时有意义。
+ * @param lockedSeconds 被限制的剩余秒数，{@link AuthFailReason#OPERATION_LIMITED} 与
+ *                      {@link AuthFailReason#DEVICE_LIMITED} 时有意义。
  *                      <b>给的是秒数这个事实，不是「请 3 分钟后重试」这句话</b> ——
  *                      向上取整到分钟、要不要加一句「联系客服」，都是展示层的决定
  */
@@ -28,5 +29,13 @@ public record MemberAuthResult(MemberIdentity identity, AuthFailReason reason, l
 
     public static MemberAuthResult limited(long lockedSeconds) {
         return new MemberAuthResult(null, AuthFailReason.OPERATION_LIMITED, lockedSeconds);
+    }
+
+    /**
+     * 设备维度被限。与 {@link #limited} 分开，理由见 {@link AuthFailReason#DEVICE_LIMITED} ——
+     * 两者的解法不同，用户要据此决定下一步做什么。
+     */
+    public static MemberAuthResult deviceLimited(long lockedSeconds) {
+        return new MemberAuthResult(null, AuthFailReason.DEVICE_LIMITED, lockedSeconds);
     }
 }
