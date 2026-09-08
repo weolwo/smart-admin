@@ -94,10 +94,14 @@ class DeviceTokenCodecTest {
         String token = codec.issue(DEVICE_ID, "APP");
         String[] parts = token.substring(3).split("\\.");
 
-        // 翻转签名最后一个字符
-        String sig = parts[2];
-        char last = sig.charAt(sig.length() - 1);
-        String tampered = sig.substring(0, sig.length() - 1) + (last == 'A' ? 'B' : 'A');
+        // 🔴 必须按【字节】改，不能按字符改。
+        // 16 字节的 base64url 是 22 个字符：前 21 个编掉 126 位，最后一个字符只有高 2 位有效，
+        // 低 4 位是填充位，解码器直接忽略。所以「把最后一个字符换成另一个」有约 1/4 的概率
+        // 解出完全相同的字节 —— 签名压根没被改动，用例就会假失败。
+        // 本用例最初就是这么写的，跑了两次都是绿的，第三次才炸。
+        byte[] sig = Base64.getUrlDecoder().decode(parts[2]);
+        sig[0] ^= 0x01;
+        String tampered = Base64.getUrlEncoder().withoutPadding().encodeToString(sig);
 
         assertNull(codec.verify("dv_" + parts[0] + "." + parts[1] + "." + tampered));
     }

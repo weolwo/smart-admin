@@ -130,6 +130,16 @@ public class DeviceTokenCodec {
     }
 
     /**
+     * 当前签发用的密钥版本。
+     *
+     * <p>签发方要把它落进 {@code t_device.key_version} —— 轮换期间「这批设备是哪把钥匙签的」
+     * 是个会被问到的问题，而令牌本身在服务端不留存，事后没地方查。
+     */
+    public int currentKeyVersion() {
+        return currentKeyVersion;
+    }
+
+    /**
      * 生成一个新的设备号。
      *
      * <p>放在本类而不是调用方，是因为「什么形状的 deviceId 是合法的」由验签这一侧说了算：
