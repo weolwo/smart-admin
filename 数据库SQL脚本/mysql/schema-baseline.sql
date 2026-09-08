@@ -27,7 +27,7 @@ SET NAMES utf8mb4;
 --
 -- 生成时间：2026-08-23（DumpSchema 导出）
 -- 最后核对：2026-08-31（手工，见下）
--- 表数量：64 张
+-- 表数量：65 张
 --
 -- ⚠️ 2026-08-31 核对结果：本文件自 2026-08-23 导出之后【被手工改过】，
 --    但头部与分组的计数没跟着改 —— 曾写着 84 张，实际只有 64 张。
@@ -485,7 +485,7 @@ CREATE TABLE `t_file_relation` (
 
 
 -- =====================================================================================
--- 会员域（5 张）
+-- 会员域（6 张）
 -- =====================================================================================
 
 DROP TABLE IF EXISTS `t_member`;
@@ -578,6 +578,7 @@ CREATE TABLE `t_member_login_log` (
   `device_type` varchar(16) DEFAULT NULL COMMENT '设备端：APP/H5/WECHAT/PC',
   `os_name` varchar(32) DEFAULT NULL COMMENT '操作系统：iOS/Android/Windows',
   `browser_name` varchar(32) DEFAULT NULL COMMENT '浏览器：Chrome/Safari',
+  `device_id` char(32) DEFAULT NULL COMMENT '设备号，关联 t_device.device_id。为空表示该次登录发生在设备身份上线之前',
   `status` tinyint NOT NULL COMMENT '登录结果：0-成功, 1-失败, 2-登出。与 t_login_log.login_result 同口径，共用 LoginLogResultEnum',
   `remark` varchar(128) DEFAULT NULL COMMENT '提示信息：成功可为空，失败写具体原因',
   `trace_id` varchar(64) DEFAULT NULL COMMENT '全链路追踪ID，对应 LogTraceFilter 的 MDC traceId',
@@ -585,7 +586,8 @@ CREATE TABLE `t_member_login_log` (
   PRIMARY KEY (`id`,`create_time`),
   KEY `idx_mbr_log_member` (`member_id`),
   KEY `idx_mbr_log_time` (`create_time`),
-  KEY `idx_mbr_log_ip` (`client_ip`,`create_time`)
+  KEY `idx_mbr_log_ip` (`client_ip`,`create_time`),
+  KEY `idx_mbr_log_device` (`device_id`,`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='会员登录日志（append-only，按月分区）'
 /*!50500 PARTITION BY RANGE  COLUMNS(create_time)
 (PARTITION p202608 VALUES LESS THAN ('2026-09-01') ENGINE = InnoDB,
@@ -595,6 +597,30 @@ CREATE TABLE `t_member_login_log` (
  PARTITION p202612 VALUES LESS THAN ('2027-01-01') ENGINE = InnoDB,
  PARTITION p202701 VALUES LESS THAN ('2027-02-01') ENGINE = InnoDB,
  PARTITION pmax VALUES LESS THAN (MAXVALUE) ENGINE = InnoDB) */;
+
+DROP TABLE IF EXISTS `t_device`;
+CREATE TABLE `t_device` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `device_id` char(32) NOT NULL COMMENT '服务端签发的设备号，不接受客户端自报',
+  `device_type` varchar(16) NOT NULL COMMENT '设备端：APP/H5/WECHAT/PC。与 t_member_login_log.device_type 同名同口径',
+  `model` varchar(64) DEFAULT NULL COMMENT '品牌型号，客户端自报，仅供人工排查',
+  `os_version` varchar(32) DEFAULT NULL COMMENT '系统版本：区分 iOS/Android 靠它，device_type 只到端',
+  `app_version` varchar(32) DEFAULT NULL COMMENT '应用版本',
+  `register_ip` varchar(39) DEFAULT NULL COMMENT '签发时IP（兼容IPv6，39位足够）',
+  `register_region` varchar(64) DEFAULT NULL COMMENT 'IP归属地（ip2region 解析，SolvelaIpUtil 已有）',
+  `key_version` tinyint NOT NULL DEFAULT '1' COMMENT '签发时用的HMAC密钥版本：密钥泄露要能轮换，而验签得知道该用哪一把',
+  `attest_level` tinyint NOT NULL DEFAULT '0' COMMENT '可信度：0-仅自报, 1-验证码通过, 2-厂商证明通过（暂无厂商，先留档位）',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '处置档：0-正常, 1-观察（登录需验证码）, 2-封禁',
+  `remark` varchar(128) DEFAULT NULL COMMENT '处置原因：给客服看的人话',
+  `operator` varchar(64) DEFAULT NULL COMMENT '人工处置的操作人：status=2 时必填，用于追溯。自动降档时为空',
+  `last_active_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最后活跃时间，节流写（>1h 才更新）',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间（即签发时间）',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_dev_did` (`device_id`),
+  KEY `idx_dev_status` (`status`,`last_active_time`),
+  KEY `idx_dev_ip` (`register_ip`,`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='设备注册表（服务端签发，不带 member_id）';
 
 
 -- =====================================================================================
@@ -689,6 +715,7 @@ CREATE TABLE `t_proposal_record` (
   `member_id` bigint NOT NULL COMMENT '会员号：关联键',
   `trade_no` varchar(32) NOT NULL COMMENT '提案单号，服务端生成，对外唯一标识',
   `member_name` varchar(32) DEFAULT NULL COMMENT '会员账号【展示快照，非关联键，不要用于查询】',
+  `device_id` char(32) DEFAULT NULL COMMENT '发起发奖的设备号，供事后关联分析。不参与风控拦截判断',
   `asset_type` varchar(16) NOT NULL COMMENT 'SCORE/BALANCE/COUPON/PHYSICAL',
   `asset_ref` varchar(64) DEFAULT NULL COMMENT '资产引用：券模/SKU，值类资产为空',
   `asset_name` varchar(128) DEFAULT NULL COMMENT '资产展示名（券名/商品名）：由营销侧传入，避免账务域反查营销域',

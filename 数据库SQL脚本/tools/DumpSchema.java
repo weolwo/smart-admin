@@ -42,7 +42,11 @@ public class DumpSchema {
         GROUPS.put("会员域", List.of(
             "t_member","t_member_verify","t_member_id_seq","t_member_login_log",
             // 2026-08-31 补：此前不在任何组里，导出时会掉进「未分类」
-            "t_member_operation_limit"));
+            "t_member_operation_limit",
+            // 2026-09-07 新增。它【没有 member_id】——一台设备登多个号是要发现的信号，
+            // 不是要建的约束。归在会员域是因为它的 Dao 和读者都在这儿，
+            // 而且查询时几乎总是和 t_member_login_log.device_id 一起出现。
+            "t_device"));
         GROUPS.put("账务 / 履约", List.of(
             "t_member_wallet","t_member_asset_transaction","t_member_coupon",
             "t_physical_delivery","t_proposal_record","t_promotion_config"));
