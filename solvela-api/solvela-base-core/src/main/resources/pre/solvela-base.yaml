@@ -232,6 +232,36 @@ solvela:
       # ⚠️ 不配的话应用启动即失败（PiiHasher 构造器直接抛），理由同 secret-key。
       hmac-key: "Mf6yTnX2qBvK8dJwZ4hLcP1sRaE9gUoI5tWmN3bY"
 
+  # -------------------------------------------------------------------
+  # 🔴 设备令牌的签名密钥（DeviceTokenCodec）
+  # -------------------------------------------------------------------
+  # 本块服务【管理端】与【app-biz】两个进程 —— 它们都扫到 solvela.auth，
+  # 而 DeviceTokenCodec 不配密钥就【启动即失败】（构造器直接抛，理由同上面的 PII 密钥）。
+  #
+  # ⚠️ 网关（solvela-app）吃不到本文件 —— 它 2026-09-01 摘掉了全部 base 模块。
+  #    它那份在 solvela-app/src/main/resources/*/application.yaml 里，
+  #    【同环境两处必须逐字一致】：三个进程验的是同一批令牌，
+  #    不一致的表现是「网关签的令牌到了下游验不过」，而两边日志都不会报错。
+  #
+  # 🔴 【不要】复用上面的 pii.hmac-key：那把【永远不能改】（改了老会员登不进来），
+  #    这把【必须能换】（泄露 = 任何人都能自签一个合法设备号）。
+  #    一个不能改、一个必须能换，共用一把等于两边都做不到。
+  #
+  # 轮换三步，顺序不能反（见 DeviceTokenProperties 类注释）：
+  #   ① 加新密钥进 keys，不动 key-version —— 新密钥只被接受、不被使用
+  #   ② 确认所有实例都加载到新配置，再把 key-version 指向它
+  #   ③ 等旧令牌自然消亡后才能删旧的。这一步【没有时间表】——
+  #      设备令牌不过期，删早了就是让那批用户重新注册设备
+  #
+  # 🔴 生产环境从环境变量注入：
+  #        keys:
+  #          1: ${SOLVELA_AUTH_DEVICE_KEY_V1}
+  auth:
+    device:
+      key-version: 1
+      keys:
+        1: "Pr4mNbW8yZjT6xKfL2dVcH5pEaR9uG3oI7tXqM1s"
+
 # 动态脚本引擎
 script:
   # 底层引擎实现，目前仅 qlexpress
