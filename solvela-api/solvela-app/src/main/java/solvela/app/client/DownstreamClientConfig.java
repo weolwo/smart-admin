@@ -15,6 +15,7 @@ import solvela.marketing.api.ActivityApi;
 import solvela.marketing.api.MallApi;
 import solvela.marketing.api.PrizeRecordApi;
 import solvela.member.api.AssetApi;
+import solvela.member.api.DeviceApi;
 import solvela.member.api.ProposalRecordApi;
 import solvela.member.api.MemberAuthApi;
 
@@ -49,6 +50,22 @@ public class DownstreamClientConfig {
     @Bean
     public MemberAuthApi memberAuthApi(@Value("${solvela.client.member.base-url}") String baseUrl) {
         return proxy(baseUrl, Duration.ofSeconds(1), MemberAuthApi.class);
+    }
+
+    /**
+     * 设备身份。<b>1 秒</b>，与会员认证同一档：签发是一次 Redis 计数加一条 insert，
+     * 比主键点查重不了多少，而它挂在<b>客户端冷启动</b>的路径上 ——
+     * 拖长了就是用户盯着启动页。
+     *
+     * <p>契约在 {@code solvela-member-api}，与 {@link MemberAuthApi} 共用会员服务的 base-url。
+     * 设备将来要和会员一起独立出去（见 solvela-app-biz 的 pom 注释），到那天改的是这一行的配置键。
+     *
+     * <p>⚠️ 超时了不要重试：签发不是幂等的，重试一次就多一台设备、多烧一次 IP 配额。
+     * 客户端拿到 5xx 应当让用户重开 App，而不是自动重试。
+     */
+    @Bean
+    public DeviceApi deviceApi(@Value("${solvela.client.member.base-url}") String baseUrl) {
+        return proxy(baseUrl, Duration.ofSeconds(1), DeviceApi.class);
     }
 
     /**

@@ -5,13 +5,18 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import solvela.app.auth.AuthorizationInterceptor;
+import solvela.app.auth.DeviceRequirementInterceptor;
 
 /**
  * C 端的 MVC 装配。
  *
- * <p>只注册一个拦截器，<b>没有路径白名单</b>。
- * 免登录靠方法上的 {@code @Anonymous} —— 白名单按前缀匹配，
- * 加一条就可能连带放行未来新增的同前缀接口，而那件事不会有人收到通知。
+ * <p>两个拦截器，<b>都没有路径白名单</b>。免登录靠方法上的 {@code @Anonymous}、
+ * 免设备靠 {@code @DeviceExempt} —— 白名单按前缀匹配，加一条就可能连带放行
+ * 未来新增的同前缀接口，而那件事不会有人收到通知。
+ *
+ * <p>顺序是<b>设备在前、会员在后</b>：设备是更外层的身份。实际差别只有一个 ——
+ * 一个既没登录又没设备的请求，enforce 档下拿到的是 DEVICE_REQUIRED 而不是
+ * LOGIN_REQUIRED，而让用户去登录解决不了他客户端太旧的问题。
  *
  * <p>接口文档（springdoc / knife4j）的路径由 {@code springdoc.*} 配置控制，
  * 在 prod 环境整体关闭（见 application.yaml），所以这里也不需要为它开口子 ——
@@ -21,10 +26,17 @@ import solvela.app.auth.AuthorizationInterceptor;
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
 
+    private final DeviceRequirementInterceptor deviceRequirementInterceptor;
+
     private final AuthorizationInterceptor authorizationInterceptor;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(deviceRequirementInterceptor)
+                .addPathPatterns("/**")
+                // 同下：/error 必须放行，否则 404 会变成 401
+                .excludePathPatterns("/error");
+
         registry.addInterceptor(authorizationInterceptor)
                 .addPathPatterns("/**")
                 // 🔴 必须放行 /error。Spring Boot 把没有匹配到 handler 的请求转发到这里，
