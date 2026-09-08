@@ -30,8 +30,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A 桶各列改成枚举之后的真实验收（连数据库，只读）。
  *
  * <p>与 {@link DataTracerEnumMappingTest} 同样的三条路径，但覆盖数据量更大的几张表：
- * {@code t_solvela_job_log.status} 有 563 行、跨 6 个取值，
- * {@code t_login_log.user_type} 有 196 行 —— 空表证明不了任何事。
+ * {@code t_solvela_job_log.status} 跨 6 个取值，{@code t_login_log.user_type} 跨 2 个 ——
+ * 空表证明不了任何事。
+ *
+ * <p>⚠️ 这里原来写着「563 行 / 196 行」。行数会涨，写进注释只会过期；
+ * 更要命的是下面两条用例把它当成了分页大小的依据 —— 见 {@link #pageCovering}。
  *
  * <p>额外钉住 {@code @EnumSerialize}：job log 的 VO 上挂着它，
  * 输出必须仍然是 {@code {"status":2,"statusDesc":"成功"}}，
@@ -67,7 +70,8 @@ class BucketAEnumMappingTest {
     @Test
     @DisplayName("job log：XML 的 resultType + 按枚举过滤，两条路一起验")
     void jobLog按状态查询() {
-        List<SolvelaJobLogVO> all = jobLogDao.query(new Page<>(1, 1000), new SolvelaJobLogQueryForm());
+        int pageSize = pageCovering(jobLogDao.selectCount(null), "t_solvela_job_log");
+        List<SolvelaJobLogVO> all = jobLogDao.query(new Page<>(1, pageSize), new SolvelaJobLogQueryForm());
         assertFalse(all.isEmpty(), "查不到数据，这条用例失去意义");
         for (SolvelaJobLogVO vo : all) {
             assertNotNull(vo.getStatus(), "VO.status 是 null —— resultType 没走到枚举 TypeHandler");
@@ -77,7 +81,7 @@ class BucketAEnumMappingTest {
         for (SolvelaJobExecuteStatusEnum status : SolvelaJobExecuteStatusEnum.values()) {
             SolvelaJobLogQueryForm form = new SolvelaJobLogQueryForm();
             form.setStatus(status);
-            List<SolvelaJobLogVO> hit = jobLogDao.query(new Page<>(1, 1000), form);
+            List<SolvelaJobLogVO> hit = jobLogDao.query(new Page<>(1, pageSize), form);
             for (SolvelaJobLogVO vo : hit) {
                 assertTrue(status == vo.getStatus(),
                         "按 " + status + " 查询却查出了 " + vo.getStatus() + "，条件没有正确下推");
@@ -108,7 +112,8 @@ class BucketAEnumMappingTest {
     @Test
     @DisplayName("login log：XML 里 #{query.userType} 要按 value 下推")
     void loginLog按用户类型查询() {
-        List<LoginLogVO> all = loginLogDao.queryByPage(new Page<>(1, 500), new LoginLogQueryForm());
+        int pageSize = pageCovering(loginLogDao.selectCount(null), "t_login_log");
+        List<LoginLogVO> all = loginLogDao.queryByPage(new Page<>(1, pageSize), new LoginLogQueryForm());
         assertFalse(all.isEmpty(), "t_login_log 没有数据，这条用例失去意义");
         for (LoginLogVO vo : all) {
             assertNotNull(vo.getUserType(), "VO.userType 是 null");
@@ -118,7 +123,7 @@ class BucketAEnumMappingTest {
         for (UserTypeEnum userType : UserTypeEnum.values()) {
             LoginLogQueryForm form = new LoginLogQueryForm();
             form.setUserType(userType);
-            List<LoginLogVO> hit = loginLogDao.queryByPage(new Page<>(1, 500), form);
+            List<LoginLogVO> hit = loginLogDao.queryByPage(new Page<>(1, pageSize), form);
             for (LoginLogVO vo : hit) {
                 assertTrue(userType == vo.getUserType(),
                         "按 " + userType + " 查询却查出了 " + vo.getUserType());
@@ -144,5 +149,38 @@ class BucketAEnumMappingTest {
         long fail = all.stream().filter(v -> v.getLoginResult() == LoginLogResultEnum.LOGIN_FAIL).count();
         assertTrue(success > fail,
                 "登录成功(" + success + ") 居然不比失败(" + fail + ") 多 —— 0/1 口径多半被改反了");
+    }
+
+    // ------------------------------------------------------------ 分页大小
+
+    /**
+     * 单表全量比对时，最多愿意拉进内存的行数。
+     *
+     * <p>超过就该换验法了（比如直接查 {@code SELECT DISTINCT status}），而不是把表拖进 JVM。
+     * 到那一天让用例带着这句话失败，比让它悄悄退化成「只比对前 N 行」强。
+     */
+    private static final long MAX_ROWS_FOR_FULL_SCAN = 50_000;
+
+    /**
+     * 按表里的真实行数算一个<b>不会被截断</b>的页大小。
+     *
+     * <p>🔴 这两条用例原来写死 1000 / 500，而它们比较的是「不带条件查出的条数」与
+     * 「按各取值分别查出的条数之和」—— <b>前者被分页封顶，后者不会</b>。
+     * 表一涨过那个数，比较就必然不成立。
+     *
+     * <p>更糟的是它挂的时候会说「有行的 status 落在枚举之外」，指向一个不存在的问题：
+     * {@code t_solvela_job_log} 于 2026-09-08 涨过 1000 行时就是这么挂的，
+     * 报的是 {@code expected: <1000> but was: <1001>} —— 1000 正是那个页大小。
+     *
+     * <p>所以页大小必须<b>跟着表走</b>。多给 100 是留给「取行数与真正查询之间又插进来几行」
+     * 的余量：这两张都是日志表，定时任务随时在写。
+     */
+    private static int pageCovering(Long total, String table) {
+        assertNotNull(total, table + " 的行数查不出来");
+        assertTrue(total < MAX_ROWS_FOR_FULL_SCAN,
+                table + " 已有 " + total + " 行，超过全量比对的上限 " + MAX_ROWS_FOR_FULL_SCAN
+                        + "。这条用例的做法（全表拉进内存逐一比对）已经不合适了，"
+                        + "换成按 DISTINCT 取值比对，或给这张日志表加保留策略。");
+        return (int) (total + 100);
     }
 }
