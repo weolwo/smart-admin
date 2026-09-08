@@ -25,20 +25,17 @@ SET NAMES utf8mb4;
 --   然后重新跑一次 DumpSchema 覆盖本文件，用 git diff 核对是否与预期一致。
 --   🔴 只改迁移不改基线 = 新环境和老环境结构不一样，而且没人会发现。
 --
--- 生成时间：2026-08-23（DumpSchema 导出）
--- 最后核对：2026-08-31（手工，见下）
--- 表数量：65 张
+-- 🔴 <b>不要手改本文件。</b>改表结构 → 写迁移 sql → 在开发库执行 → 重跑 DumpSchema。
+--    2026-08-23 那一版被人手工改过而没有重新导出，结果是头部写 84 张、README 写 75 张、
+--    实际 64 张，三个数互不相同，而没有任何人能一眼看出它还准不准。
+--    这个文件的全部价值就是「它就是库里真实的样子」——手改一次，它就退化成
+--    一份人工维护的近似版本，也就是它当初要取代的那个东西。
 --
--- ⚠️ 2026-08-31 核对结果：本文件自 2026-08-23 导出之后【被手工改过】，
---    但头部与分组的计数没跟着改 —— 曾写着 84 张，实际只有 64 张。
---    差的 23 张（另有 2 张是后加的）已逐个查过：t_notice / t_help_doc / t_feedback /
---    t_message / t_oa_* / t_goods / t_category 等 16 张办公内容表，
---    加上 t_change_log / t_heart_beat_record / t_serial_number* / t_reload_* 6 张、
---    t_prize_group 1 张 —— 全仓【零代码引用】，是随功能一起下掉的，不是掉了。
---    本次只修计数，一张表都没动。
+--    ⚠️ 这段话写在 DumpSchema 的模板里，不写在本文件里 ——
+--    写在这里的任何字，下一次导出都会被冲掉（2026-09-08 就冲掉过一段人工核对记录）。
 --
---    🔴 教训写在这儿：这个文件的价值全在「它就是库里真实的样子」。
---    手工改它而不重新导出，它就退化成一份人工维护的近似版本 —— 正是它当初要取代的东西。
+-- 生成时间：2026-09-08
+-- 表数量：67 张
 -- =====================================================================================
 
 -- 刻意排除（手工备份表，不属于系统结构）：
@@ -302,12 +299,11 @@ CREATE TABLE `t_dict_data` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci COMMENT='字典数据表';
 
 DROP TABLE IF EXISTS `t_solvela_job`;
-CREATE TABLE `t_solvela_job`
-(
+CREATE TABLE `t_solvela_job` (
   `job_id` int NOT NULL AUTO_INCREMENT COMMENT '任务id',
   `job_code` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '任务编码：10位大写字母+数字，全局唯一',
   `job_name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '任务名称',
-  `handler_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '执行器名称，对应 @SolvelaJobHandler#name()',
+  `handler_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '执行器名称，对应 @SmartJobHandler#name()',
   `job_group` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'BUSINESS' COMMENT '分组：SYSTEM/DATA/ACTIVITY/OPS/BUSINESS',
   `trigger_type` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '触发类型',
   `trigger_value` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '触发配置',
@@ -348,12 +344,11 @@ CREATE TABLE `t_solvela_job`
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC COMMENT='定时任务配置 @listen';
 
 DROP TABLE IF EXISTS `t_solvela_job_log`;
-CREATE TABLE `t_solvela_job_log`
-(
+CREATE TABLE `t_solvela_job_log` (
   `log_id` bigint NOT NULL AUTO_INCREMENT,
   `job_id` int NOT NULL COMMENT '任务id',
   `job_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '任务名称',
-  `app_env` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'dev' COMMENT '环境标识：冗余列，避免日志表扫描每秒 join t_solvela_job',
+  `app_env` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'dev' COMMENT '环境标识：冗余列，避免日志表扫描每秒 join t_smart_job',
   `trace_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL COMMENT '链路追踪id',
   `trigger_source` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'SCHEDULE' COMMENT '触发来源：SCHEDULE 定时 / MANUAL 手动。无 RETRY —— 重试继承原值，靠 retry_seq 区分',
   `trigger_time` datetime NOT NULL COMMENT '本次调度的原定触发时刻（不是执行时刻）',
@@ -520,29 +515,6 @@ CREATE TABLE `t_member` (
   KEY `idx_mbr_invite` (`invite_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='会员主表';
 
-DROP TABLE IF EXISTS `t_member_operation_limit`;
-CREATE TABLE `t_member_operation_limit`
-(
-    `id`             bigint   NOT NULL AUTO_INCREMENT COMMENT '自增id',
-    `member_id`      bigint   NOT NULL COMMENT '会员号：关联键',
-    `operation_type` int      NOT NULL COMMENT '受限操作：1-登录, 2-修改密码。见 MemberOperationTypeEnum',
-    `lock_time`      datetime NOT NULL COMMENT '冻结开始时间',
-    `expire_time`    datetime NOT NULL COMMENT '自动到期时间：到点即视为解除，不依赖回写',
-    `unlock_time`    datetime          DEFAULT NULL COMMENT '实际解冻时间：status=1 时必填',
-    `unlock_type`    tinyint           DEFAULT NULL COMMENT '解冻方式：1-自动到期, 2-重置密码, 3-人工。status=0 时为 NULL',
-    `operator`       varchar(64)       DEFAULT NULL COMMENT '人工解冻的操作人：unlock_type=3 时必填，用于追溯',
-    `status`         tinyint  NOT NULL DEFAULT '0' COMMENT '状态：0-冻结中, 1-已解冻',
-    `reason`         varchar(128)      DEFAULT NULL COMMENT '触发原因：给客服看的人话，如「连续登录失败」',
-    `remark`         varchar(256)      DEFAULT NULL COMMENT '备注',
-    `create_time`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_time`    datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    PRIMARY KEY (`id`),
-    KEY              `idx_mbr_limit_active` (`member_id`, `operation_type`, `status`),
-    KEY              `idx_mbr_limit_expire` (`status`, `expire_time`)
-) ENGINE = InnoDB
-  DEFAULT CHARSET = utf8mb4
-  COLLATE = utf8mb4_0900_ai_ci COMMENT ='会员操作限制（功能级、带到期、可解冻）';
-
 DROP TABLE IF EXISTS `t_member_verify`;
 CREATE TABLE `t_member_verify` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
@@ -574,7 +546,7 @@ CREATE TABLE `t_member_login_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
   `member_id` bigint NOT NULL COMMENT '会员号',
   `client_ip` varchar(39) DEFAULT NULL COMMENT '客户端IP（兼容IPv6，39位足够）',
-  `ip_region` varchar(64) DEFAULT NULL COMMENT 'IP归属地（ip2region 解析，SolvelaIpUtil 已有）',
+  `ip_region` varchar(64) DEFAULT NULL COMMENT 'IP归属地（ip2region 解析，SmartIpUtil 已有）',
   `device_type` varchar(16) DEFAULT NULL COMMENT '设备端：APP/H5/WECHAT/PC',
   `os_name` varchar(32) DEFAULT NULL COMMENT '操作系统：iOS/Android/Windows',
   `browser_name` varchar(32) DEFAULT NULL COMMENT '浏览器：Chrome/Safari',
@@ -597,6 +569,26 @@ CREATE TABLE `t_member_login_log` (
  PARTITION p202612 VALUES LESS THAN ('2027-01-01') ENGINE = InnoDB,
  PARTITION p202701 VALUES LESS THAN ('2027-02-01') ENGINE = InnoDB,
  PARTITION pmax VALUES LESS THAN (MAXVALUE) ENGINE = InnoDB) */;
+
+DROP TABLE IF EXISTS `t_member_operation_limit`;
+CREATE TABLE `t_member_operation_limit` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '自增id',
+  `member_id` bigint NOT NULL COMMENT '会员号：关联键',
+  `operation_type` int NOT NULL COMMENT '受限操作：1-登录, 2-修改密码。见 MemberOperationTypeEnum',
+  `lock_time` datetime NOT NULL COMMENT '冻结开始时间',
+  `expire_time` datetime NOT NULL COMMENT '自动到期时间：到点即视为解除，不依赖回写',
+  `unlock_time` datetime DEFAULT NULL COMMENT '实际解冻时间：status=1 时必填',
+  `unlock_type` tinyint DEFAULT NULL COMMENT '解冻方式：1-自动到期, 2-重置密码, 3-人工。status=0 时为 NULL',
+  `operator` varchar(64) DEFAULT NULL COMMENT '人工解冻的操作人：unlock_type=3 时必填，用于追溯',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '状态：0-冻结中, 1-已解冻',
+  `reason` varchar(128) DEFAULT NULL COMMENT '触发原因：给客服看的人话，如「连续登录失败」',
+  `remark` varchar(256) DEFAULT NULL COMMENT '备注',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_mbr_limit_active` (`member_id`,`operation_type`,`status`),
+  KEY `idx_mbr_limit_expire` (`status`,`expire_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='会员操作限制（功能级、带到期、可解冻）';
 
 DROP TABLE IF EXISTS `t_device`;
 CREATE TABLE `t_device` (
@@ -624,7 +616,7 @@ CREATE TABLE `t_device` (
 
 
 -- =====================================================================================
--- 账务 / 履约（6 张）
+-- 账务 / 履约（7 张）
 -- =====================================================================================
 
 DROP TABLE IF EXISTS `t_member_wallet`;
@@ -699,7 +691,7 @@ CREATE TABLE `t_physical_delivery` (
   `receiver_address` varchar(512) DEFAULT NULL COMMENT '收件详细地址【密文】：中奖时未知，由用户后续补填',
   `logistics_company` varchar(64) DEFAULT NULL COMMENT '物流公司',
   `logistics_no` varchar(128) DEFAULT NULL COMMENT '物流单号',
-  `status` tinyint DEFAULT '0' COMMENT '状态：-1-已取消, 0-待发货, 1-已发货, 2-已签收, 3-异常退回',
+  `status` tinyint DEFAULT '0' COMMENT '状态：0-待发货, 1-已发货, 2-已签收, 3-异常退回',
   `create_by` varchar(64) DEFAULT NULL COMMENT '创建人',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_by` varchar(64) DEFAULT NULL COMMENT '更新人',
@@ -747,8 +739,9 @@ CREATE TABLE `t_proposal_record` (
 DROP TABLE IF EXISTS `t_promotion_config`;
 CREATE TABLE `t_promotion_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '配置ID',
+  `group_id` bigint DEFAULT NULL COMMENT '所属优惠配置分组ID，关联 t_promotion_group；为空表示未分组的独立配置',
   `promo_name` varchar(128) NOT NULL COMMENT '优惠配置名称',
-  `prize_type` varchar(32) NOT NULL COMMENT '资产类型：SCORE(积分), BALANCE(现金), COUPON(优惠券), PHYSICAL(实物)',
+  `prize_type` varchar(32) NOT NULL COMMENT '资产类型：SCORE(积分), BALANCE(现金), COUPON(优惠券), PHYSICAL(实物), MARKER(标记)',
   `total_quota` int NOT NULL DEFAULT '-1' COMMENT '总库存(个数)：-1为不限制(适用于券/实物)',
   `used_quota` int NOT NULL DEFAULT '0' COMMENT '已消耗库存(个数)',
   `total_amount` decimal(18,4) NOT NULL DEFAULT '-1.0000' COMMENT '总预算(金额)：-1为不限制(适用于积分/现金)',
@@ -759,6 +752,8 @@ CREATE TABLE `t_promotion_config` (
   `single_max_quota` int NOT NULL DEFAULT '1' COMMENT '单次最大数量兜底，超限阻断',
   `single_max_amount` decimal(18,4) NOT NULL DEFAULT '0.0000' COMMENT '单次最大金额兜底，超限阻断',
   `limit_period` varchar(32) NOT NULL DEFAULT 'LIFETIME' COMMENT '限制周期：LIFETIME(终身), DAILY(每日), WEEKLY(每周), MONTHLY(每月), CUSTOM',
+  `limit_start_time` datetime DEFAULT NULL COMMENT '限制周期为CUSTOM时的窗口开始时间',
+  `limit_end_time` datetime DEFAULT NULL COMMENT '限制周期为CUSTOM时的窗口结束时间',
   `identify_limit` int DEFAULT '-1' COMMENT '同周期内，单会员ID最多领取次数 (-1为不限)',
   `phone_limit` int DEFAULT '-1' COMMENT '同周期内，单手机号最多领取次数 (-1为不限)',
   `ip_limit` int DEFAULT '-1' COMMENT '同周期内，单IP地址最多领取次数 (-1为不限)',
@@ -770,12 +765,28 @@ CREATE TABLE `t_promotion_config` (
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_by` varchar(64) DEFAULT NULL COMMENT '更新人',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_prize_type` (`group_id`,`prize_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='优惠配置表';
+
+DROP TABLE IF EXISTS `t_promotion_group`;
+CREATE TABLE `t_promotion_group` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '分组ID',
+  `group_code` varchar(32) NOT NULL COMMENT '分组编码：10位大写字母+数字，全局唯一，服务端生成',
+  `group_name` varchar(128) NOT NULL COMMENT '分组名称，如「2026中秋活动优惠配置」',
+  `remark` varchar(512) DEFAULT NULL COMMENT '备注',
+  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0-停用, 1-启用。是组内所有配置的主开关：停用会连带停用组内全部 t_promotion_config',
+  `create_by` varchar(64) DEFAULT NULL COMMENT '创建人',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_by` varchar(64) DEFAULT NULL COMMENT '更新人',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_code` (`group_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='优惠配置分组';
 
 
 -- =====================================================================================
--- 营销 - 活动与奖品（9 张）
+-- 营销 - 活动与奖品（10 张）
 -- =====================================================================================
 
 DROP TABLE IF EXISTS `t_activity_config`;
@@ -821,8 +832,8 @@ DROP TABLE IF EXISTS `t_prize_config`;
 CREATE TABLE `t_prize_config` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
   `activity_code` varchar(32) NOT NULL COMMENT '活动编码',
-  `promotion_config_id` bigint NOT NULL COMMENT '优惠配置ID',
-  `prize_type` varchar(32) NOT NULL COMMENT '资产类型：SCORE, BALANCE, COUPON, PHYSICAL, LOTTERY, CUSTOM',
+  `promotion_config_id` bigint DEFAULT NULL COMMENT '优惠配置ID：承载预算与风控；标记(MARKER)类奖品不需要，为 NULL',
+  `prize_type` varchar(32) NOT NULL COMMENT '资产类型：SCORE, BALANCE, COUPON, PHYSICAL, MARKER, LOTTERY, CUSTOM',
   `prize_name` varchar(128) NOT NULL COMMENT '奖品名称',
   `prize_code` varchar(64) NOT NULL COMMENT '奖品编码',
   `prize_level` int DEFAULT '0' COMMENT '奖品级别',
@@ -839,27 +850,6 @@ CREATE TABLE `t_prize_config` (
   UNIQUE KEY `uk_prize_code` (`prize_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='奖品配置表';
 
-DROP TABLE IF EXISTS `t_mq_message_log`;
-CREATE TABLE `t_mq_message_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
-  `message_id` varchar(64) NOT NULL COMMENT '消息唯一标识（发送方生成）。唯一索引即消费幂等',
-  `exchange` varchar(64) NOT NULL COMMENT '交换机',
-  `routing_key` varchar(64) NOT NULL COMMENT '路由键。将来活动挂事件监听就是按它路由的',
-  `consumer_key` varchar(64) NOT NULL DEFAULT '' COMMENT '消费者标识：活动事件填活动编码，固定消费者填 handler 名。后台重试按它隔离',
-  `queue` varchar(64) NOT NULL COMMENT '队列名：同一条消息可能被多个队列消费，队列名参与定位',
-  `payload` mediumtext NOT NULL COMMENT '消息 JSON 原文',
-  `status` tinyint NOT NULL DEFAULT '0' COMMENT '0-已接收, 1-处理成功, 2-处理失败',
-  `fail_reason` varchar(255) DEFAULT NULL COMMENT '处理失败原因',
-  `retry_count` int NOT NULL DEFAULT '0' COMMENT '重试次数',
-  `receive_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
-  `handle_time` datetime DEFAULT NULL COMMENT '处理完成时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_mq_msg` (`message_id`,`consumer_key`),
-  KEY `idx_mq_retry` (`consumer_key`,`status`,`receive_time`),
-  KEY `idx_mq_status` (`status`,`receive_time`),
-  KEY `idx_mq_receive_time` (`receive_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='消息接收记录：唯一索引即消费幂等，只保留 7 天';
-
 DROP TABLE IF EXISTS `t_prize_log`;
 CREATE TABLE `t_prize_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
@@ -867,10 +857,10 @@ CREATE TABLE `t_prize_log` (
   `member_name` varchar(32) DEFAULT NULL COMMENT '会员账号【展示快照，非关联键，不要用于查询】',
   `prize_code` varchar(64) NOT NULL COMMENT '奖品编码',
   `activity_code` varchar(32) NOT NULL COMMENT '活动编码',
-  `activity_type` varchar(32) DEFAULT NULL COMMENT '玩法类型 BASIC/DRAW/TASK/LOTTERY：发奖时由发放方写入。派发链路据它归类提案来源，不再回头查活动表 —— 拆服务后活动域与资产域不在同一个进程',
+  `activity_type` varchar(32) DEFAULT NULL COMMENT '玩法类型 BASIC/DRAW/TASK/LOTTERY：发奖时由发放方写入，派发链路据它归类提案来源',
   `prize_level` int DEFAULT '0' COMMENT '奖品级别',
   `prize_name` varchar(128) NOT NULL COMMENT '奖品名称',
-  `prize_type` varchar(32) NOT NULL COMMENT '奖励类型：SCORE, BALANCE, COUPON, PHYSICAL',
+  `prize_type` varchar(32) NOT NULL COMMENT '奖励类型：SCORE, BALANCE, COUPON, PHYSICAL, MARKER',
   `prize_value` varchar(128) NOT NULL COMMENT '奖励体值(积分数/券ID)',
   `fail_reason` varchar(128) DEFAULT NULL COMMENT '异常原因：发奖失败时才有值',
   `approve_status` tinyint NOT NULL DEFAULT '0' COMMENT '审批状态：0-无需审批, 1-待审批, 2-已批准, 3-已驳回',
@@ -878,8 +868,8 @@ CREATE TABLE `t_prize_log` (
   `approve_time` datetime DEFAULT NULL COMMENT '审批时间',
   `valid_until` datetime DEFAULT NULL COMMENT '过期时间',
   `status` tinyint DEFAULT '0' COMMENT '执行状态：0-等待, 1-成功, 2-失败',
-  `proposal_status` tinyint NOT NULL DEFAULT '0' COMMENT '提案侧结果：0-待提交, 1-已受理, 2-被拒绝。与 status 是两件事：本列说「会员服务收没收下」，status 说「用户最终有没有拿到」',
-  `proposal_id` bigint DEFAULT NULL COMMENT '会员服务返回的提案 id，对账与人工排查用',
+  `proposal_status` tinyint NOT NULL DEFAULT '0' COMMENT '提案侧结果：0-待提交, 1-已受理(提案已生成), 2-被拒绝。与 status 是两件事：本列说的是「会员服务收没收下」，status 说的是「用户最终有没有拿到」',
+  `proposal_id` bigint DEFAULT NULL COMMENT '会员服务返回的提案 id。对账与人工排查用 —— 回调靠 source_biz_id 关联即可，但出问题时能直接拿这个 id 去会员库里查',
   `external_biz_no` varchar(128) DEFAULT NULL COMMENT '外部单号',
   `remark` varchar(255) DEFAULT NULL COMMENT '异常原因',
   `create_by` varchar(64) DEFAULT NULL COMMENT '创建人',
@@ -888,7 +878,8 @@ CREATE TABLE `t_prize_log` (
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_external_biz` (`external_biz_no`),
-  KEY `idx_prize_log_` (`member_id`,`activity_code`)
+  KEY `idx_prize_log_` (`member_id`,`activity_code`),
+  KEY `idx_prize_log_proposal` (`proposal_status`,`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='奖励记录表';
 
 DROP TABLE IF EXISTS `t_prize_pool_config`;
@@ -897,13 +888,12 @@ CREATE TABLE `t_prize_pool_config` (
   `activity_code` varchar(32) NOT NULL COMMENT '活动编码',
   `pool_code` varchar(32) NOT NULL COMMENT '奖池唯一编码 (如: VIP_POOL)',
   `pool_name` varchar(128) NOT NULL COMMENT '奖池名称',
-  `reset_period` varchar(32) NOT NULL DEFAULT 'DAY' COMMENT '重置周期，天，周，月，活动期间',
-  `draw_mode` tinyint DEFAULT '1' COMMENT '抽奖算法: 1-按概率(probability), 2-按库存比例(stock_ratio)',
   `status` tinyint NOT NULL DEFAULT '1' COMMENT '0关闭，1开启',
   `create_by` varchar(32) DEFAULT NULL COMMENT '创建人',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_by` varchar(32) DEFAULT NULL COMMENT '更新人',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `draw_code` varchar(32) DEFAULT NULL COMMENT '所属抽奖配置编码，关联 t_draw_config.draw_code',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_pool_code` (`pool_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='奖池配置';
@@ -958,6 +948,45 @@ CREATE TABLE `t_draw_prize_log` (
   PRIMARY KEY (`id`),
   KEY `idx_mem_act` (`member_id`,`activity_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='抽奖记录';
+
+DROP TABLE IF EXISTS `t_mq_message_log`;
+CREATE TABLE `t_mq_message_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'id',
+  `message_id` varchar(64) NOT NULL COMMENT '消息唯一标识（发送方生成）。? 唯一索引即【消费幂等】：重复投递在插入那一刻就被挡住，不用每个消费者各写一套去重',
+  `exchange` varchar(64) NOT NULL COMMENT '交换机',
+  `routing_key` varchar(64) NOT NULL COMMENT '路由键。将来活动挂事件监听就是按它路由的',
+  `consumer_key` varchar(64) NOT NULL DEFAULT '' COMMENT '消费者标识：活动事件填活动编码，固定消费者填 handler 名。后台重试按它隔离 —— 重跑 A 活动不会碰到 B',
+  `queue` varchar(64) NOT NULL COMMENT '队列名：同一条消息可能被多个队列消费，队列名参与定位',
+  `payload` mediumtext NOT NULL COMMENT '消息 JSON 原文。存原文而不是解析后的字段 —— 重放时不需要再拼一次',
+  `status` tinyint NOT NULL DEFAULT '0' COMMENT '0-已接收, 1-处理成功, 2-处理失败',
+  `fail_reason` varchar(255) DEFAULT NULL COMMENT '处理失败原因，截断到列宽',
+  `retry_count` int NOT NULL DEFAULT '0' COMMENT '重试次数。持续增长是最直接的告警指标',
+  `receive_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
+  `handle_time` datetime DEFAULT NULL COMMENT '处理完成时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_mq_msg` (`message_id`,`consumer_key`),
+  KEY `idx_mq_status` (`status`,`receive_time`),
+  KEY `idx_mq_receive_time` (`receive_time`),
+  KEY `idx_mq_retry` (`consumer_key`,`status`,`receive_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='消息接收记录：唯一索引即消费幂等，只保留 7 天';
+
+DROP TABLE IF EXISTS `t_draw_config`;
+CREATE TABLE `t_draw_config` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键id',
+  `activity_code` varchar(32) NOT NULL COMMENT '活动编码',
+  `draw_code` varchar(32) NOT NULL COMMENT '抽奖配置编码。脚本挂载用的就是它',
+  `draw_name` varchar(128) NOT NULL COMMENT '抽奖名称',
+  `draw_mode` tinyint NOT NULL DEFAULT '1' COMMENT '抽奖算法：1-按概率, 2-按库存比例',
+  `reset_period` varchar(32) NOT NULL DEFAULT 'DAY' COMMENT '重置周期：DAY/WEEK/MONTH/ACTIVITY',
+  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0-关闭, 1-开启',
+  `create_by` varchar(32) DEFAULT NULL COMMENT '创建人',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_by` varchar(32) DEFAULT NULL COMMENT '更新人',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_draw_code` (`draw_code`),
+  UNIQUE KEY `uk_draw_activity` (`activity_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='抽奖配置。一个活动一套（uk_draw_activity 保证），奖池挂在它下面；与 t_lottery_config 同层';
 
 
 -- =====================================================================================
@@ -1206,20 +1235,25 @@ CREATE TABLE `t_script` (
   `script_name` varchar(128) NOT NULL COMMENT '脚本名称，来自文件头 @name',
   `domain` varchar(32) NOT NULL COMMENT '业务域，对应 ScriptDomain 枚举。由 scene 推导，不单独声明',
   `scene` varchar(32) NOT NULL COMMENT '场景，对应 ScriptScene 枚举，来自文件头 @scene。决定入参与返回值契约',
-  `file_path` varchar(255) NOT NULL COMMENT 'classpath 下的路径，如 scripts/task/streak_sign_7d.ql',
-  `content` mediumtext NOT NULL COMMENT '脚本内容。只读镜像：权威在文件，启动时由加载器覆盖写入，改这里不生效',
+  `file_path` varchar(255) DEFAULT NULL COMMENT '来源文件路径，仅 source=FILE 的行有值',
+  `content` mediumtext NOT NULL COMMENT '脚本内容。这一行就是一个版本，写入后不再改',
   `content_hash` varchar(64) NOT NULL COMMENT 'content 的 SHA-256，加载器据此判断内容是否变化',
   `version` int NOT NULL DEFAULT '1' COMMENT '版本号，内容变化时 +1',
   `params_schema` json DEFAULT NULL COMMENT '入参契约快照，由 ScriptScene.getParams() 生成，供前端渲染',
   `return_type` varchar(32) NOT NULL COMMENT '返回值类型，由 ScriptScene 决定',
   `description` varchar(500) DEFAULT NULL COMMENT '用途说明，来自文件头 @desc',
-  `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0-停用, 1-启用',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `active_flag` tinyint(1) DEFAULT NULL COMMENT '激活标记：1=当前生效版本；历史版本必须是 NULL。? 不许填 0，填 0 会导致同一脚本只能存下一个历史版本',
+  `source` varchar(16) NOT NULL DEFAULT 'MANUAL' COMMENT '来源：FILE-项目文件导入 / MANUAL-后台录入',
+  `change_log` varchar(255) DEFAULT NULL COMMENT '这一版改了什么',
+  `create_by` varchar(32) DEFAULT NULL COMMENT '创建人',
+  `update_by` varchar(32) DEFAULT NULL COMMENT '更新人',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_script_code` (`script_code`),
+  UNIQUE KEY `uk_script_code_version` (`script_code`,`version`),
+  UNIQUE KEY `uk_script_active` (`script_code`,`active_flag`),
   KEY `idx_script_scene` (`scene`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='脚本注册表。文件的只读镜像，权威在 common-api/src/main/resources/scripts/，无 create_by/update_by 是因为这张表只由加载器写';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='脚本表。一行=一个版本，同一 script_code 至多一行 active_flag=1；激活与回滚都是切这一列';
 
 DROP TABLE IF EXISTS `t_script_ref`;
 CREATE TABLE `t_script_ref` (
@@ -1233,8 +1267,9 @@ CREATE TABLE `t_script_ref` (
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_by` varchar(32) DEFAULT NULL COMMENT '更新人',
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `ref_key` varchar(64) NOT NULL DEFAULT '' COMMENT '槽位内分组键（如事件编码）。单值槽位恒为空串 —— ? 不许可空：NULL 在唯一索引里不判重，约束会失效',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_script_ref_point` (`ref_type`,`ref_id`,`ref_slot`),
+  UNIQUE KEY `uk_script_ref_point` (`ref_type`,`ref_id`,`ref_slot`,`ref_key`),
   KEY `idx_script_ref_code` (`script_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='脚本引用关系表。存在的唯一理由：回答「改这个脚本会影响哪些业务对象」';
 

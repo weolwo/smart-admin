@@ -7,14 +7,14 @@
 ## 🔴 新环境部署：两个文件，按顺序
 
 ```
-mysql> SOURCE 数据库SQL脚本/mysql/schema-baseline.sql;   -- ① 建结构（65 张表）
+mysql> SOURCE 数据库SQL脚本/mysql/schema-baseline.sql;   -- ① 建结构（67 张表）
 mysql> SOURCE 数据库SQL脚本/mysql/data-baseline.sql;     -- ② 灌种子数据（菜单/字典/权限等）
 ```
 
 跑完就能登录并正常使用。之后按需执行造数脚本（都可重复执行，见 `*造数*.sql`）。
 
-当前文件实测（2026-08-31 逐个数出来，2026-09-07 随 t_device 增加 1 张后更新）：`schema-baseline` 131 条语句
-（65 DROP + 65 CREATE + 1 SET NAMES），`data-baseline` 36 条语句、17 条 INSERT
+当前文件实测（2026-09-08 由 DumpSchema 重新导出后数出来）：`schema-baseline` 135 条语句
+（67 DROP + 67 CREATE + 1 SET NAMES），`data-baseline` 36 条语句、17 条 INSERT
 覆盖 16 张配置表共 576 行；其中菜单 329 / 角色菜单 139 / 员工 12 /
 文件分类 7（含 COMMON、NOTICE、HELP_DOC、FEEDBACK 四个内置 code）/
 定时任务 9 / 任务事件 9，**业务表全部为 0 行**（基线不带任何测试数据）。
@@ -25,7 +25,7 @@ mysql> SOURCE 数据库SQL脚本/mysql/data-baseline.sql;     -- ② 灌种子�
 
 | 文件 | 内容 | 不含 |
 |---|---|---|
-| `schema-baseline.sql` | 65 张表的结构 | 任何数据 |
+| `schema-baseline.sql` | 67 张表的结构 | 任何数据 |
 | `data-baseline.sql` | 16 张配置表、576 行种子数据 | 会员/活动/任务记录/流水/日志等业务数据 |
 
 > ⚠️ `data-baseline.sql` 里的 `t_employee` 含 Argon2 密码哈希与手机号

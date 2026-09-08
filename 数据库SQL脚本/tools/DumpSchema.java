@@ -49,13 +49,18 @@ public class DumpSchema {
             "t_device"));
         GROUPS.put("账务 / 履约", List.of(
             "t_member_wallet","t_member_asset_transaction","t_member_coupon",
-            "t_physical_delivery","t_proposal_record","t_promotion_config"));
+            "t_physical_delivery","t_proposal_record","t_promotion_config",
+            // 2026-09-08 补：此前不在任何组里，每次导出都掉进「未分类」。
+            // 它是优惠配置的分组（见 mysql/优惠配置分组-建表与菜单.sql），跟着 t_promotion_config 走
+            "t_promotion_group"));
         GROUPS.put("营销 - 活动与奖品", List.of(
             "t_activity_config","t_activity_display","t_prize_config","t_prize_log",
             "t_prize_pool_config","t_prize_pool_item","t_pool_prize_mapping",
             "t_draw_prize_log",
             // 2026-08-31 补：此前不在任何组里，导出时会掉进「未分类」
-            "t_mq_message_log"));
+            "t_mq_message_log",
+            // 2026-09-08 补：同上。抽奖玩法的配置表，与 t_draw_prize_log 同域
+            "t_draw_config"));
             // 同期移除 t_prize_group（库里已无、零引用）。
             // t_prize_dispatch_outbox 也在本次删除 —— 它的实体与 Dao 从来没有代码读写。
         GROUPS.put("营销 - 任务", List.of(
@@ -123,6 +128,15 @@ SET NAMES utf8mb4;
 --     ② mysql/sql-update-log/vX.sql —— 让已有环境能升上来
 --   然后重新跑一次 DumpSchema 覆盖本文件，用 git diff 核对是否与预期一致。
 --   🔴 只改迁移不改基线 = 新环境和老环境结构不一样，而且没人会发现。
+--
+-- 🔴 <b>不要手改本文件。</b>改表结构 → 写迁移 sql → 在开发库执行 → 重跑 DumpSchema。
+--    2026-08-23 那一版被人手工改过而没有重新导出，结果是头部写 84 张、README 写 75 张、
+--    实际 64 张，三个数互不相同，而没有任何人能一眼看出它还准不准。
+--    这个文件的全部价值就是「它就是库里真实的样子」——手改一次，它就退化成
+--    一份人工维护的近似版本，也就是它当初要取代的那个东西。
+--
+--    ⚠️ 这段话写在 DumpSchema 的模板里，不写在本文件里 ——
+--    写在这里的任何字，下一次导出都会被冲掉（2026-09-08 就冲掉过一段人工核对记录）。
 --
 -- 生成时间：%s
 -- 表数量：%d 张
