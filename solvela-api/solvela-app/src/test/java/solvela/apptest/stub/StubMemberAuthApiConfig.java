@@ -10,6 +10,9 @@ import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.EmailBindFailReason;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberContactView;
+import solvela.member.api.MemberPhoneBindCmd;
+import solvela.member.api.MemberPhoneBindResult;
+import solvela.member.api.PhoneBindFailReason;
 import solvela.member.api.SmsCodeFailReason;
 import solvela.member.api.SmsCodeSendCmd;
 import solvela.member.api.SmsCodeSendResult;
@@ -124,6 +127,14 @@ public class StubMemberAuthApiConfig {
                     return SmsCodeSendResult.fail(SmsCodeFailReason.SEND_FAILED);
                 }
                 return SmsCodeSendResult.ok();
+            }
+
+            @Override
+            public MemberPhoneBindResult bindPhone(MemberPhoneBindCmd cmd) {
+                if (cmd.newPhone() != null && cmd.newPhone().startsWith("13911")) {
+                    return MemberPhoneBindResult.fail(PhoneBindFailReason.PHONE_TAKEN);
+                }
+                return MemberPhoneBindResult.ok();
             }
 
             @Override

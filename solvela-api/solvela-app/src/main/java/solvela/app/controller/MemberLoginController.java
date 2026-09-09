@@ -14,6 +14,7 @@ import solvela.app.auth.CurrentMember;
 import solvela.app.auth.MemberPrincipal;
 import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
+import solvela.app.domain.PhoneBindRequest;
 import solvela.app.domain.SessionRevokeRequest;
 import solvela.member.api.MemberContactView;
 import solvela.app.domain.SmsCodeRequest;

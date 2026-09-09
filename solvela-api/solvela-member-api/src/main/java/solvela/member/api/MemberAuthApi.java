@@ -96,6 +96,18 @@ public interface MemberAuthApi {
     MemberEmailBindResult bindEmail(@RequestBody MemberEmailBindCmd cmd);
 
     /**
+     * 绑定 / 更换手机号。
+     *
+     * <p>与 {@link #bindEmail} 同一个判断：手机号不是资料，是<b>登录身份</b>，
+     * 而且比邮箱重一档 —— {@code uk_mbr_phone_hash} 是唯一约束，
+     * 换绑意味着原来那个号从此登不了、也注册不了这个账号。
+     *
+     * <p>🔴 {@code memberId} 由网关从令牌解析后填入，<b>不接受客户端传</b>。
+     */
+    @PostExchange("/phone/bind")
+    MemberPhoneBindResult bindPhone(@RequestBody MemberPhoneBindCmd cmd);
+
+    /**
      * 当前会员的联系方式，<b>全部脱敏</b>。
      *
      * <p>刻意不合并进 {@link #getAuthIdentity}：那个结果会进网关的缓存和日志，

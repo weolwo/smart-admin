@@ -23,6 +23,8 @@ import solvela.member.api.MemberIdentity;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
 import solvela.member.api.MemberContactView;
+import solvela.member.api.MemberPhoneBindCmd;
+import solvela.member.api.MemberPhoneBindResult;
 import solvela.member.api.MemberRegisterResult;
 import solvela.enums.DeviceStatusEnum;
 import solvela.member.api.SmsCodeVerifyResult;
@@ -105,6 +107,8 @@ public class MemberAuthService implements MemberAuthApi {
 
     private final solvela.member.device.DeviceDispositionService dispositionService;
     private final MemberEmailBindService emailBindService;
+
+    private final solvela.member.sms.MemberPhoneBindService phoneBindService;
     private final MemberPasswordResetService passwordResetService;
 
     /**
@@ -365,6 +369,14 @@ public class MemberAuthService implements MemberAuthApi {
     @Override
     public MemberEmailBindResult bindEmail(MemberEmailBindCmd cmd) {
         return emailBindService.bind(cmd);
+    }
+
+    /**
+     * 绑定 / 更换手机号。逻辑全在 {@link MemberPhoneBindService}，本方法只是契约的落点。
+     */
+    @Override
+    public MemberPhoneBindResult bindPhone(MemberPhoneBindCmd cmd) {
+        return phoneBindService.bind(cmd);
     }
 
     /**

@@ -20,6 +20,9 @@ import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
 import solvela.app.domain.PasswordResetRequest;
+import solvela.app.domain.PhoneBindRequest;
+import solvela.member.api.MemberPhoneBindCmd;
+import solvela.member.api.MemberPhoneBindResult;
 import solvela.app.domain.PasswordResetView;
 import solvela.app.web.ApiErrors;
 import solvela.app.web.ApiException;
@@ -241,6 +244,38 @@ public class MemberLoginService {
                     "更换邮箱需要验证身份：请输入当前密码，或获取原邮箱的验证码");
             case REBIND_VERIFICATION_FAILED -> new ApiException(ApiErrors.BAD_CREDENTIALS,
                     "身份验证未通过，请检查密码或原邮箱验证码");
+        };
+    }
+
+    /**
+     * 绑定 / 更换手机号。<b>需要登录</b>。
+     *
+     * <p>会员号从 {@code CurrentMember} 取，不收客户端传的 —— 与绑定邮箱同一条规矩。
+     */
+    public void bindPhone(PhoneBindRequest request, String ip) {
+        MemberPhoneBindResult result = memberAuthApi.bindPhone(new MemberPhoneBindCmd(
+                CurrentMember.require().memberId(),
+                request.phone(), request.code(),
+                request.currentPassword(), request.oldPhoneCode(),
+                ip, CurrentDevice.deviceIdOrNull()));
+        if (!result.success()) {
+            throw translatePhoneBind(result);
+        }
+    }
+
+    /** 绑定手机号失败原因 → HTTP 契约。措辞与邮箱那条对称。 */
+    private ApiException translatePhoneBind(MemberPhoneBindResult result) {
+        return switch (result.reason()) {
+            case BAD_PHONE_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "手机号格式不正确");
+            case SMS_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
+            case SMS_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case SMS_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
+            // 409 而不是 400：不是「你填错了」，是「服务端已有一个冲突的东西」
+            case PHONE_TAKEN -> new ApiException(ApiErrors.CONFLICT, "该手机号已被其他账号绑定");
+            case REBIND_VERIFICATION_REQUIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS,
+                    "更换手机号需要验证身份：请输入当前密码，或获取原手机号的验证码");
+            case REBIND_VERIFICATION_FAILED -> new ApiException(ApiErrors.BAD_CREDENTIALS,
+                    "身份验证未通过，请检查密码或原手机号验证码");
         };
     }
 

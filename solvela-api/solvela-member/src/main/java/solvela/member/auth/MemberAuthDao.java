@@ -85,6 +85,32 @@ public interface MemberAuthDao {
             """)
     Member selectForEmailBind(@Param("memberId") Long memberId);
 
+    /** 换绑手机号要读的那几列：状态、密码（判有没有）、当前手机号密文。 */
+    @Select("""
+            SELECT member_id, status, password, phone
+            FROM t_member
+            WHERE member_id = #{memberId}
+            """)
+    Member selectForPhoneBind(@Param("memberId") Long memberId);
+
+    /**
+     * 换绑手机号。
+     *
+     * <p>🔴 {@code UNHEX} 不能省，理由见 {@link #selectForLogin} ——
+     * 漏了的表现是「绑定说成功了，但按手机号登录查不到人」。
+     *
+     * <p>唯一约束 {@code uk_mbr_phone_hash} 会拦住「绑一个别人已经绑了的号」，
+     * 那条异常由调用方翻译成 PHONE_TAKEN。
+     */
+    @org.apache.ibatis.annotations.Update("""
+            UPDATE t_member
+               SET phone = #{phoneCipher}, phone_hash = UNHEX(#{phoneHashHex}), update_time = NOW()
+             WHERE member_id = #{memberId}
+            """)
+    int updatePhone(@Param("memberId") Long memberId,
+                    @Param("phoneCipher") String phoneCipher,
+                    @Param("phoneHashHex") String phoneHashHex);
+
     /**
      * 取联系方式，供「账号安全」页展示。
      *
