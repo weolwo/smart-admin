@@ -144,6 +144,50 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
   return toLoginResult(raw)
 }
 
+/**
+ * 短信验证码的用途。对齐后端 SmsScene。
+ *
+ * 比邮箱**少一个 BIND** —— 绑定手机号还没做。
+ *
+ * 🔴 场景必须显式传，服务端不给默认值：默认成注册的话，
+ * 用户拿去重置密码时验不过，而两边看起来都很正常。
+ */
+export const SMS_SCENES = ['REGISTER', 'LOGIN', 'RESET_PASSWORD'] as const
+export type SmsScene = (typeof SMS_SCENES)[number]
+
+/** 邮箱验证码的用途。对齐后端 EmailCodeScene */
+export const EMAIL_CODE_SCENES = ['REGISTER', 'LOGIN', 'BIND', 'RESET_PASSWORD'] as const
+export type EmailCodeScene = (typeof EMAIL_CODE_SCENES)[number]
+
+/**
+ * 索取短信验证码。成功返回 204，**没有响应体**。
+ *
+ * <p>⚠️ 短信是**要花钱**的接口，服务端的 IP 日限比邮箱紧得多。
+ * 所以这颗按钮必须有冷却（见 useCodeSender），不能让用户连点。
+ *
+ * <p>失败时抛 ApiError：
+ *   INVALID_ARGUMENT(400)  号码格式不对
+ *   OPERATION_LIMITED(429) 冷却中 / 今天发太多了，message 里已带「还要等多久」
+ *   INTERNAL(500)          发不出去 —— 这是**我们的**问题，别让用户以为号码填错了
+ */
+export async function sendSmsCode(scene: SmsScene, phone: string): Promise<void> {
+  await requestVoid({ url: '/auth/sms/code', method: 'POST', data: { scene, phone } })
+}
+
+/**
+ * 索取邮箱验证码。成功返回 204，**没有响应体**。
+ *
+ * <p>🔴 **成功不代表真的寄了一封信。** 邮箱与场景不匹配时（拿一个没注册过的邮箱
+ * 要登录验证码、拿一个已注册的邮箱要注册验证码）服务端会静默成功 ——
+ * 如实回答等于送出一个账号枚举接口。
+ *
+ * <p>所以调用方**不要**把成功解释成「这个邮箱存在/不存在」，
+ * 提示语只能是「已发送」这一句，不能有第二种。
+ */
+export async function sendEmailCode(scene: EmailCodeScene, email: string): Promise<void> {
+  await requestVoid({ url: '/auth/email/code', method: 'POST', data: { scene, email } })
+}
+
 /** 后端返回 204，没有响应体 */
 export async function logout(): Promise<void> {
   await requestVoid({ url: '/auth/logout', method: 'POST' })

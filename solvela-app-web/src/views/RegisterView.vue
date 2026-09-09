@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { sendSmsCode } from '@/api/auth'
 import { ApiError } from '@/api/errors'
+import { useCodeSender } from '@/composables/useCodeSender'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -10,6 +12,7 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const phone = ref('')
+const smsCode = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const submitting = ref(false)
@@ -19,8 +22,44 @@ const errorTraceId = ref<string | null>(null)
 const phoneTaken = ref(false)
 
 const phoneError = ref<string | undefined>(undefined)
+const smsCodeError = ref<string | undefined>(undefined)
 const passwordError = ref<string | undefined>(undefined)
 const confirmError = ref<string | undefined>(undefined)
+
+/**
+ * 「获取验证码」。倒计时、发送中、失败提示全在 useCodeSender 里。
+ *
+ * 🔴 手机号没填时**在这里拦掉**，不发请求。短信是要花钱的接口，
+ * 让一个空号码走一趟真实请求去换一句「格式不正确」没有道理。
+ */
+const codeSender = useCodeSender(() => sendSmsCode('REGISTER', phone.value.trim()), {
+  precheck: () => {
+    if (phone.value.trim() === '') {
+      // 提示挂在【手机号】那一栏上，不是验证码那一栏 —— 要填的是手机号
+      phoneError.value = '请先输入手机号'
+      return false
+    }
+    return true
+  },
+})
+
+/*
+ * 换了手机号，之前那个码就是发给别人的了 —— 状态必须跟着清。
+ * 不清的话：用户给 A 号发了码，改成 B 号，那个码还躺在框里，
+ * 提交时报「验证码错误」，而他明明刚收到过一条。
+ */
+watch(phone, () => {
+  smsCode.value = ''
+  smsCodeError.value = undefined
+  /*
+   * 手机号那一栏的错也要清。不清的话，用户按提示补上号码、成功拿到验证码之后，
+   * 「请先输入手机号」还挂在框下面 —— 他刚照做完，页面却还在指责他。
+   * 这条错在下一次 validate() 时才会被覆盖，也就是要等到他点提交。
+   */
+  phoneError.value = undefined
+  phoneTaken.value = false
+  codeSender.reset()
+})
 
 /** 文案，不是校验。权威规则在后端 MemberPasswordPolicy */
 const PASSWORD_HINT = '8-32 位，需同时包含字母和数字'
@@ -39,6 +78,7 @@ const PASSWORD_HINT = '8-32 位，需同时包含字母和数字'
  */
 function validate(): boolean {
   phoneError.value = phone.value.trim() === '' ? '请输入手机号' : undefined
+  smsCodeError.value = smsCode.value.trim() === '' ? '请输入验证码' : undefined
   passwordError.value = password.value === '' ? '请设置密码' : undefined
 
   if (confirmPassword.value === '') {
@@ -51,6 +91,7 @@ function validate(): boolean {
 
   return (
     phoneError.value === undefined &&
+    smsCodeError.value === undefined &&
     passwordError.value === undefined &&
     confirmError.value === undefined
   )
@@ -63,6 +104,7 @@ async function submit(): Promise<void> {
   errorMessage.value = ''
   errorTraceId.value = null
   phoneTaken.value = false
+  smsCodeError.value = undefined
   if (!validate()) {
     return
   }
@@ -72,6 +114,7 @@ async function submit(): Promise<void> {
     await auth.register({
       registerType: 'PHONE_PASSWORD',
       identity: phone.value.trim(),
+      smsCode: smsCode.value.trim(),
       password: password.value,
       deviceType: 'H5',
     })
@@ -84,6 +127,13 @@ async function submit(): Promise<void> {
         // 409：这个号已经有主了。挂到手机号字段上，并在下面给一个「去登录」的出口
         phoneTaken.value = true
         phoneError.value = error.message
+      } else if (error.code === 'BAD_CREDENTIALS') {
+        /*
+         * 401 在注册这条路上只有一个来源：验证码不对/已失效/错太多次。
+         * 挂到验证码框上，而不是丢进表单级错误区 —— 用户要知道该重填哪一栏，
+         * 而「验证码错误」这四个字放在最下面时，他往往先去检查手机号
+         */
+        smsCodeError.value = error.message
       } else {
         // WEAK_PASSWORD 时后端的 message 就是规则原文，比前端那句提示更权威，原样展示
         errorMessage.value = error.message
@@ -119,6 +169,31 @@ async function goLogin(): Promise<void> {
         :maxlength="11"
         :error="phoneError"
       />
+      <Field
+        v-model="smsCode"
+        icon="lock"
+        type="tel"
+        placeholder="短信验证码"
+        autocomplete="one-time-code"
+        :maxlength="6"
+        :error="smsCodeError ?? codeSender.error.value"
+      >
+        <!--
+          按钮放进输入框内部，而不是并排两个控件：并排时两者宽度要靠 flex 分，
+          在窄屏上验证码框会被挤到只剩四五个字符宽。
+        -->
+        <template #suffix>
+          <Button
+            variant="text"
+            type="button"
+            :disabled="!codeSender.canSend.value"
+            @click="codeSender.send"
+          >
+            {{ codeSender.label.value }}
+          </Button>
+        </template>
+      </Field>
+
       <Field
         v-model="password"
         icon="lock"

@@ -96,6 +96,16 @@ const message = computed(() => props.error ?? props.hint)
       >
         <Icon :name="revealed ? 'eye' : 'eye-off'" :size="20" />
       </button>
+
+      <!--
+        右侧附加控件，目前只有验证码那颗「获取」按钮用。
+        做成插槽而不是再开一个 CodeField 组件：胶囊、聚焦描边、错误态、
+        下方提示行这四样它们完全一致，复制一份的话四处样式要各改一遍，
+        而漏改的表现是两个框在同一屏上长得不一样。
+      -->
+      <div v-if="$slots.suffix" class="sv-field__suffix">
+        <slot name="suffix" />
+      </div>
     </div>
 
     <p
@@ -168,6 +178,16 @@ const message = computed(() => props.error ?? props.hint)
 
 .sv-field__input:focus {
   outline: none;
+}
+
+/* 右侧控件与输入框之间留一条界线，让它看起来是「另一个东西」而不是输入区的一部分 */
+.sv-field__suffix {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding-left: var(--sv-space-sm);
+  margin-right: calc(var(--sv-space-xs) * -1);
+  border-left: 1px solid var(--sv-border-color);
 }
 
 .sv-field__reveal {
