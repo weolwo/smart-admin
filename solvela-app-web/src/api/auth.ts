@@ -79,11 +79,19 @@ export interface RegisterPayload {
   registerType?: RegisterType
   identity: string
   /** 邮箱注册的验证码 */
-  emailCode?: string
+  emailCode?: string | undefined
   /** 手机号注册的短信验证码 */
-  smsCode?: string
-  /** 邮箱注册时可以不填 —— 那种会员之后走验证码登录 */
-  password?: string
+  smsCode?: string | undefined
+  /**
+   * 邮箱注册时可以不填 —— 那种会员之后走验证码登录。
+   *
+   * 🔴 不填要传 `undefined`，**不能传空串**：空串会被后端当成
+   * 「填了一个不合规的密码」而拒掉（见 MemberRegisterService 的强度校验）。
+   *
+   * 类型带 `| undefined` 是必须的：tsconfig 开了 exactOptionalPropertyTypes，
+   * 在那个开关下「没传这个字段」和「传了 undefined」是两件事。
+   */
+  password?: string | undefined
   deviceType?: DeviceType
 }
 
@@ -200,6 +208,52 @@ export async function sendSmsCode(scene: SmsScene, phone: string): Promise<void>
  */
 export async function sendEmailCode(scene: EmailCodeScene, email: string): Promise<void> {
   await requestVoid({ url: '/auth/email/code', method: 'POST', data: { scene, email } })
+}
+
+/**
+ * 我的联系方式，**全部脱敏**（形如 `138****8000`）。
+ *
+ * 🔴 这是单独一次调用，不在 `/auth/me` 里 —— 那个结果会进网关缓存和日志，
+ * 而手机号邮箱是 PII。明文一次都不会出域，这里拿到的就是最终要显示的样子。
+ */
+export interface MemberContact {
+  phone: string | null
+  email: string | null
+  /**
+   * 有没有设过密码。
+   *
+   * 换绑邮箱的界面靠它决定给什么选项：没设过密码的人只能走「旧邮箱验证码」，
+   * 给他一个「输入当前密码」的框，是让他对着一个填不了的东西发愁。
+   */
+  passwordSet: boolean
+}
+
+export async function fetchContact(): Promise<MemberContact> {
+  return request<MemberContact>({ url: '/auth/contact', method: 'POST' })
+}
+
+/**
+ * 绑定 / 更换邮箱。成功返回 204。
+ *
+ * <h3>🔴 换绑必须多给一样东西，首次绑定不用</h3>
+ * 拦的是这条链：**会话被盗 → 换绑成攻击者的邮箱 → 用「忘记密码」重置 → 永久接管**。
+ * 每一步单看都合法，而 C 端令牌有 30 天有效期。
+ *
+ * 所以已经绑过邮箱的人，还要证明自己是原主 —— `currentPassword`
+ * 或 `oldEmailCode` 二选一。没设过密码的会员只有后一条路。
+ */
+export interface EmailBindPayload {
+  email: string
+  /** 新邮箱收到的验证码 */
+  code: string
+  /** 当前密码。换绑时与 oldEmailCode 二选一 */
+  currentPassword?: string | undefined
+  /** 旧邮箱收到的验证码。换绑时与 currentPassword 二选一 */
+  oldEmailCode?: string | undefined
+}
+
+export async function bindEmail(payload: EmailBindPayload): Promise<void> {
+  await requestVoid({ url: '/auth/email/bind', method: 'POST', data: payload })
 }
 
 /** 后端返回 204，没有响应体 */

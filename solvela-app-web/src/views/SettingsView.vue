@@ -20,6 +20,7 @@
     <div class="page__body">
       <h2 class="page__group">账号安全</h2>
       <div class="page__card">
+        <Cell icon="user" title="邮箱" :to="{ name: 'email-bind' }" />
         <Cell icon="phone" title="登录设备" :to="{ name: 'sessions' }" />
       </div>
     </div>

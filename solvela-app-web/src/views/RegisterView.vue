@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { sendSmsCode } from '@/api/auth'
+import { sendEmailCode, sendSmsCode } from '@/api/auth'
 import { ApiError } from '@/api/errors'
 import { useCodeSender } from '@/composables/useCodeSender'
 import { useAuthStore } from '@/stores/auth'
@@ -11,8 +11,31 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
+/**
+ * 用手机号还是邮箱注册。
+ *
+ * <h3>🔴 邮箱注册可以不设密码，那不是省事，是另一种账号</h3>
+ * 后端 {@code MemberRegisterCmd} 允许 EMAIL_CODE 注册时 password 为空
+ *（`t_member.password` 可为 NULL，DDL 注释写着「验证码登录可为空」）。
+ * 那种会员之后<b>只能靠邮箱验证码登录</b> —— 所以登录页必须同时支持验证码登录，
+ * 否则这条注册通道会把人注册进一个自己进不去的账号。
+ */
+const IDENTITY_OPTIONS = [
+  { value: 'phone', label: '手机号' },
+  { value: 'email', label: '邮箱' },
+] as const
+type IdentityKind = (typeof IDENTITY_OPTIONS)[number]['value']
+
+const identityKind = ref<IdentityKind>('phone')
+
 const phone = ref('')
 const smsCode = ref('')
+const email = ref('')
+const emailCode = ref('')
+const emailError = ref<string | undefined>(undefined)
+const emailCodeError = ref<string | undefined>(undefined)
+/** 邮箱已被注册时立起来，与 phoneTaken 同一个用途 */
+const emailTaken = ref(false)
 const password = ref('')
 const confirmPassword = ref('')
 const submitting = ref(false)
@@ -43,6 +66,41 @@ const codeSender = useCodeSender(() => sendSmsCode('REGISTER', phone.value.trim(
   },
 })
 
+/**
+ * 邮箱那条的「获取验证码」。与短信那条各自独立 ——
+ * 共用一个的话，切换注册方式时倒计时会跟着串过去，
+ * 而那两条码是发到两个完全不同的地方的。
+ */
+const emailCodeSender = useCodeSender(() => sendEmailCode('REGISTER', email.value.trim()), {
+  precheck: () => {
+    if (email.value.trim() === '') {
+      emailError.value = '请先输入邮箱'
+      return false
+    }
+    return true
+  },
+})
+
+watch(email, () => {
+  emailCode.value = ''
+  emailCodeError.value = undefined
+  emailError.value = undefined
+  emailTaken.value = false
+  emailCodeSender.reset()
+})
+
+/*
+ * 切换注册方式时清掉整体错误。
+ * 不清的话，用户被「该手机号已注册」挡下之后切到邮箱，那句红字还挂在下面 ——
+ * 而它说的是另一件事。
+ */
+watch(identityKind, () => {
+  errorMessage.value = ''
+  errorTraceId.value = null
+  phoneTaken.value = false
+  emailTaken.value = false
+})
+
 /*
  * 换了手机号，之前那个码就是发给别人的了 —— 状态必须跟着清。
  * 不清的话：用户给 A 号发了码，改成 B 号，那个码还躺在框里，
@@ -64,6 +122,9 @@ watch(phone, () => {
 /** 文案，不是校验。权威规则在后端 MemberPasswordPolicy */
 const PASSWORD_HINT = '8-32 位，需同时包含字母和数字'
 
+/** 邮箱注册可以不设密码，那时提示要说清楚「不填会怎样」，而不是只说规则 */
+const EMAIL_PASSWORD_HINT = '不填也可以，之后用邮箱验证码登录'
+
 /**
  * 刻意不在前端写手机号正则，也不在前端实现密码强度规则。
  *
@@ -77,11 +138,23 @@ const PASSWORD_HINT = '8-32 位，需同时包含字母和数字'
  * confirmPassword 字段。
  */
 function validate(): boolean {
-  phoneError.value = phone.value.trim() === '' ? '请输入手机号' : undefined
-  smsCodeError.value = smsCode.value.trim() === '' ? '请输入验证码' : undefined
-  passwordError.value = password.value === '' ? '请设置密码' : undefined
+  const byEmail = identityKind.value === 'email'
 
-  if (confirmPassword.value === '') {
+  phoneError.value = !byEmail && phone.value.trim() === '' ? '请输入手机号' : undefined
+  smsCodeError.value = !byEmail && smsCode.value.trim() === '' ? '请输入验证码' : undefined
+  emailError.value = byEmail && email.value.trim() === '' ? '请输入邮箱' : undefined
+  emailCodeError.value = byEmail && emailCode.value.trim() === '' ? '请输入验证码' : undefined
+
+  /*
+   * 🔴 邮箱注册时密码【可以不填】—— 那种会员之后走验证码登录。
+   * 但只要填了就得两次一致：填了一个又打错第二遍，静默忽略比报错更糟。
+   */
+  const wantsPassword = !byEmail || password.value !== '' || confirmPassword.value !== ''
+  passwordError.value = !byEmail && password.value === '' ? '请设置密码' : undefined
+
+  if (!wantsPassword) {
+    confirmError.value = undefined
+  } else if (confirmPassword.value === '') {
     confirmError.value = '请再次输入密码'
   } else if (confirmPassword.value !== password.value) {
     confirmError.value = '两次输入的密码不一致'
@@ -92,6 +165,8 @@ function validate(): boolean {
   return (
     phoneError.value === undefined &&
     smsCodeError.value === undefined &&
+    emailError.value === undefined &&
+    emailCodeError.value === undefined &&
     passwordError.value === undefined &&
     confirmError.value === undefined
   )
@@ -104,18 +179,25 @@ async function submit(): Promise<void> {
   errorMessage.value = ''
   errorTraceId.value = null
   phoneTaken.value = false
+  emailTaken.value = false
   smsCodeError.value = undefined
+  emailCodeError.value = undefined
   if (!validate()) {
     return
   }
 
+  const byEmail = identityKind.value === 'email'
   submitting.value = true
   try {
     await auth.register({
-      registerType: 'PHONE_PASSWORD',
-      identity: phone.value.trim(),
-      smsCode: smsCode.value.trim(),
-      password: password.value,
+      registerType: byEmail ? 'EMAIL_CODE' : 'PHONE_PASSWORD',
+      identity: (byEmail ? email.value : phone.value).trim(),
+      // 只带这条通道自己的码。两条都带的话，服务端按 registerType 只看其中一个，
+      // 而另一条码会被白白消费掉（验过即作废）
+      ...(byEmail ? { emailCode: emailCode.value.trim() } : { smsCode: smsCode.value.trim() }),
+      // 🔴 邮箱注册允许不设密码：传空串会被后端当成「填了一个弱密码」而拒掉，
+      //    必须是 undefined
+      password: password.value === '' ? undefined : password.value,
       deviceType: 'H5',
     })
     // 注册即登录：后端把令牌一起返回了，直接进目标页，不再跳一次登录
@@ -124,16 +206,25 @@ async function submit(): Promise<void> {
   } catch (error) {
     if (error instanceof ApiError) {
       if (error.code === 'CONFLICT') {
-        // 409：这个号已经有主了。挂到手机号字段上，并在下面给一个「去登录」的出口
-        phoneTaken.value = true
-        phoneError.value = error.message
+        // 409：这个身份已经有主了。挂到对应字段上，并在下面给一个「去登录」的出口
+        if (byEmail) {
+          emailTaken.value = true
+          emailError.value = error.message
+        } else {
+          phoneTaken.value = true
+          phoneError.value = error.message
+        }
       } else if (error.code === 'BAD_CREDENTIALS') {
         /*
          * 401 在注册这条路上只有一个来源：验证码不对/已失效/错太多次。
          * 挂到验证码框上，而不是丢进表单级错误区 —— 用户要知道该重填哪一栏，
          * 而「验证码错误」这四个字放在最下面时，他往往先去检查手机号
          */
-        smsCodeError.value = error.message
+        if (byEmail) {
+          emailCodeError.value = error.message
+        } else {
+          smsCodeError.value = error.message
+        }
       } else {
         // WEAK_PASSWORD 时后端的 message 就是规则原文，比前端那句提示更权威，原样展示
         errorMessage.value = error.message
@@ -156,51 +247,91 @@ async function goLogin(): Promise<void> {
   <div class="page">
     <header class="page__head">
       <h1 class="page__title">创建账号</h1>
-      <p class="page__subtitle">手机号注册，注册完直接开抽</p>
+      <p class="page__subtitle">注册完直接开抽</p>
     </header>
 
     <form class="page__form" novalidate @submit.prevent="submit">
-      <Field
-        v-model="phone"
-        icon="phone"
-        type="tel"
-        placeholder="手机号"
-        autocomplete="username"
-        :maxlength="11"
-        :error="phoneError"
-      />
-      <Field
-        v-model="smsCode"
-        icon="lock"
-        type="tel"
-        placeholder="短信验证码"
-        autocomplete="one-time-code"
-        :maxlength="6"
-        :error="smsCodeError ?? codeSender.error.value"
-      >
-        <!--
+      <!--
+        两条通道摆在明面上。做成下拉框的话，用户得先点开才知道还能用邮箱注册 ——
+        而「原来可以不用手机号」正是这一栏要告诉他的事。
+      -->
+      <Segmented v-model="identityKind" :options="IDENTITY_OPTIONS" />
+
+      <template v-if="identityKind === 'email'">
+        <Field
+          v-model="email"
+          icon="user"
+          placeholder="邮箱"
+          autocomplete="username"
+          :error="emailError"
+        />
+        <Field
+          v-model="emailCode"
+          icon="lock"
+          type="tel"
+          placeholder="邮箱验证码"
+          autocomplete="one-time-code"
+          :maxlength="6"
+          :error="emailCodeError ?? emailCodeSender.error.value"
+        >
+          <template #suffix>
+            <Button
+              variant="text"
+              type="button"
+              :block="false"
+              :disabled="!emailCodeSender.canSend.value"
+              @click="emailCodeSender.send"
+            >
+              {{ emailCodeSender.label.value }}
+            </Button>
+          </template>
+        </Field>
+      </template>
+
+      <template v-else>
+        <Field
+          v-model="phone"
+          icon="phone"
+          type="tel"
+          placeholder="手机号"
+          autocomplete="username"
+          :maxlength="11"
+          :error="phoneError"
+        />
+        <Field
+          v-model="smsCode"
+          icon="lock"
+          type="tel"
+          placeholder="短信验证码"
+          autocomplete="one-time-code"
+          :maxlength="6"
+          :error="smsCodeError ?? codeSender.error.value"
+        >
+          <!--
           按钮放进输入框内部，而不是并排两个控件：并排时两者宽度要靠 flex 分，
           在窄屏上验证码框会被挤到只剩四五个字符宽。
         -->
-        <template #suffix>
-          <Button
-            variant="text"
-            type="button"
-            :disabled="!codeSender.canSend.value"
-            @click="codeSender.send"
-          >
-            {{ codeSender.label.value }}
-          </Button>
-        </template>
-      </Field>
+          <template #suffix>
+            <Button
+              variant="text"
+              type="button"
+              :block="false"
+              :disabled="!codeSender.canSend.value"
+              @click="codeSender.send"
+            >
+              {{ codeSender.label.value }}
+            </Button>
+          </template>
+        </Field>
+      </template>
 
       <Field
         v-model="password"
         icon="lock"
         type="password"
-        placeholder="设置密码"
+        :placeholder="identityKind === 'email' ? '设置密码（可不填）' : '设置密码'"
         autocomplete="new-password"
-        :hint="PASSWORD_HINT"
+        :hint="identityKind === 'email' ? EMAIL_PASSWORD_HINT : PASSWORD_HINT"
         :error="passwordError"
       />
       <Field
@@ -220,8 +351,10 @@ async function goLogin(): Promise<void> {
 
       <Button type="submit" :loading="submitting" class="page__submit">注册</Button>
 
-      <!-- 号已被占用是唯一一种「用户下一步很明确」的失败，给个直达按钮比让他找返回键强 -->
-      <Button v-if="phoneTaken" variant="text" @click="goLogin">该手机号已注册，去登录</Button>
+      <!-- 身份已被占用是唯一一种「用户下一步很明确」的失败，给个直达按钮比让他找返回键强 -->
+      <Button v-if="phoneTaken || emailTaken" variant="text" @click="goLogin">
+        {{ phoneTaken ? '该手机号已注册，去登录' : '该邮箱已注册，去登录' }}
+      </Button>
     </form>
 
     <p class="page__alt">

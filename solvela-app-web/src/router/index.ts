@@ -88,6 +88,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '设置' },
   },
   {
+    path: '/settings/email',
+    name: 'email-bind',
+    component: () => import('@/views/EmailBindView.vue'),
+    meta: { title: '邮箱' },
+  },
+  {
     path: '/settings/sessions',
     name: 'sessions',
     component: () => import('@/views/SessionsView.vue'),

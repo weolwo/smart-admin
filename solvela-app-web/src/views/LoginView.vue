@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { sendSmsCode } from '@/api/auth'
+import { sendEmailCode, sendSmsCode, type LoginType } from '@/api/auth'
 import { ApiError } from '@/api/errors'
 import { useCodeSender } from '@/composables/useCodeSender'
 import { useAuthStore } from '@/stores/auth'
@@ -11,7 +11,30 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
+/**
+ * 登录方式。
+ *
+ * <h3>🔴 邮箱验证码这一条不是锦上添花，是必需的</h3>
+ * 邮箱注册允许不设密码（后端 `t_member.password` 可为 NULL，
+ * DDL 注释写着「验证码登录可为空」）。没有这条通道的话，
+ * 那批会员注册完就再也进不来了。
+ *
+ * <p>邮箱这一档默认走【验证码】而不是密码，正是因为这个：
+ * 默认密码的话，没设过密码的人第一眼看到的是一个他永远填不对的框。
+ */
+const LOGIN_OPTIONS = [
+  { value: 'PHONE_PASSWORD', label: '手机号' },
+  { value: 'EMAIL_CODE', label: '邮箱' },
+] as const
+
+const loginType = ref<LoginType>('PHONE_PASSWORD')
+/** 邮箱那一档里，用验证码还是密码 */
+const emailUsesPassword = ref(false)
+
 const phone = ref('')
+const email = ref('')
+const emailCode = ref('')
+const emailError = ref<string | undefined>(undefined)
 const password = ref('')
 
 /**
@@ -37,6 +60,41 @@ const errorMessage = ref('')
 const errorTraceId = ref<string | null>(null)
 const phoneError = ref<string | undefined>(undefined)
 const passwordError = ref<string | undefined>(undefined)
+
+const byEmail = computed(() => loginType.value !== 'PHONE_PASSWORD')
+
+/** 邮箱那一档的「获取验证码」。场景 LOGIN */
+const emailCodeSender = useCodeSender(() => sendEmailCode('LOGIN', email.value.trim()), {
+  precheck: () => {
+    if (email.value.trim() === '') {
+      emailError.value = '请先输入邮箱'
+      return false
+    }
+    return true
+  },
+})
+
+/*
+ * 切换登录方式时，把上一档的错和二次验证状态全清掉 ——
+ * 它们说的是另一件事，留着只会让人对着一句不相干的红字发愁。
+ */
+watch([loginType, emailUsesPassword], () => {
+  errorMessage.value = ''
+  errorTraceId.value = null
+  phoneError.value = undefined
+  emailError.value = undefined
+  passwordError.value = undefined
+  challengeRequired.value = false
+  verificationCode.value = ''
+  verificationError.value = undefined
+  emailCodeSender.reset()
+})
+
+watch(email, () => {
+  emailCode.value = ''
+  emailError.value = undefined
+  emailCodeSender.reset()
+})
 
 /** 二次验证的「获取验证码」。场景是 LOGIN，与注册那条码互不相干 */
 const codeSender = useCodeSender(() => sendSmsCode('LOGIN', phone.value.trim()), {
@@ -76,9 +134,29 @@ const SUCCESS_DWELL_MS = 700
  * 按钮置灰时用户看不出差哪一项，只知道点不动。
  */
 function validate(): boolean {
-  phoneError.value = phone.value.trim() === '' ? '请输入手机号' : undefined
-  passwordError.value = password.value === '' ? '请输入密码' : undefined
-  return phoneError.value === undefined && passwordError.value === undefined
+  if (!byEmail.value) {
+    phoneError.value = phone.value.trim() === '' ? '请输入手机号' : undefined
+    passwordError.value = password.value === '' ? '请输入密码' : undefined
+    return phoneError.value === undefined && passwordError.value === undefined
+  }
+  phoneError.value = undefined
+  emailError.value = email.value.trim() === '' ? '请输入邮箱' : undefined
+  passwordError.value = (
+    emailUsesPassword.value ? password.value === '' : emailCode.value.trim() === ''
+  )
+    ? emailUsesPassword.value
+      ? '请输入密码'
+      : '请输入验证码'
+    : undefined
+  return emailError.value === undefined && passwordError.value === undefined
+}
+
+/** 三种登录方式最终落成哪一个 */
+function resolvedLoginType(): LoginType {
+  if (!byEmail.value) {
+    return 'PHONE_PASSWORD'
+  }
+  return emailUsesPassword.value ? 'EMAIL_PASSWORD' : 'EMAIL_CODE'
 }
 
 async function submit(): Promise<void> {
@@ -100,11 +178,11 @@ async function submit(): Promise<void> {
   try {
     await auth.login(
       {
-        // 这一页只做手机号+密码。邮箱那两条通道有各自的入口，
-        // 把三种方式塞进同一个表单只会让每一种都别扭
-        loginType: 'PHONE_PASSWORD',
-        identity: phone.value.trim(),
-        credential: password.value,
+        loginType: resolvedLoginType(),
+        identity: (byEmail.value ? email.value : phone.value).trim(),
+        // credential 装什么由 loginType 决定：密码，或者那条邮箱验证码
+        credential:
+          byEmail.value && !emailUsesPassword.value ? emailCode.value.trim() : password.value,
         // 正常设备上这一项永远是 undefined —— 绝大多数登录不受影响
         verificationCode: verificationCode.value.trim() || undefined,
         deviceType: 'H5',
@@ -150,7 +228,7 @@ async function submit(): Promise<void> {
   <div class="page">
     <header class="page__head">
       <h1 class="page__title">欢迎回来</h1>
-      <p class="page__subtitle">输入手机号和密码，继续参与抽奖</p>
+      <p class="page__subtitle">继续参与抽奖</p>
     </header>
 
     <!--
@@ -159,23 +237,72 @@ async function submit(): Promise<void> {
       自己监听 keyup.enter 做不到后者。
     -->
     <form class="page__form" novalidate @submit.prevent="submit">
-      <Field
-        v-model="phone"
-        icon="phone"
-        type="tel"
-        placeholder="手机号"
-        autocomplete="username"
-        :maxlength="11"
-        :error="phoneError"
-      />
-      <Field
-        v-model="password"
-        icon="lock"
-        type="password"
-        placeholder="密码"
-        autocomplete="current-password"
-        :error="passwordError"
-      />
+      <Segmented v-model="loginType" :options="LOGIN_OPTIONS" />
+
+      <template v-if="byEmail">
+        <Field
+          v-model="email"
+          icon="user"
+          placeholder="邮箱"
+          autocomplete="username"
+          :error="emailError"
+        />
+        <!--
+          默认走验证码而不是密码：邮箱注册允许不设密码，
+          默认密码的话，那批人第一眼看到的是一个自己永远填不对的框。
+        -->
+        <Field
+          v-if="!emailUsesPassword"
+          v-model="emailCode"
+          icon="lock"
+          type="tel"
+          placeholder="邮箱验证码"
+          autocomplete="one-time-code"
+          :maxlength="6"
+          :error="passwordError ?? emailCodeSender.error.value"
+        >
+          <template #suffix>
+            <Button
+              variant="text"
+              type="button"
+              :block="false"
+              :disabled="!emailCodeSender.canSend.value"
+              @click="emailCodeSender.send"
+            >
+              {{ emailCodeSender.label.value }}
+            </Button>
+          </template>
+        </Field>
+        <Field
+          v-else
+          v-model="password"
+          icon="lock"
+          type="password"
+          placeholder="密码"
+          autocomplete="current-password"
+          :error="passwordError"
+        />
+      </template>
+
+      <template v-else>
+        <Field
+          v-model="phone"
+          icon="phone"
+          type="tel"
+          placeholder="手机号"
+          autocomplete="username"
+          :maxlength="11"
+          :error="phoneError"
+        />
+        <Field
+          v-model="password"
+          icon="lock"
+          type="password"
+          placeholder="密码"
+          autocomplete="current-password"
+          :error="passwordError"
+        />
+      </template>
 
       <!--
         只在服务端明确要求时才出现。默认就摆在这里的话，
@@ -195,6 +322,7 @@ async function submit(): Promise<void> {
           <Button
             variant="text"
             type="button"
+            :block="false"
             :disabled="!codeSender.canSend.value"
             @click="codeSender.send"
           >
@@ -210,6 +338,17 @@ async function submit(): Promise<void> {
       </p>
 
       <Button type="submit" :loading="submitting" class="page__submit">登录</Button>
+
+      <!-- 邮箱那一档给一个切换出口：设过密码的人不该被逼着每次都收一封信 -->
+      <p v-if="byEmail" class="page__switch">
+        <button
+          type="button"
+          class="page__link-btn"
+          @click="emailUsesPassword = !emailUsesPassword"
+        >
+          {{ emailUsesPassword ? '改用邮箱验证码登录' : '改用密码登录' }}
+        </button>
+      </p>
 
       <div class="page__options">
         <Checkbox v-model="remember" label="记住我" />
@@ -279,6 +418,27 @@ async function submit(): Promise<void> {
 
 .page__submit {
   margin-top: var(--sv-space-sm);
+}
+
+.page__switch {
+  margin: 0;
+  text-align: center;
+}
+
+.page__link-btn {
+  border: 0;
+  padding: var(--sv-space-xs);
+  background: transparent;
+  color: var(--sv-color-primary);
+  font: inherit;
+  font-size: var(--sv-font-caption);
+  cursor: pointer;
+}
+
+.page__link-btn:focus-visible {
+  outline: 2px solid var(--sv-color-primary);
+  outline-offset: 2px;
+  border-radius: var(--sv-radius-sm);
 }
 
 .page__options {
