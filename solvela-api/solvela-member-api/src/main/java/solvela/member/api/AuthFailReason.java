@@ -85,6 +85,30 @@ public enum AuthFailReason {
     /** 验证码错误。剩余次数由域内部计数，用尽后转为 {@link #EMAIL_CODE_LOCKED}。 */
     EMAIL_CODE_MISMATCH,
 
+    // ------------------------------------------------------------------ 设备观察档（2026-09-10）
+
+    /**
+     * 密码/验证码是对的，但<b>这台设备处在观察档</b>，还要再验一道验证码。
+     *
+     * <h3>🔴 这一档排在密码校验【之后】，是刻意的</h3>
+     * 排在之前的话，任何人拿一个手机号就能让我们给机主发一条短信 ——
+     * 而短信是花钱的，那就成了一个免费的短信轰炸接口。
+     *
+     * <p>代价是它<b>确认了密码是对的</b>：攻击者猜中密码时会看到这一档而不是
+     * BAD_CREDENTIALS。这是所有二次验证共有的取舍 —— 他知道了密码对，
+     * 但仍然进不去，因为他没有机主的手机。
+     */
+    DEVICE_VERIFICATION_REQUIRED,
+
+    /**
+     * 二次验证码给了，但不对 / 已失效 / 错太多次。
+     *
+     * <p>与 {@link #DEVICE_VERIFICATION_REQUIRED} 分开，是因为客户端要据此
+     * 决定<b>弹输入框</b>还是<b>报错并让他重发</b> —— 判据同
+     * {@code EmailBindFailReason} 的 REQUIRED / FAILED 那一对。
+     */
+    DEVICE_VERIFICATION_FAILED,
+
     /** 验证码连续输错次数用尽，已作废，必须重新发送。 */
     EMAIL_CODE_LOCKED
 }

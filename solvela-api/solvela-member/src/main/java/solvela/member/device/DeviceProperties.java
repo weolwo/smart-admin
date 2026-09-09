@@ -60,6 +60,32 @@ public class DeviceProperties {
         return registerWindow == null ? Duration.ofDays(1) : registerWindow;
     }
 
+    /**
+     * 活跃时间的<b>节流窗口</b>：同一台设备这段时间内只写一次库。
+     *
+     * <p>默认 1 小时，与 {@code t_device.last_active_time} 的 DDL 注释一致
+     *（「节流写（&gt;1h 才更新）」）。调小会让这张表变热，调大会让
+     * 「这台设备最近还在用吗」变糊 —— 而后者是清理与统计的依据。
+     */
+    private Duration activeThrottle = Duration.ofHours(1);
+
+    /**
+     * 观察期长度：设备被降到观察档之后，多久自动回档。
+     *
+     * <p>🔴 默认 24 小时，是个<b>拍出来的数</b>，和那四个阈值一样没有真实分布支撑。
+     * 太短起不到抬成本的作用，太长会把一个偶然撞上阈值的正常用户按住一整天 ——
+     * 而他不会来报障，只会不再打开。等 observe 档跑出真实数据再校准。
+     */
+    private Duration observeWindow = Duration.ofHours(24);
+
+    public Duration activeThrottle() {
+        return activeThrottle == null ? Duration.ofHours(1) : activeThrottle;
+    }
+
+    public Duration observeWindow() {
+        return observeWindow == null ? Duration.ofHours(24) : observeWindow;
+    }
+
     public int maxRegisterPerIp() {
         return maxRegisterPerIp <= 0 ? 10 : maxRegisterPerIp;
     }

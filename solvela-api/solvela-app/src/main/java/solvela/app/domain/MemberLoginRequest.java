@@ -39,6 +39,9 @@ public record MemberLoginRequest(
         @Schema(description = "密码或邮箱验证码", requiredMode = Schema.RequiredMode.REQUIRED)
         @NotBlank(message = "请输入密码或验证码") String credential,
 
+        @Schema(description = "二次验证码。仅当服务端回 DEVICE_VERIFICATION_REQUIRED 时才需要带")
+        String verificationCode,
+
         @Schema(description = "设备端：APP/H5/WECHAT/PC")
         String deviceType) {
 

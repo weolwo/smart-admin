@@ -30,6 +30,15 @@ public enum DeviceGuardRule {
 
     /** 一天注册数超限。压批量建号。 */
     REGISTER_TOO_MANY("REGISTER_TOO_MANY", "设备注册账号过于频繁"),
+
+    /**
+     * 已被<b>人工</b>封禁。
+     *
+     * <p>与上面四条不是一回事：那四条是「拍出来的阈值撞上了」，
+     * 这一条是<b>有人看过之后签的字</b>。所以它不受 dry-run 影响 ——
+     * 把它也关掉，后台那个封禁按钮就是假的。
+     */
+    BANNED("BANNED", "设备已被封禁"),
     ;
 
     private final String value;

@@ -118,7 +118,7 @@ public class MemberLoginService {
     public MemberResult login(MemberLoginRequest request, String ip) {
         MemberAuthResult result = memberAuthApi.authenticate(new MemberAuthCmd(
                 request.typeOrDefault(), request.identity(), request.credential(),
-                request.deviceType(), ip, CurrentDevice.deviceIdOrNull()));
+                request.verificationCode(), request.deviceType(), ip, CurrentDevice.deviceIdOrNull()));
         if (!result.success()) {
             throw translate(result);
         }
@@ -298,6 +298,16 @@ public class MemberLoginService {
             // 合并文案会让被设备维度限住的用户一直去找回密码，而那解决不了他的问题
             case DEVICE_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED,
                     String.format(DEVICE_LIMITED_MSG, minutes(result.lockedSeconds())));
+            /*
+             * 观察档的二次验证。两条分开，因为客户端要据此决定
+             * 【把验证码框亮出来】还是【报错并让他重新获取】。
+             *
+             * 🔴 措辞都不提「你的设备被标记了」—— 那句话对真实用户毫无意义
+             * （他做不了任何事），只会让人以为账号出了问题去找客服。
+             */
+            case DEVICE_VERIFICATION_REQUIRED -> new ApiException(ApiErrors.DEVICE_VERIFICATION_REQUIRED);
+            case DEVICE_VERIFICATION_FAILED ->
+                    new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误，请重新获取");
         };
     }
 

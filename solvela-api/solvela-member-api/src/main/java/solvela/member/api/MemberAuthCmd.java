@@ -42,6 +42,18 @@ public record MemberAuthCmd(
         MemberLoginType loginType,
         String identity,
         String credential,
+        /**
+         * <b>二次验证码</b>，仅当这台设备处在观察档时才用得到。
+         *
+         * <p>与 {@link #credential} 不是一回事：credential 是「你知道什么」
+         *（密码，或 EMAIL_CODE 登录时的那个码），这一项是「这台设备最近可疑，
+         * 再证明一次你能收到本人的短信/邮件」。
+         *
+         * <p>正常设备上<b>永远为 null</b> —— 客户端不必先问一次「要不要验」，
+         * 而是先不带地提交，被服务端回 {@code DEVICE_VERIFICATION_REQUIRED}
+         * 之后再补。多一次往返，换的是绝大多数登录不受影响。
+         */
+        String verificationCode,
         String deviceType,
         String clientIp,
         String deviceId) {
@@ -49,6 +61,7 @@ public record MemberAuthCmd(
     /** 兼容既有调用点的手机号密码登录。 */
     public static MemberAuthCmd byPhonePassword(String phone, String password,
                                                 String deviceType, String clientIp, String deviceId) {
-        return new MemberAuthCmd(MemberLoginType.PHONE_PASSWORD, phone, password, deviceType, clientIp, deviceId);
+        return new MemberAuthCmd(MemberLoginType.PHONE_PASSWORD, phone, password, null,
+                deviceType, clientIp, deviceId);
     }
 }

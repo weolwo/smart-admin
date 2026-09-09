@@ -22,7 +22,13 @@ import solvela.member.MemberOperationLimit;
 import solvela.member.api.AuthFailReason;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
+import solvela.member.device.DeviceDispositionService;
 import solvela.member.device.DeviceGuard;
+import solvela.member.sms.MemberSmsCodeService;
+import solvela.member.api.SmsCodeVerifyResult;
+import solvela.member.api.SmsScene;
+import solvela.member.api.MemberLoginType;
+import solvela.enums.DeviceStatusEnum;
 import solvela.member.device.DeviceGuardRule;
 import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.loginlog.dao.MemberLoginLogDao;
@@ -90,6 +96,10 @@ class MemberAuthServiceTest {
     private PiiHasher piiHasher;
     @Mock
     private DeviceGuard deviceGuard;
+    @Mock
+    private DeviceDispositionService dispositionService;
+    @Mock
+    private MemberSmsCodeService smsCodeService;
 
     @InjectMocks
     private MemberAuthService service;
@@ -111,6 +121,8 @@ class MemberAuthServiceTest {
         // 默认设备闸放行：绝大多数用例关心的是它【之后】的分支顺序
         when(deviceGuard.checkLogin(any())).thenReturn(DeviceGuardVerdict.pass());
         when(deviceGuard.checkMemberFanout(any(), any())).thenReturn(DeviceGuardVerdict.pass());
+        // 默认设备是正常档：观察档那条支线由 checkDeviceChallenge 自己的用例覆盖
+        when(dispositionService.currentStatus(any())).thenReturn(DeviceStatusEnum.NORMAL);
     }
 
     // ------------------------------------------------------------------ 正常路径
@@ -312,6 +324,75 @@ class MemberAuthServiceTest {
 
     private MemberAuthCmd cmd(String phone, String password) {
         return MemberAuthCmd.byPhonePassword(phone, password, "H5", "127.0.0.1", DEVICE_ID);
+    }
+
+    /** 带二次验证码的登录命令。 */
+    private MemberAuthCmd cmdWithCode(String code) {
+        return new MemberAuthCmd(MemberLoginType.PHONE_PASSWORD, PHONE, RAW_PASSWORD, code,
+                "H5", "127.0.0.1", DEVICE_ID);
+    }
+
+    /** 把这台设备置成观察档。 */
+    private void deviceUnderObservation() {
+        when(dispositionService.currentStatus(DEVICE_ID)).thenReturn(DeviceStatusEnum.OBSERVE);
+    }
+
+    // ------------------------------------------------------------------ 设备观察档
+
+    @Test
+    @DisplayName("🔴 观察档 + 没给码 → DEVICE_VERIFICATION_REQUIRED，而不是登录失败")
+    void 观察档要二次验证() {
+        deviceUnderObservation();
+
+        MemberAuthResult result = service.authenticate(cmd(PHONE, RAW_PASSWORD));
+
+        assertFalse(result.success());
+        assertEquals(AuthFailReason.DEVICE_VERIFICATION_REQUIRED, result.reason(),
+                "密码是对的，只是还差一步。回成 BAD_CREDENTIALS 的话，"
+                        + "用户会一直以为自己密码记错了，去走找回密码 —— 而那解决不了他的问题");
+    }
+
+    @Test
+    @DisplayName("观察档 + 码不对 → FAILED，与「没给」分得开")
+    void 观察档码不对() {
+        deviceUnderObservation();
+        when(smsCodeService.verify(any(), any(), any())).thenReturn(SmsCodeVerifyResult.MISMATCH);
+
+        assertEquals(AuthFailReason.DEVICE_VERIFICATION_FAILED,
+                service.authenticate(cmdWithCode("000000")).reason(),
+                "「还需要一步」和「你给的不对」是两件事：客户端据此决定弹输入框还是报错");
+    }
+
+    @Test
+    @DisplayName("观察档 + 码对 → 正常放行")
+    void 观察档码对了() {
+        deviceUnderObservation();
+        when(smsCodeService.verify(eq(SmsScene.LOGIN), eq(PHONE), eq("123456")))
+                .thenReturn(SmsCodeVerifyResult.OK);
+
+        assertTrue(service.authenticate(cmdWithCode("123456")).success());
+    }
+
+    @Test
+    @DisplayName("🔴 二次验证排在密码校验【之后】—— 否则谁都能拿一个手机号让我们发短信")
+    void 二次验证排在密码之后() {
+        deviceUnderObservation();
+
+        MemberAuthResult result = service.authenticate(
+                new MemberAuthCmd(MemberLoginType.PHONE_PASSWORD, PHONE, "WrongPassword9", "123456",
+                        "H5", "127.0.0.1", DEVICE_ID));
+
+        assertEquals(AuthFailReason.BAD_CREDENTIALS, result.reason(),
+                "密码错就该在密码那一关挡下，不该走到二次验证");
+        verify(smsCodeService, never()).verify(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("正常档设备完全不受影响 —— 绝大多数登录不该多一次往返")
+    void 正常档不要二次验证() {
+        assertTrue(service.authenticate(cmd(PHONE, RAW_PASSWORD)).success());
+
+        verify(smsCodeService, never()).verify(any(), any(), any());
     }
 
     private MemberOperationLimit limitExpiringIn(long seconds) {

@@ -22,6 +22,9 @@ import solvela.member.api.MemberIdentity;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
 import solvela.member.api.MemberRegisterResult;
+import solvela.enums.DeviceStatusEnum;
+import solvela.member.api.SmsCodeVerifyResult;
+import solvela.member.api.SmsScene;
 import solvela.member.api.SmsCodeSendCmd;
 import solvela.member.api.SmsCodeSendResult;
 import solvela.member.sms.MemberSmsCodeService;
@@ -95,6 +98,8 @@ public class MemberAuthService implements MemberAuthApi {
     private final MemberEmailCodeIssuer emailCodeIssuer;
 
     private final MemberSmsCodeService smsCodeService;
+
+    private final solvela.member.device.DeviceDispositionService dispositionService;
     private final MemberEmailBindService emailBindService;
     private final MemberPasswordResetService passwordResetService;
 
@@ -188,6 +193,14 @@ public class MemberAuthService implements MemberAuthApi {
             return credentialProblem;
         }
 
+        // ---------- 设备观察档：二次验证 ----------
+        // 🔴 排在密码校验【之后】：排在之前的话，任何人拿一个手机号就能让我们
+        //    给机主发一条短信 —— 而短信是花钱的，那就成了免费的轰炸接口。
+        MemberAuthResult deviceChallenge = checkDeviceChallenge(loginType, identity, member, cmd);
+        if (deviceChallenge != null) {
+            return deviceChallenge;
+        }
+
         operationLimitService.clearFail(member.getMemberId(), MemberOperationTypeEnum.LOGIN);
 
         // 一机多号只能在这里判 —— 在此之前拿不到 memberId。
@@ -200,6 +213,55 @@ public class MemberAuthService implements MemberAuthApi {
 
         saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_SUCCESS, null);
         return MemberAuthResult.ok(toIdentity(member));
+    }
+
+    /**
+     * 观察档设备的二次验证。正常设备返回 null（什么都不做）。
+     *
+     * <h3>为什么是「多验一道」而不是「直接拒」</h3>
+     * 方案里那句「优先降级，不优先拒绝」落在这里。误伤的代价不对称：
+     * 拦错一个正常用户，他不会来报障，只会不再打开；而多要一道验证码，
+     * 正常用户只是多花十秒，刷子却要为<b>每一台设备</b>付出一条短信的成本。
+     *
+     * <h3>用哪条通道，跟着登录身份走</h3>
+     * 用 switch 表达式：新增登录方式时<b>编译不过</b>，
+     * 而不是悄悄落进某个兜底分支，让观察档对那条新通道形同虚设。
+     */
+    private MemberAuthResult checkDeviceChallenge(MemberLoginType loginType, String identity,
+                                                  Member member, MemberAuthCmd cmd) {
+        if (dispositionService.currentStatus(cmd.deviceId()) != DeviceStatusEnum.OBSERVE) {
+            return null;
+        }
+        /*
+         * 🔴 邮箱验证码登录【本来就是一道验证码】，不再要第二道。
+         * 再要一道的话，用户会在同一个邮箱里收到两封信，
+         * 而第二封证明不了第一封证明不了的任何事情。
+         */
+        if (loginType == MemberLoginType.EMAIL_CODE) {
+            return null;
+        }
+        if (SolvelaStringUtil.isBlank(cmd.verificationCode())) {
+            saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "设备观察档：需要二次验证");
+            return MemberAuthResult.fail(AuthFailReason.DEVICE_VERIFICATION_REQUIRED);
+        }
+        // 用哪条通道跟着登录身份走。switch 表达式：新增登录方式时【编译不过】，
+        // 而不是悄悄落进兜底分支，让观察档对那条新通道形同虚设
+        boolean passed = switch (loginType) {
+            // 手机号+密码：发一条短信到本人号码
+            case PHONE_PASSWORD ->
+                    smsCodeService.verify(SmsScene.LOGIN, identity, cmd.verificationCode())
+                            == SmsCodeVerifyResult.OK;
+            // 邮箱+密码：邮箱一定有（就是用它登的），发到那个邮箱
+            case EMAIL_PASSWORD ->
+                    emailCodeService.verify(EmailCodeScene.LOGIN, identity, cmd.verificationCode())
+                            == EmailCodeVerifyResult.OK;
+            case EMAIL_CODE -> throw new IllegalStateException("不可能走到：EMAIL_CODE 已在上面返回");
+        };
+        if (passed) {
+            return null;
+        }
+        saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "设备观察档：二次验证码不正确");
+        return MemberAuthResult.fail(AuthFailReason.DEVICE_VERIFICATION_FAILED);
     }
 
     /**

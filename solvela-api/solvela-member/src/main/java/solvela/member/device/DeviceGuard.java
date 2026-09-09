@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import solvela.base.module.redis.RedisService;
 import solvela.base.util.SolvelaStringUtil;
+import solvela.enums.DeviceStatusEnum;
 
 /**
  * 设备维度的闸门：登录频次、失败次数、一机多号、批量注册。
@@ -58,6 +59,8 @@ public class DeviceGuard {
 
     private final DeviceGuardProperties properties;
 
+    private final DeviceDispositionService dispositionService;
+
     /**
      * 登录前的闸：这台设备今天登得太多了吗、最近失败得太多了吗。
      *
@@ -67,6 +70,11 @@ public class DeviceGuard {
     public DeviceGuardVerdict checkLogin(String deviceId) {
         if (SolvelaStringUtil.isBlank(deviceId)) {
             return DeviceGuardVerdict.pass();
+        }
+        // 封禁排在所有计数之前：一台已被人工封掉的设备不该再消耗任何计数配额，
+        // 也不该因为「今天还没登够 30 次」而被放行
+        if (banned(deviceId)) {
+            return DeviceGuardVerdict.hit(DeviceGuardRule.BANNED, 0L, false);
         }
         // 🔴 失败计数【只读不加】：它由 recordLoginFailure 在真的失败时才 +1。
         //    在这里 incr 会把「一次正常登录」也算成失败，阈值当场失去意义
@@ -129,6 +137,9 @@ public class DeviceGuard {
         if (SolvelaStringUtil.isBlank(deviceId)) {
             return DeviceGuardVerdict.pass();
         }
+        if (banned(deviceId)) {
+            return DeviceGuardVerdict.hit(DeviceGuardRule.BANNED, 0L, false);
+        }
         long count = redisService.increment(key(KEY_REGISTER, deviceId), properties.dayWindow().toSeconds());
         if (count > properties.getMaxRegisterPerDay()) {
             return verdict(DeviceGuardRule.REGISTER_TOO_MANY, deviceId, KEY_REGISTER);
@@ -148,7 +159,30 @@ public class DeviceGuard {
         long retryAfter = Math.max(1L, redisService.getExpire(key(keyPrefix, deviceId)));
         log.warn("【设备闸门】{} deviceId: {}, 规则: {}({}), 还需等待 {} 秒",
                 dryRun ? "命中但放行[dry-run]" : "拦截", deviceId, rule.getValue(), rule.getDesc(), retryAfter);
+        /*
+         * 🔴 降档也归 dryRun 管。
+         *
+         * 「进观察档」不是一条日志，它对用户是有感的（下次登录要多验一道短信码）——
+         * 所以它和拦截是同一类动作，dry-run 期间两者都不该发生。
+         * 只把拦截关掉、留着降档，等于「说好了不拦人，实际在拦」。
+         *
+         * 代价是 dry-run 期间整个处置闭环也是静止的。那正是方案本来的顺序：
+         * 四个阈值全是拍出来的，先拿真实流量校准，再收口。
+         */
+        if (!dryRun) {
+            dispositionService.observe(deviceId, rule.getDesc());
+        }
         return DeviceGuardVerdict.hit(rule, retryAfter, dryRun);
+    }
+
+    /**
+     * 是否已被人工封禁。
+     *
+     * <p>🔴 <b>不受 dryRun 影响</b>。dry-run 说的是「那四个拍出来的阈值先别拦人」，
+     * 而封禁是<b>有人看过之后签字做的决定</b> —— 把它也关掉，后台那个按钮就是假的。
+     */
+    private boolean banned(String deviceId) {
+        return dispositionService.currentStatus(deviceId) == DeviceStatusEnum.BANNED;
     }
 
     private long readCount(String prefix, String deviceId) {

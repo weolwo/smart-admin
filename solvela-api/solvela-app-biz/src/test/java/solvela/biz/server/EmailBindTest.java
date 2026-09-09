@@ -268,11 +268,11 @@ class EmailBindTest {
         String second = freshEmail();
         assertTrue(bind(second, sendAndReadCode(EmailCodeScene.BIND, second, memberId), PASSWORD, null).success());
 
-        assertTrue(memberAuthService.authenticate(new MemberAuthCmd(
-                MemberLoginType.EMAIL_PASSWORD, second, PASSWORD, "H5", freshIp(), null)).success(),
+        assertTrue(memberAuthService.authenticate(new MemberAuthCmd(MemberLoginType.EMAIL_PASSWORD, second, PASSWORD, null,
+                "H5", freshIp(), null)).success(),
                 "新邮箱应当能登录");
-        assertFalse(memberAuthService.authenticate(new MemberAuthCmd(
-                MemberLoginType.EMAIL_PASSWORD, first, PASSWORD, "H5", freshIp(), null)).success(),
+        assertFalse(memberAuthService.authenticate(new MemberAuthCmd(MemberLoginType.EMAIL_PASSWORD, first, PASSWORD, null,
+                "H5", freshIp(), null)).success(),
                 "旧邮箱换掉之后就不该再是这个账号的登录身份了");
     }
 }
