@@ -7,6 +7,8 @@ import solvela.app.auth.CurrentDevice;
 import solvela.app.auth.MemberPrincipal;
 import solvela.app.auth.MemberPrincipalLoader;
 import solvela.auth.member.MemberAccessToken;
+import solvela.auth.member.MemberSession;
+import solvela.auth.member.MemberSessionContext;
 import solvela.auth.member.MemberTokenStore;
 import solvela.app.auth.CurrentMember;
 import solvela.app.domain.EmailBindRequest;
@@ -111,7 +113,7 @@ public class MemberLoginService {
         }
 
         MemberPrincipal principal = MemberPrincipal.of(result.identity());
-        MemberAccessToken token = tokenStore.issue(principal.memberId());
+        MemberAccessToken token = tokenStore.issue(principal.memberId(), sessionContext(deviceType, ip));
         return new MemberResult(token.value(), token.expiresIn().toSeconds(), principal);
     }
 
@@ -124,7 +126,8 @@ public class MemberLoginService {
         }
 
         MemberPrincipal principal = MemberPrincipal.of(result.identity());
-        MemberAccessToken token = tokenStore.issue(principal.memberId());
+        MemberAccessToken token = tokenStore.issue(principal.memberId(),
+                sessionContext(request.deviceType(), ip));
         // 资料可能在上次缓存之后被后台改过，登录是重建缓存最自然的时机
         principalLoader.evict(principal.memberId());
 
@@ -267,6 +270,38 @@ public class MemberLoginService {
             case ACCOUNT_UNAVAILABLE -> new ApiException(ApiErrors.ACCOUNT_DISABLED,
                     "账号状态异常，无法自助重置密码，请联系客服");
         };
+    }
+
+    /**
+     * 签发令牌时顺手记下的展示信息，供「我的登录设备」用。
+     *
+     * <p>{@code region} 传 null —— 解析 IP 归属地的工具在 solvela-base-core，
+     * 而网关的 classpath 上没有它（见 {@link MemberSessionContext} 的类注释）。
+     */
+    private static MemberSessionContext sessionContext(String deviceType, String ip) {
+        return new MemberSessionContext(
+                deviceType == null || deviceType.isBlank() ? DEFAULT_DEVICE_TYPE : deviceType,
+                CurrentDevice.deviceIdOrNull(), ip, null);
+    }
+
+    /** 这个会员当前活着的登录会话。 */
+    public java.util.List<MemberSession> listSessions(Long memberId, String currentToken) {
+        return tokenStore.listSessions(memberId, currentToken);
+    }
+
+    /**
+     * 让某一个会话下线。
+     *
+     * <p>🔴 memberId 从令牌解析而来，<b>不收客户端传的</b> —— 收了就等于
+     * 「说自己是谁就是谁」，任何人都能把别人的会话踢掉。
+     */
+    public boolean revokeSession(Long memberId, String sessionId) {
+        return tokenStore.revokeSession(memberId, sessionId);
+    }
+
+    /** 下线除当前之外的所有会话。 */
+    public int revokeOtherSessions(Long memberId, String currentToken) {
+        return tokenStore.revokeOthers(memberId, currentToken);
     }
 
     public void logout(String tokenValue, Long memberId, String ip) {

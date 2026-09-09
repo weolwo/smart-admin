@@ -14,7 +14,11 @@ import solvela.app.auth.CurrentMember;
 import solvela.app.auth.MemberPrincipal;
 import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
+import solvela.app.domain.SessionRevokeRequest;
 import solvela.app.domain.SmsCodeRequest;
+import solvela.auth.member.MemberSession;
+
+import java.util.List;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
@@ -150,6 +154,50 @@ public class MemberLoginController {
     public ResponseEntity<Void> logout(HttpServletRequest servletRequest) {
         MemberPrincipal member = CurrentMember.require();
         memberLoginService.logout(currentToken(servletRequest), member.memberId(), ClientIp.of(servletRequest));
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 我的登录设备。<b>要登录</b>。
+     *
+     * <h3>它回答的是「现在有谁登着我的号」</h3>
+     * 只列<b>活着的</b>会话 —— 历史登录记录是另一件事（后台的 t_member_login_log），
+     * 混进来的话用户会看到一堆早已失效的设备，对着点不动的下线按钮发愁。
+     *
+     * <p>列表里 {@code current=true} 那一条是用户此刻正在用的。必须标出来：
+     * 不标的话他很容易把自己这台点下线，然后当场被踢出去。
+     */
+    @PostMapping("/sessions")
+    public List<MemberSession> sessions(HttpServletRequest servletRequest) {
+        return memberLoginService.listSessions(
+                CurrentMember.require().memberId(), currentToken(servletRequest));
+    }
+
+    /**
+     * 让某个会话下线。
+     *
+     * <p>返回 204。成功与「这个 sessionId 已经不在了」<b>都是 204</b> ——
+     * 用户要的结果是「那台设备下线」，而它本来就不在线时，这个结果已经成立。
+     * 为此回一个 404 只会让客户端多写一段没用的分支。
+     */
+    @PostMapping("/sessions/revoke")
+    public ResponseEntity<Void> revokeSession(@RequestBody @Valid SessionRevokeRequest request,
+                                              HttpServletRequest servletRequest) {
+        memberLoginService.revokeSession(CurrentMember.require().memberId(), request.sessionId());
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 下线<b>除当前之外</b>的所有会话。
+     *
+     * <p>这是「我的号可能被别人登着」时最有用的那个按钮：一次点掉所有其它设备，
+     * 而自己不用重新登。做成「全部下线（含自己）」的话，用户会犹豫要不要点 ——
+     * 而犹豫的那几分钟里，别人还登着。
+     */
+    @PostMapping("/sessions/revokeOthers")
+    public ResponseEntity<Void> revokeOtherSessions(HttpServletRequest servletRequest) {
+        memberLoginService.revokeOtherSessions(
+                CurrentMember.require().memberId(), currentToken(servletRequest));
         return ResponseEntity.noContent().build();
     }
 

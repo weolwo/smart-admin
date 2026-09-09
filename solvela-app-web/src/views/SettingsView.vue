@@ -2,13 +2,14 @@
 /**
  * 设置页。
  *
- * <h3>🔴 目前是空壳，是刻意的</h3>
- * 「我的」页面上「设置」这一项必须指向一个真实存在的页面 ——
- * 指向一个不存在的路由，用户点了会掉进 404，这跟本项目在别处刻意坚持的
- * 「不给死链接」（忘记密码置灰、优惠页未开活动不做链接）是同一条原则的反面。
+ * <h3>它终于有一项真实内容了</h3>
+ * 之前是空壳（「我的」页上的「设置」必须指向一个真实存在的页面，否则用户会掉进
+ * 404 —— 与本项目在别处坚持的「不给死链接」是同一条原则）。
+ * 2026-09-10 加了「登录设备」，那是第一项。
  *
- * <p>具体设置项（消息通知、隐私、账号安全……）等真实需求出现时再加，
- * 不在这次"先把框架搭出来"的范围内。
+ * <p>这里刻意<b>没有</b>用 Section：它封装的是「加载/出错/空」三态，
+ * 而这一页是一张写死的清单，不会加载、不会出错、不会为空。
+ * 硬套的话要传四个恒定值的 prop，读的人还要停下来确认它们是不是真的恒定。
  */
 </script>
 
@@ -17,7 +18,10 @@
     <NavBar title="设置" />
 
     <div class="page__body">
-      <p class="page__empty">设置项正在建设中，敬请期待</p>
+      <h2 class="page__group">账号安全</h2>
+      <div class="page__card">
+        <Cell icon="phone" title="登录设备" :to="{ name: 'sessions' }" />
+      </div>
     </div>
   </div>
 </template>
@@ -31,15 +35,20 @@
 
 .page__body {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: var(--sv-space-page);
 }
 
-.page__empty {
-  margin: 0;
-  color: var(--sv-text-placeholder);
+.page__group {
+  margin: 0 0 var(--sv-space-sm);
+  padding-left: var(--sv-space-xs);
+  color: var(--sv-text-secondary);
   font-size: var(--sv-font-caption);
+  font-weight: 500;
+}
+
+.page__card {
+  border-radius: var(--sv-radius-card);
+  background: var(--sv-bg-surface);
+  overflow: hidden;
 }
 </style>

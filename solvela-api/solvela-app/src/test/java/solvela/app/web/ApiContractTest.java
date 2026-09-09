@@ -190,6 +190,31 @@ class ApiContractTest {
     }
 
     @Test
+    @DisplayName("🔴 会话相关的三条路由都【需要登录】—— 它们暴露的是「谁登着我的号」")
+    void 会话接口需要登录() {
+        for (String path : new String[]{"/auth/sessions", "/auth/sessions/revoke",
+                "/auth/sessions/revokeOthers"}) {
+            HttpResponse<String> response = post(path, "{\"sessionId\":\"x\"}", null);
+
+            assertEquals(401, response.statusCode(),
+                    path + " 未登录也能调。这三条一条比一条严重："
+                            + "列表泄露的是别人的登录轨迹，下线能把别人踢出去。实际：" + response.body());
+            assertEquals("LOGIN_REQUIRED", parse(response).path("code").asText(), path);
+        }
+    }
+
+    @Test
+    @DisplayName("下线接口漏传 sessionId → 400，不是 500")
+    void 下线缺参数返回400() {
+        HttpResponse<String> response = post("/auth/sessions/revoke", "{}", "mb_" + "A".repeat(43));
+
+        // 令牌是伪造的，所以先撞 401；真正要钉的是它【不会】 500。
+        // 参数校验与认证谁先谁后不重要，重要的是两者都不该把异常漏成 500
+        assertTrue(response.statusCode() == 400 || response.statusCode() == 401,
+                "实际：" + response.statusCode() + " " + response.body());
+    }
+
+    @Test
     @DisplayName("参数校验失败 → 400，且带上具体哪个字段不对")
     void 参数错误返回400() {
         HttpResponse<String> response = post("/auth/login", "{\"identity\":\"\",\"credential\":\"\"}", null);

@@ -13,6 +13,7 @@ import solvela.enums.MemberStatusEnum;
 import solvela.member.auth.MemberAuthService;
 import solvela.member.service.MemberService;
 import solvela.auth.member.MemberAccessToken;
+import solvela.auth.member.MemberSessionContext;
 import solvela.auth.member.MemberTokenStore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,8 +74,8 @@ class FreezeRevokesSessionTest {
     @Test
     @DisplayName("🔴 冻结之后，此前签发的令牌立刻失效")
     void 冻结当场吊销全部会话() {
-        MemberAccessToken phone = tokenStore.issue(MEMBER_ID);
-        MemberAccessToken pad = tokenStore.issue(MEMBER_ID);
+        MemberAccessToken phone = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
+        MemberAccessToken pad = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
         // 前提确认：不先证明令牌本来是有效的，下面的断言就可能是空过
         assertEquals(MEMBER_ID, tokenStore.resolve(phone.value()), "前提不成立：令牌一开始就解析不出会员");
         assertEquals(MEMBER_ID, tokenStore.resolve(pad.value()));
@@ -100,7 +101,7 @@ class FreezeRevokesSessionTest {
     @Test
     @DisplayName("解冻不恢复旧会话 —— 用户重新登录，这是刻意的")
     void 解冻不恢复旧会话() {
-        MemberAccessToken token = tokenStore.issue(MEMBER_ID);
+        MemberAccessToken token = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
         memberService.updateStatus(MEMBER_ID, MemberStatusEnum.FROZEN, "acceptance-test");
 
         memberService.updateStatus(MEMBER_ID, MemberStatusEnum.NORMAL, "acceptance-test");
@@ -108,7 +109,7 @@ class FreezeRevokesSessionTest {
         assertNull(tokenStore.resolve(token.value()),
                 "被封期间的那批会话很可能正是导致被封的原因，解冻不该把它们放回来");
         // 但新登录必须能用
-        MemberAccessToken fresh = tokenStore.issue(MEMBER_ID);
+        MemberAccessToken fresh = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
         assertEquals(MEMBER_ID, tokenStore.resolve(fresh.value()), "解冻后应当能重新签发可用的令牌");
     }
 }

@@ -87,6 +87,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/SettingsView.vue'),
     meta: { title: '设置' },
   },
+  {
+    path: '/settings/sessions',
+    name: 'sessions',
+    component: () => import('@/views/SessionsView.vue'),
+    meta: { title: '登录设备' },
+  },
   // ---- 活动专题页：从「优惠」点进去。分享入口，匿名可看（对齐后端 @Anonymous），
   //      抽奖那一步再要求登录 ----
   {

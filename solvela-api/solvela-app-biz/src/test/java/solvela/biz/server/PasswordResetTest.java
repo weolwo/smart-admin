@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import solvela.auth.member.MemberAccessToken;
+import solvela.auth.member.MemberSessionContext;
 import solvela.auth.member.MemberTokenStore;
 import solvela.base.mail.MailService;
 import solvela.base.module.redis.RedisService;
@@ -141,8 +142,8 @@ class PasswordResetTest {
     @DisplayName("🔴 重置成功：新密码能登录，旧密码不能，而且【所有会话被吊销】")
     void 重置并踢下线() {
         registerWithEmail();
-        MemberAccessToken phone = tokenStore.issue(memberId);
-        MemberAccessToken pad = tokenStore.issue(memberId);
+        MemberAccessToken phone = tokenStore.issue(memberId, MemberSessionContext.empty());
+        MemberAccessToken pad = tokenStore.issue(memberId, MemberSessionContext.empty());
         assertEquals(memberId, tokenStore.resolve(phone.value()), "前提不成立：令牌一开始就无效");
 
         MemberPasswordResetResult result = reset(sendAndReadCode(EmailCodeScene.RESET_PASSWORD, email), NEW_PASSWORD);

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import solvela.auth.member.MemberAccessToken;
+import solvela.auth.member.MemberSessionContext;
 import solvela.auth.member.MemberTokenStore;
 
 import java.nio.charset.StandardCharsets;
@@ -36,7 +37,7 @@ class TokenStoreTest {
     @Test
     @DisplayName("签发的令牌能换回会员号，且带过期时间")
     void 签发与解析() {
-        MemberAccessToken token = tokenStore.issue(MEMBER_ID);
+        MemberAccessToken token = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
         try {
             assertTrue(token.value().startsWith("mb_"), "令牌应带系统前缀，实际：" + token.value());
             assertEquals(MEMBER_ID, tokenStore.resolve(token.value()));
@@ -52,12 +53,23 @@ class TokenStoreTest {
     @Test
     @DisplayName("🔴 Redis 里存的是摘要，不是令牌原文")
     void 令牌原文不落库() {
-        MemberAccessToken token = tokenStore.issue(MEMBER_ID);
+        MemberAccessToken token = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
         try {
             // 原文当 key 查不到 —— 说明存的不是它
             assertNull(redis.opsForValue().get("app:auth:t:" + token.value()));
-            // 摘要当 key 查得到
-            assertEquals(String.valueOf(MEMBER_ID), redis.opsForValue().get(tokenKey(token.value())));
+            // 摘要当 key 查得到，且值以会员号开头
+            String stored = redis.opsForValue().get(tokenKey(token.value()));
+            assertNotNull(stored);
+            assertTrue(stored.startsWith(MEMBER_ID + "|") || stored.equals(String.valueOf(MEMBER_ID)),
+                    "会员号必须在最前面：认证路径上每个请求都要取它，不该为此解析整条记录。实际：" + stored);
+            /*
+             * 🔴 2026-09-10 这里从「值恰好等于会员号」改成了「不含令牌原文」。
+             * 值的格式变了（多了 sessionId、登录时间、设备等展示字段），
+             * 但这条用例真正要守的性质一个字都没变 —— 存进去的东西不能拿来登录。
+             * 断言格式的话，每次加一个展示字段它都会红，而红了什么也没说明。
+             */
+            assertFalse(stored.contains(token.value()),
+                    "会话记录里出现了令牌原文，等价于明文存密码");
 
             // 反查集合里也只有摘要
             Set<String> digests = redis.opsForSet().members("app:auth:m:" + MEMBER_ID);
@@ -73,7 +85,7 @@ class TokenStoreTest {
     @Test
     @DisplayName("吊销之后立刻失效 —— 这是选不透明令牌而不是 JWT 的全部理由")
     void 吊销即时生效() {
-        MemberAccessToken token = tokenStore.issue(MEMBER_ID);
+        MemberAccessToken token = tokenStore.issue(MEMBER_ID, MemberSessionContext.empty());
         assertEquals(MEMBER_ID, tokenStore.resolve(token.value()));
 
         tokenStore.revoke(token.value());
@@ -90,7 +102,7 @@ class TokenStoreTest {
     void 全部吊销() {
         Set<String> tokens = new HashSet<>();
         for (int i = 0; i < 3; i++) {
-            tokens.add(tokenStore.issue(MEMBER_ID).value());
+            tokens.add(tokenStore.issue(MEMBER_ID, MemberSessionContext.empty()).value());
         }
         try {
             int revoked = tokenStore.revokeAll(MEMBER_ID);
