@@ -77,14 +77,15 @@ class LoginWritesDeviceIdTest {
 
     private void register(String deviceId) {
         phone = freshPhone();
-        MemberRegisterResult result = memberAuthService.register(new MemberRegisterCmd(
-                phone, PASSWORD, "APP", freshIp(), "APP", deviceId));
+        MemberRegisterResult result = memberAuthService.register(
+                MemberRegisterCmd.byPhonePassword(phone, PASSWORD, "APP", freshIp(), "APP", deviceId));
         assertTrue(result.success(), "前提不成立，注册就失败了：" + result.reason());
         memberId = result.identity().memberId();
     }
 
     private MemberAuthResult login(String deviceId) {
-        return memberAuthService.authenticate(new MemberAuthCmd(phone, PASSWORD, "APP", freshIp(), deviceId));
+        return memberAuthService.authenticate(
+                MemberAuthCmd.byPhonePassword(phone, PASSWORD, "APP", freshIp(), deviceId));
     }
 
     private List<Map<String, Object>> logs() {
@@ -114,7 +115,7 @@ class LoginWritesDeviceIdTest {
         register(device);
 
         MemberAuthResult bad = memberAuthService.authenticate(
-                new MemberAuthCmd(phone, "WrongPassword9", "APP", freshIp(), device));
+                MemberAuthCmd.byPhonePassword(phone, "WrongPassword9", "APP", freshIp(), device));
         assertFalse(bad.success());
 
         Map<String, Object> last = logs().get(logs().size() - 1);

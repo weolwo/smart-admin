@@ -8,11 +8,16 @@ import solvela.app.auth.MemberPrincipal;
 import solvela.app.auth.MemberPrincipalLoader;
 import solvela.auth.member.MemberAccessToken;
 import solvela.auth.member.MemberTokenStore;
+import solvela.app.auth.CurrentMember;
+import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
 import solvela.app.web.ApiErrors;
 import solvela.app.web.ApiException;
+import solvela.member.api.EmailCodeScene;
+import solvela.member.api.EmailCodeSendCmd;
+import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -86,7 +91,8 @@ public class MemberLoginService {
                 : request.deviceType();
 
         MemberRegisterResult result = memberAuthApi.register(new MemberRegisterCmd(
-                request.phone(), request.password(), deviceType, ip, deviceType,
+                request.typeOrDefault(), request.identity(), request.emailCode(), request.password(),
+                deviceType, ip, deviceType,
                 // 灰度期间可能为 null（老客户端还没带设备令牌），域里会直接放行
                 CurrentDevice.deviceIdOrNull()));
         if (!result.success()) {
@@ -100,8 +106,8 @@ public class MemberLoginService {
 
     public MemberResult login(MemberLoginRequest request, String ip) {
         MemberAuthResult result = memberAuthApi.authenticate(new MemberAuthCmd(
-                request.phone(), request.password(), request.deviceType(), ip,
-                CurrentDevice.deviceIdOrNull()));
+                request.typeOrDefault(), request.identity(), request.credential(),
+                request.deviceType(), ip, CurrentDevice.deviceIdOrNull()));
         if (!result.success()) {
             throw translate(result);
         }
@@ -118,6 +124,37 @@ public class MemberLoginService {
      * 退出登录。只吊销<b>当前这一个</b>令牌，其它设备不受影响 ——
      * 「退出所有设备」是另一个动作，用户得明确选择。
      */
+    /**
+     * 索取邮箱验证码。
+     *
+     * <p>🔴 <b>返回成功不代表真的寄了一封信。</b>邮箱与场景不匹配时（拿一个没注册过的
+     * 邮箱要登录验证码、拿一个已注册的邮箱要注册验证码）域会静默成功 ——
+     * 如实回答等于送出一个账号枚举接口。所以这里<b>不要</b>加任何
+     * 「已发送到 xxx」之外的提示，更不要把域返回的成功与否解释成「这个邮箱存不存在」。
+     */
+    public void sendEmailCode(EmailCodeRequest request, String ip) {
+        EmailCodeSendResult result = memberAuthApi.sendEmailCode(new EmailCodeSendCmd(
+                request.scene(), request.email(), ip,
+                // BIND 场景要知道「是谁在绑」，其余三个是匿名接口
+                request.scene() == EmailCodeScene.BIND ? CurrentMember.memberIdOrNull() : null));
+        if (!result.success()) {
+            throw translateEmailCode(result);
+        }
+    }
+
+    /** 发码失败原因 → HTTP 契约。同样用 switch 表达式，新增原因时编译不过。 */
+    private ApiException translateEmailCode(EmailCodeSendResult result) {
+        return switch (result.reason()) {
+            case BAD_EMAIL_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "邮箱格式不正确");
+            case TOO_FREQUENT -> new ApiException(ApiErrors.OPERATION_LIMITED,
+                    String.format("验证码已发送，请 %d 秒后再试", Math.max(1, result.retryAfterSeconds())));
+            case DAILY_LIMIT_REACHED -> new ApiException(ApiErrors.OPERATION_LIMITED,
+                    "今日验证码发送次数已用完，请明天再试");
+            // 这是【我们自己】的问题，如实说「稍后再试」而不是让用户以为自己填错了
+            case SEND_FAILED -> new ApiException(ApiErrors.INTERNAL, "验证码发送失败，请稍后再试");
+        };
+    }
+
     public void logout(String tokenValue, Long memberId, String ip) {
         tokenStore.revoke(tokenValue);
         memberAuthApi.recordLogout(new MemberLogoutCmd(memberId, ip, CurrentDevice.deviceIdOrNull()));
@@ -136,6 +173,13 @@ public class MemberLoginService {
             case ACCOUNT_FROZEN -> new ApiException(ApiErrors.ACCOUNT_DISABLED, "账号已被冻结，请联系客服");
             case NO_PASSWORD -> new ApiException(ApiErrors.BAD_CREDENTIALS, "该账号未设置密码，请使用短信验证码登录");
             case OPERATION_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED, lockedMessage(result.lockedSeconds()));
+            // 邮箱格式：与手机号格式同一个判据，明说不泄露任何信息
+            case BAD_EMAIL_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "邮箱格式不正确");
+            // 验证码三态说得具体。它们说的是【码】不是【账号】，
+            // 而且没有账号的邮箱也存了码（MailDelivery.SUPPRESS），所以不构成账号枚举
+            case EMAIL_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
+            case EMAIL_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case EMAIL_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
             // 同为 429，但措辞完全不同：账号被限说「连续登录失败」，设备被限说「当前设备」——
             // 合并文案会让被设备维度限住的用户一直去找回密码，而那解决不了他的问题
             case DEVICE_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED,
@@ -164,6 +208,13 @@ public class MemberLoginService {
                     new ApiException(ApiErrors.OPERATION_LIMITED, registerLimitedMessage(result.retryAfterSeconds()));
             case DEVICE_LIMITED -> new ApiException(ApiErrors.OPERATION_LIMITED,
                     String.format(DEVICE_LIMITED_MSG, minutes(result.retryAfterSeconds())));
+            case BAD_EMAIL_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "邮箱格式不正确");
+            // 与 PHONE_TAKEN 同一个取舍：必须如实说，否则用户不知道该去登录还是换个邮箱。
+            // 这条枚举口子在邮箱这边【贵得多】—— 验证码校验排在查重之前
+            case EMAIL_TAKEN -> new ApiException(ApiErrors.CONFLICT, "该邮箱已注册，请直接登录");
+            case EMAIL_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
+            case EMAIL_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case EMAIL_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
         };
     }
 

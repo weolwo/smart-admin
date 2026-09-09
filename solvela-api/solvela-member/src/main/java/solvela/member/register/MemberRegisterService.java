@@ -20,6 +20,11 @@ import solvela.member.api.RegisterFailReason;
 import solvela.member.id.MemberIdAllocator;
 import solvela.member.device.DeviceGuard;
 import solvela.member.device.DeviceGuardVerdict;
+import solvela.member.api.EmailCodeScene;
+import solvela.member.api.EmailCodeVerifyResult;
+import solvela.member.api.MemberRegisterType;
+import solvela.member.email.MemberEmailCodeService;
+import solvela.member.util.MemberEmailUtil;
 import solvela.member.util.MemberPhoneUtil;
 
 /**
@@ -68,6 +73,7 @@ public class MemberRegisterService {
     private final PiiHasher piiHasher;
     private final PiiCipher piiCipher;
     private final DeviceGuard deviceGuard;
+    private final MemberEmailCodeService emailCodeService;
 
     /**
      * 注册。
@@ -81,17 +87,33 @@ public class MemberRegisterService {
     @Transactional(rollbackFor = Exception.class)
     public MemberRegisterResult register(MemberRegisterCmd cmd) {
 
-        // ---------- 手机号规范化 ----------
-        // 必须先规范化再算摘要：同一个人写成 "138 0000 0000" 和 "13800000000"
-        // 会得到两个不同的 hash，唯一约束拦不住，一个号能注册出两个账号
-        String phone = MemberPhoneUtil.normalize(cmd.phone());
-        if (phone == null) {
-            return MemberRegisterResult.fail(RegisterFailReason.BAD_PHONE_FORMAT);
+        MemberRegisterType registerType = cmd.registerType() == null
+                ? MemberRegisterType.PHONE_PASSWORD
+                : cmd.registerType();
+        boolean byEmail = registerType == MemberRegisterType.EMAIL_CODE;
+
+        // ---------- 身份规范化 ----------
+        // 必须先规范化再算摘要：同一个人写成 "138 0000 0000" 和 "13800000000"、
+        // 或者 "A@Example.com" 和 "A@example.com"，都会得到两个不同的 hash，
+        // 唯一约束拦不住，一个身份能注册出两个账号
+        String identity = byEmail
+                ? MemberEmailUtil.normalize(cmd.identity())
+                : MemberPhoneUtil.normalize(cmd.identity());
+        if (identity == null) {
+            return MemberRegisterResult.fail(byEmail
+                    ? RegisterFailReason.BAD_EMAIL_FORMAT
+                    : RegisterFailReason.BAD_PHONE_FORMAT);
         }
 
         // ---------- 密码强度 ----------
-        if (!MemberPasswordPolicy.isValid(cmd.password())) {
-            return MemberRegisterResult.fail(RegisterFailReason.WEAK_PASSWORD);
+        // 🔴 邮箱注册允许不设密码（t_member.password 允许 NULL，DDL 注释写着
+        //    「验证码登录可为空」），那种会员之后走 EMAIL_CODE 登录。
+        //    但只要填了就得过强度校验 —— 「填了一个弱密码却被静默接受」比不让填更糟
+        boolean hasPassword = !SolvelaStringUtil.isEmpty(cmd.password());
+        if (!byEmail || hasPassword) {
+            if (!MemberPasswordPolicy.isValid(cmd.password())) {
+                return MemberRegisterResult.fail(RegisterFailReason.WEAK_PASSWORD);
+            }
         }
 
         // ---------- 设备限频 ----------
@@ -109,15 +131,38 @@ public class MemberRegisterService {
             return MemberRegisterResult.tooManyAttempts(retryAfter);
         }
 
-        // ---------- 手机号查重 ----------
+        // ---------- 邮箱验证码 ----------
+        // 🔴 排在【查重之前】：不然一个没有验证码的人也能拿注册接口
+        //    反复问「这个邮箱注册过没有」—— 而 EMAIL_TAKEN 是必须如实回答的
+        //    （藏了用户就没法用，见 RegisterFailReason 类注释），
+        //    那个枚举口子只能靠「先证明你拥有这个邮箱」把成本抬上去
+        if (byEmail) {
+            EmailCodeVerifyResult codeResult =
+                    emailCodeService.verify(EmailCodeScene.REGISTER, identity, cmd.emailCode());
+            if (codeResult != EmailCodeVerifyResult.OK) {
+                return MemberRegisterResult.fail(switch (codeResult) {
+                    case NOT_FOUND -> RegisterFailReason.EMAIL_CODE_EXPIRED;
+                    case MISMATCH -> RegisterFailReason.EMAIL_CODE_MISMATCH;
+                    case TOO_MANY_ATTEMPTS -> RegisterFailReason.EMAIL_CODE_LOCKED;
+                    case OK -> throw new IllegalStateException("不可能走到：OK 已在上面判掉");
+                });
+            }
+        }
+
+        // ---------- 身份查重 ----------
         // 只是提前给一句人话，不是并发防线 —— 真正的防线是下面的唯一约束
-        String phoneHashHex = piiHasher.hash(phone);
-        if (memberRegisterDao.countByPhoneHash(phoneHashHex) > 0) {
-            return MemberRegisterResult.fail(RegisterFailReason.PHONE_TAKEN);
+        String identityHashHex = piiHasher.hash(identity);
+        int taken = byEmail
+                ? memberRegisterDao.countByEmailHash(identityHashHex)
+                : memberRegisterDao.countByPhoneHash(identityHashHex);
+        if (taken > 0) {
+            return MemberRegisterResult.fail(byEmail
+                    ? RegisterFailReason.EMAIL_TAKEN
+                    : RegisterFailReason.PHONE_TAKEN);
         }
 
         // ---------- 建号 ----------
-        return createMember(cmd, phone, phoneHashHex);
+        return createMember(cmd, byEmail, identity, identityHashHex);
     }
 
     /**
@@ -128,7 +173,8 @@ public class MemberRegisterService {
      * 再写一条 LOGIN_SUCCESS 只是让登录轨迹里多一条语义不同的行，
      * 查一个人「什么时候登过」时反而要先把它剔掉。
      */
-    private MemberRegisterResult createMember(MemberRegisterCmd cmd, String phone, String phoneHashHex) {
+    private MemberRegisterResult createMember(MemberRegisterCmd cmd, boolean byEmail,
+                                              String identity, String identityHashHex) {
         long memberId = memberIdAllocator.nextMemberId();
         String memberName = MEMBER_NAME_PREFIX + memberId;
         String nickname = DEFAULT_NICKNAME_PREFIX + memberId;
@@ -143,10 +189,17 @@ public class MemberRegisterService {
                     nickname,
                     GenderEnum.UNKNOWN.getValue(),
                     // 密文与摘要必须来自【同一个】规范化后的字符串，
-                    // 否则「解密出来的号」和「能登录的号」会是两个东西
-                    piiCipher.encrypt(phone),
-                    phoneHashHex,
-                    PasswordCipher.encode(cmd.password()),
+                    // 否则「解密出来的号」和「能登录的号」会是两个东西。
+                    // 🔴 手机号与邮箱只填一半，另一半是 null —— 两列都允许 NULL，
+                    //    而 UNHEX(NULL) 就是 NULL，不用特判
+                    byEmail ? null : piiCipher.encrypt(identity),
+                    byEmail ? null : identityHashHex,
+                    byEmail ? piiCipher.encrypt(identity) : null,
+                    byEmail ? identityHashHex : null,
+                    // 邮箱注册可以不设密码，那种会员之后走验证码登录。
+                    // encode(null) 会抛，所以这里必须先判 —— 而「密码列为 NULL」
+                    // 正是 DDL 给验证码注册留的口子
+                    SolvelaStringUtil.isEmpty(cmd.password()) ? null : PasswordCipher.encode(cmd.password()),
                     MemberStatusEnum.NORMAL.getValue(),
                     registerSource,
                     cmd.clientIp());
@@ -154,8 +207,10 @@ public class MemberRegisterService {
             // 闭合查重与插入之间那个窗口：两个请求同时注册同一个号时，
             // 一个成功一个撞唯一约束。撞了就是「已被注册」，对用户是同一件事。
             // 🔴 别把它当成意外抛出去 —— 那会变成 500，而这是一个完全预期内的结果
-            log.info("【会员注册】手机号并发重复注册，已被唯一约束拦下, memberId: {}", memberId);
-            return MemberRegisterResult.fail(RegisterFailReason.PHONE_TAKEN);
+            log.info("【会员注册】并发重复注册，已被唯一约束拦下, byEmail: {}, memberId: {}", byEmail, memberId);
+            return MemberRegisterResult.fail(byEmail
+                    ? RegisterFailReason.EMAIL_TAKEN
+                    : RegisterFailReason.PHONE_TAKEN);
         }
 
         log.info("【会员注册】成功, memberId: {}, source: {}, ip: {}", memberId, registerSource, cmd.clientIp());

@@ -67,7 +67,7 @@ class ApiContractTest {
     @DisplayName("注册成功 → 200，直接带回令牌（不用再登一次）")
     void 注册成功直接返回令牌() {
         HttpResponse<String> response =
-                post("/auth/register", "{\"phone\":\"13800000000\",\"password\":\"abcd1234\"}", null);
+                post("/auth/register", "{\"identity\":\"13800000000\",\"password\":\"abcd1234\"}", null);
 
         assertEquals(200, response.statusCode(), "实际响应：" + response.body());
 
@@ -84,7 +84,7 @@ class ApiContractTest {
     @DisplayName("🔴 注册接口不能泄露密码或手机号")
     void 注册响应里没有敏感信息() {
         HttpResponse<String> response =
-                post("/auth/register", "{\"phone\":\"13800000000\",\"password\":\"abcd1234\"}", null);
+                post("/auth/register", "{\"identity\":\"13800000000\",\"password\":\"abcd1234\"}", null);
 
         String raw = response.body();
         assertFalse(raw.contains("13800000000"),
@@ -98,7 +98,7 @@ class ApiContractTest {
     @DisplayName("手机号已注册 → 409，且明说，不含糊")
     void 手机号已注册返回409() {
         HttpResponse<String> response =
-                post("/auth/register", "{\"phone\":\"13800000001\",\"password\":\"abcd1234\"}", null);
+                post("/auth/register", "{\"identity\":\"13800000001\",\"password\":\"abcd1234\"}", null);
 
         assertEquals(409, response.statusCode(),
                 "用 409 而不是 400：这不是「你填错了」，是「服务端已有一个冲突的东西」，"
@@ -115,7 +115,7 @@ class ApiContractTest {
     @DisplayName("密码太弱 → 400，且把规则原文给出来")
     void 密码太弱返回400() {
         HttpResponse<String> response =
-                post("/auth/register", "{\"phone\":\"13800000002\",\"password\":\"abcd1234\"}", null);
+                post("/auth/register", "{\"identity\":\"13800000002\",\"password\":\"abcd1234\"}", null);
 
         assertEquals(400, response.statusCode(), "实际响应：" + response.body());
 
@@ -130,7 +130,7 @@ class ApiContractTest {
     @DisplayName("注册过于频繁 → 429，并告诉还要等多久")
     void 注册限频返回429() {
         HttpResponse<String> response =
-                post("/auth/register", "{\"phone\":\"13800000003\",\"password\":\"abcd1234\"}", null);
+                post("/auth/register", "{\"identity\":\"13800000003\",\"password\":\"abcd1234\"}", null);
 
         assertEquals(429, response.statusCode(), "实际响应：" + response.body());
 
@@ -144,7 +144,7 @@ class ApiContractTest {
     @Test
     @DisplayName("参数校验失败 → 400，且带上具体哪个字段不对")
     void 参数错误返回400() {
-        HttpResponse<String> response = post("/auth/login", "{\"phone\":\"\",\"password\":\"\"}", null);
+        HttpResponse<String> response = post("/auth/login", "{\"identity\":\"\",\"credential\":\"\"}", null);
 
         assertEquals(400, response.statusCode(), "实际响应：" + response.body());
 
@@ -161,7 +161,7 @@ class ApiContractTest {
     @DisplayName("手机号格式不对 → 400 并明说；这不泄露任何账号是否存在")
     void 手机号格式错误() {
         HttpResponse<String> response =
-                post("/auth/login", "{\"phone\":\"not-a-phone\",\"password\":\"whatever\"}", null);
+                post("/auth/login", "{\"identity\":\"not-a-phone\",\"credential\":\"whatever\"}", null);
 
         assertEquals(400, response.statusCode(), "实际响应：" + response.body());
         assertEquals("INVALID_ARGUMENT", parse(response).path("code").asText());

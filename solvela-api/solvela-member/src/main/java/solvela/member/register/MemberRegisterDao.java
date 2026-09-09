@@ -39,6 +39,17 @@ public interface MemberRegisterDao {
     int countByPhoneHash(@Param("phoneHashHex") String phoneHashHex);
 
     /**
+     * 这个邮箱摘要是否已被占用。与 {@link #countByPhoneHash} 逐字对称，UNHEX 同样不能省。
+     *
+     * <p>⚠️ 注销<b>不</b>释放邮箱：{@code t_member} 的注销逻辑只把 {@code phone_hash} 置 NULL
+     * （见 member.sql 的列注释）。所以一个注销过的邮箱查得到就是真占用，
+     * 而它的主人已经没法用它重新注册了 —— 这是既有行为，本次不改，
+     * 但要做「注销后释放邮箱」时，改的是那段注销逻辑，不是这里。
+     */
+    @Select("SELECT COUNT(1) FROM t_member WHERE email_hash = UNHEX(#{emailHashHex})")
+    int countByEmailHash(@Param("emailHashHex") String emailHashHex);
+
+    /**
      * 建会员。
      *
      * <p>{@code create_by} 不填 —— DDL 注释：「后台导入时有值，<b>自主注册为空</b>」。
@@ -46,10 +57,11 @@ public interface MemberRegisterDao {
      */
     @Insert("""
             INSERT INTO t_member
-                (member_id, member_name, nickname, gender, phone, phone_hash,
+                (member_id, member_name, nickname, gender, phone, phone_hash, email, email_hash,
                  password, status, register_source, register_ip, create_time)
             VALUES
-                (#{memberId}, #{memberName}, #{nickname}, #{gender}, #{phoneCipher}, UNHEX(#{phoneHashHex}),
+                (#{memberId}, #{memberName}, #{nickname}, #{gender},
+                 #{phoneCipher}, UNHEX(#{phoneHashHex}), #{emailCipher}, UNHEX(#{emailHashHex}),
                  #{password}, #{status}, #{registerSource}, #{registerIp}, NOW())
             """)
     int insertMember(@Param("memberId") Long memberId,
@@ -58,6 +70,11 @@ public interface MemberRegisterDao {
                      @Param("gender") int gender,
                      @Param("phoneCipher") String phoneCipher,
                      @Param("phoneHashHex") String phoneHashHex,
+                     // 🔴 手机号与邮箱【只会有一个】：手机号注册的会员没有邮箱，
+                     //    邮箱注册的会员没有手机号。另一半传 null，两列都允许 NULL。
+                     //    UNHEX(NULL) 结果是 NULL，所以空值这条路径不用特判
+                     @Param("emailCipher") String emailCipher,
+                     @Param("emailHashHex") String emailHashHex,
                      @Param("password") String password,
                      @Param("status") int status,
                      @Param("registerSource") String registerSource,

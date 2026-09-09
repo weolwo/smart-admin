@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import solvela.app.auth.Anonymous;
 import solvela.app.auth.CurrentMember;
 import solvela.app.auth.MemberPrincipal;
+import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
@@ -35,15 +36,20 @@ public class MemberLoginController {
     private final MemberLoginService memberLoginService;
 
     /**
-     * 手机号 + 密码注册，成功后<b>直接返回令牌</b>，形状与登录完全一致。
+     * 注册。两种方式共用这一条路由，由请求体里的 registerType 决定。
+     * 成功后<b>直接返回令牌</b>，形状与登录完全一致 ——
+     * 客户端不用为注册单独写一套「存令牌 + 存会员信息」的代码。
      *
-     * <p>客户端因此不用为注册单独写一套「存令牌 + 存会员信息」的代码 ——
-     * 拿到 {@code MemberResult} 就走登录成功那条路。
-     *
-     * <h3>⚠️ 目前没有短信验证码</h3>
-     * 全仓没有短信基础设施，所以这条路由现在<b>任何人都能拿别人的手机号建号</b>，
-     * 唯一的缓解是会员域里的 IP 限频（见 {@code MemberRegisterService} 的类注释）。
-     * 上线前必须补验证码 —— 加一个字段、域里加一步校验，本方法不用动。
+     * <h3>⚠️ 两条通道的可信度差得很远</h3>
+     * <ul>
+     *   <li><b>EMAIL_CODE</b>：验码即证明这个邮箱归他，<b>拿别人的邮箱注册不了</b>；</li>
+     *   <li><b>PHONE_PASSWORD</b>：全仓仍然<b>没有短信基础设施</b>，所以这条路
+     *       至今是<b>任何人都能拿别人的手机号建号</b>，唯一的缓解是会员域的 IP 限频
+     *       与设备限频。而 {@code uk_mbr_phone_hash} 是唯一约束 ——
+     *       号被占了，真机主就注册不了了。</li>
+     * </ul>
+     * 🔴 上线前手机号那条仍然必须补短信验证码。邮箱这条<b>不能替代它</b>，
+     * 它只是提供了另一条已验证的入口。
      */
     @Anonymous
     @PostMapping("/register")
@@ -53,7 +59,25 @@ public class MemberLoginController {
     }
 
     /**
-     * 手机号 + 密码登录。
+     * 索取邮箱验证码。四个场景共用这一条路由，用途由请求体里的 scene 指定。
+     *
+     * <p>标 {@link Anonymous}：注册、登录、重置密码这三个场景本来就没有登录态。
+     * 绑定邮箱（BIND）有登录态，但它照样走这条路由 —— {@code @Anonymous}
+     * 的类注释说得很清楚：标了它<b>不代表拿不到身份</b>，带了有效令牌的请求照样会被识别。
+     *
+     * <p>🔴 返回 204，<b>不返回任何关于这个邮箱的信息</b>。
+     * 「已发送」「该邮箱未注册」这类区分会把它变成账号枚举接口。
+     */
+    @Anonymous
+    @PostMapping("/email/code")
+    public ResponseEntity<Void> sendEmailCode(@RequestBody @Valid EmailCodeRequest request,
+                                              HttpServletRequest servletRequest) {
+        memberLoginService.sendEmailCode(request, ClientIp.of(servletRequest));
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 登录。三种方式共用这一条路由，由请求体里的 loginType 决定。
      *
      * <p>IP 在<b>端上</b>取，不传进 service —— service 收 {@code HttpServletRequest}
      * 就意味着它只能被 HTTP 调用，短信验证码登录、第三方登录、内部工具都没法复用同一段逻辑。

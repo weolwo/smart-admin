@@ -40,6 +40,24 @@ public interface MemberAuthDao {
     Member selectForLogin(@Param("phoneHashHex") String phoneHashHex);
 
     /**
+     * 按邮箱摘要查登录所需信息。与 {@link #selectForLogin} 逐字对称。
+     *
+     * <p>🔴 <b>UNHEX 同样不能省</b>，理由完全一样：{@code email_hash} 也是 {@code binary(32)}，
+     * 而 {@code PiiHasher.hash()} 返回 64 位 hex。漏了的表现是
+     * 「邮箱注册成功，但登录一直说邮箱或密码错误」—— 而两边代码单看都很正常。
+     *
+     * <p>⚠️ 邮箱注册出来的会员<b>没有手机号</b>（{@code phone_hash} 为 NULL），
+     * 反过来手机号注册的会员也没有邮箱。所以这两个查询各查各的，
+     * 不要指望其中一个能兜住另一个。
+     */
+    @Select("""
+            SELECT member_id, member_name, nickname, avatar_file_id, gender, status, password
+            FROM t_member
+            WHERE email_hash = UNHEX(#{emailHashHex})
+            """)
+    Member selectForLoginByEmail(@Param("emailHashHex") String emailHashHex);
+
+    /**
      * 按会员号查身份信息。<b>不含 password</b> —— 还原登录态用不到它。
      */
     @Select("""

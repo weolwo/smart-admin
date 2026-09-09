@@ -2,6 +2,8 @@ package solvela.biz.server.controller;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.RestController;
+import solvela.member.api.EmailCodeSendCmd;
+import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -41,6 +43,11 @@ public class MemberAuthInternalController implements MemberAuthApi {
     @Override
     public MemberAuthResult authenticate(MemberAuthCmd cmd) {
         return memberAuthService.authenticate(cmd);
+    }
+
+    @Override
+    public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
+        return memberAuthService.sendEmailCode(cmd);
     }
 
     @Override

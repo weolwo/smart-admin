@@ -5,6 +5,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import solvela.enums.GenderEnum;
 import solvela.member.api.AuthFailReason;
+import solvela.member.api.EmailCodeFailReason;
+import solvela.member.api.EmailCodeSendCmd;
+import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -33,7 +36,7 @@ public class ApiContractDownstreamStub {
             public MemberAuthResult authenticate(MemberAuthCmd cmd) {
                 // 只区分「像不像手机号」这一件事：契约测试要的是
                 // BAD_PHONE_FORMAT → 400、BAD_CREDENTIALS → 401 这两条映射成立
-                if (cmd.phone() == null || !cmd.phone().matches("[0-9]{11}")) {
+                if (cmd.identity() == null || !cmd.identity().matches("[0-9]{11}")) {
                     return MemberAuthResult.fail(AuthFailReason.BAD_PHONE_FORMAT);
                 }
                 return MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
@@ -46,20 +49,41 @@ public class ApiContractDownstreamStub {
              */
             @Override
             public MemberRegisterResult register(MemberRegisterCmd cmd) {
-                if (cmd.phone() == null || !cmd.phone().matches("[0-9]{11}")) {
+                if (cmd.identity() == null || !cmd.identity().matches("[0-9]{11}")) {
                     return MemberRegisterResult.fail(RegisterFailReason.BAD_PHONE_FORMAT);
                 }
-                if (cmd.phone().endsWith("1")) {
+                if (cmd.identity().endsWith("1")) {
                     return MemberRegisterResult.fail(RegisterFailReason.PHONE_TAKEN);
                 }
-                if (cmd.phone().endsWith("2")) {
+                if (cmd.identity().endsWith("2")) {
                     return MemberRegisterResult.fail(RegisterFailReason.WEAK_PASSWORD);
                 }
-                if (cmd.phone().endsWith("3")) {
+                if (cmd.identity().endsWith("3")) {
                     return MemberRegisterResult.tooManyAttempts(90L);
                 }
                 return MemberRegisterResult.ok(new MemberIdentity(
                         1000000001L, "sv1000000001", "会员1000000001", null, GenderEnum.UNKNOWN));
+            }
+
+            /**
+             * 发码桩：契约测试只验网关那张翻译表，域的规则（限频、静默不寄）
+             * 由会员域自己的用例负责。这里按邮箱前缀分派到各个 reason。
+             */
+            @Override
+            public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
+                if (cmd.email() == null || !cmd.email().contains("@")) {
+                    return EmailCodeSendResult.fail(EmailCodeFailReason.BAD_EMAIL_FORMAT);
+                }
+                if (cmd.email().startsWith("busy@")) {
+                    return EmailCodeSendResult.tooFrequent(42L);
+                }
+                if (cmd.email().startsWith("quota@")) {
+                    return EmailCodeSendResult.dailyLimit(3600L);
+                }
+                if (cmd.email().startsWith("broken@")) {
+                    return EmailCodeSendResult.fail(EmailCodeFailReason.SEND_FAILED);
+                }
+                return EmailCodeSendResult.ok();
             }
 
             @Override

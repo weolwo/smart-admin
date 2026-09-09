@@ -14,6 +14,7 @@ import solvela.base.module.redis.RedisService;
 import solvela.crypto.PiiCipher;
 import solvela.crypto.PiiHasher;
 import solvela.member.device.DeviceGuard;
+import solvela.member.email.MemberEmailCodeService;
 import solvela.member.device.DeviceGuardRule;
 import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.api.MemberRegisterCmd;
@@ -78,6 +79,8 @@ class MemberRegisterServiceTest {
     private PiiCipher piiCipher;
     @Mock
     private DeviceGuard deviceGuard;
+    @Mock
+    private MemberEmailCodeService emailCodeService;
 
     private MemberRegisterProperties properties;
     private MemberRegisterService service;
@@ -86,14 +89,15 @@ class MemberRegisterServiceTest {
     void setUp() {
         properties = new MemberRegisterProperties();
         service = new MemberRegisterService(memberRegisterDao, memberIdAllocator, properties,
-                redisService, piiHasher, piiCipher, deviceGuard);
+                redisService, piiHasher, piiCipher, deviceGuard, emailCodeService);
 
         when(piiHasher.hash(PHONE)).thenReturn(PHONE_HASH);
         when(piiCipher.encrypt(PHONE)).thenReturn("加密后的号");
         when(memberIdAllocator.nextMemberId()).thenReturn(MEMBER_ID);
         when(memberRegisterDao.countByPhoneHash(PHONE_HASH)).thenReturn(0);
+        // 12 个参数：2026-09-09 加了 emailCipher / emailHashHex 两个
         when(memberRegisterDao.insertMember(anyLong(), anyString(), anyString(), anyInt(),
-                anyString(), anyString(), anyString(), anyInt(), anyString(), anyString())).thenReturn(1);
+                any(), any(), any(), any(), any(), anyInt(), anyString(), anyString())).thenReturn(1);
         when(redisService.generateRedisKey(anyString(), anyString())).thenReturn("k");
         // 默认设备闸放行：本类关心的是格式 → 强度 → 限频 → 查重这条顺序
         when(deviceGuard.checkRegister(any())).thenReturn(DeviceGuardVerdict.pass());
@@ -127,10 +131,10 @@ class MemberRegisterServiceTest {
     @Test
     @DisplayName("注册来源缺省不为空：留空的话来源统计从第一天起就是错的")
     void 来源缺省() {
-        service.register(new MemberRegisterCmd(PHONE, STRONG_PASSWORD, "H5", CLIENT_IP, null, DEVICE_ID));
+        service.register(MemberRegisterCmd.byPhonePassword(PHONE, STRONG_PASSWORD, "H5", CLIENT_IP, null, DEVICE_ID));
 
         verify(memberRegisterDao).insertMember(anyLong(), anyString(), anyString(), anyInt(),
-                anyString(), anyString(), anyString(), anyInt(),
+                any(), any(), any(), any(), any(), anyInt(),
                 org.mockito.ArgumentMatchers.argThat(s -> s != null && !s.isBlank()), anyString());
     }
 
@@ -141,7 +145,7 @@ class MemberRegisterServiceTest {
         // 再写一条 LOGIN_SUCCESS 只会让登录轨迹里多一条语义不同的行，
         // 查「这个人什么时候登过」时反而要先把它剔掉
         verify(memberRegisterDao).insertMember(anyLong(), anyString(), anyString(), anyInt(),
-                anyString(), anyString(), anyString(), anyInt(), anyString(), anyString());
+                any(), any(), any(), any(), any(), anyInt(), anyString(), anyString());
     }
 
     // ------------------------------------------------------------------ 顺序
@@ -218,7 +222,7 @@ class MemberRegisterServiceTest {
     @DisplayName("🔴 拿不到客户端 IP 时放行，不是一律拒绝")
     void 没有IP时放行() {
         MemberRegisterResult result =
-                service.register(new MemberRegisterCmd(PHONE, STRONG_PASSWORD, "H5", null, "APP", DEVICE_ID));
+                service.register(MemberRegisterCmd.byPhonePassword(PHONE, STRONG_PASSWORD, "H5", null, "APP", DEVICE_ID));
 
         // 一律拒绝会让任何一次取 IP 失败变成「全站注册不可用」，那种故障比放过几个注册严重得多
         assertTrue(result.success());
@@ -241,7 +245,7 @@ class MemberRegisterServiceTest {
     void 并发重复注册() {
         // 查重和插入之间的窗口，靠库上的唯一约束闭合
         when(memberRegisterDao.insertMember(anyLong(), anyString(), anyString(), anyInt(),
-                anyString(), anyString(), anyString(), anyInt(), anyString(), anyString()))
+                any(), any(), any(), any(), any(), anyInt(), anyString(), anyString()))
                 .thenThrow(new DuplicateKeyException("uk_member_phone_hash"));
 
         MemberRegisterResult result = service.register(cmd(PHONE, STRONG_PASSWORD));
@@ -251,7 +255,7 @@ class MemberRegisterServiceTest {
     }
 
     private MemberRegisterCmd cmd(String phone, String password) {
-        return new MemberRegisterCmd(phone, password, "H5", CLIENT_IP, "APP", DEVICE_ID);
+        return MemberRegisterCmd.byPhonePassword(phone, password, "H5", CLIENT_IP, "APP", DEVICE_ID);
     }
 
     // ------------------------------------------------------------------ 设备闸

@@ -4,6 +4,9 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import solvela.enums.GenderEnum;
+import solvela.member.api.EmailCodeFailReason;
+import solvela.member.api.EmailCodeSendCmd;
+import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -70,6 +73,27 @@ public class StubMemberAuthApiConfig {
             @Override
             public MemberRegisterResult register(MemberRegisterCmd cmd) {
                 throw new UnsupportedOperationException("这个桩只实现了 getAuthIdentity，按需再补");
+            }
+
+            /**
+             * 发码桩：契约测试只验网关那张翻译表，域的规则（限频、静默不寄）
+             * 由会员域自己的用例负责。这里按邮箱前缀分派到各个 reason。
+             */
+            @Override
+            public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
+                if (cmd.email() == null || !cmd.email().contains("@")) {
+                    return EmailCodeSendResult.fail(EmailCodeFailReason.BAD_EMAIL_FORMAT);
+                }
+                if (cmd.email().startsWith("busy@")) {
+                    return EmailCodeSendResult.tooFrequent(42L);
+                }
+                if (cmd.email().startsWith("quota@")) {
+                    return EmailCodeSendResult.dailyLimit(3600L);
+                }
+                if (cmd.email().startsWith("broken@")) {
+                    return EmailCodeSendResult.fail(EmailCodeFailReason.SEND_FAILED);
+                }
+                return EmailCodeSendResult.ok();
             }
 
             @Override

@@ -55,6 +55,19 @@ public interface MemberAuthApi {
     MemberAuthResult authenticate(@RequestBody MemberAuthCmd cmd);
 
     /**
+     * 发一封邮箱验证码。
+     *
+     * <p>挂在<b>认证契约</b>上而不是另建一个 Api，理由同 {@link #register} 的注释：
+     * 多一个接口就多一个「服务端薄壳建了没有」的失误面，而那个坑踩过一次。
+     *
+     * <p>🔴 <b>返回成功不代表真的寄了一封信。</b>邮箱与场景不匹配时（比如拿一个
+     * 没注册过的邮箱要登录验证码）会静默成功 —— 如实回答等于送出一个账号枚举接口。
+     * 详见 {@code MemberEmailCodeIssuer} 的类注释。
+     */
+    @PostExchange("/email-code")
+    EmailCodeSendResult sendEmailCode(@RequestBody EmailCodeSendCmd cmd);
+
+    /**
      * 按会员号取<b>可用身份</b>；会员不存在或状态不正常返回 null。
      *
      * <p>网关每个请求都会（经缓存）走一次这里，把令牌解析出的会员号还原成身份。

@@ -20,11 +20,35 @@ package solvela.member.api;
  * <p>允许为 null：灰度期间老客户端还没带设备令牌（见 {@code DeviceAuthProperties.Mode}）。
  * 🔴 <b>为 null 时不要当成「可疑」处理</b> —— 那会在 enforce 之前就把老版本用户全挡在外面。
  *
- * @param phone      用户输入的手机号，任意格式，域内会规范化
- * @param password   用户输入的明文密码
+ * <h3>identity 与 credential 是什么，取决于 loginType</h3>
+ * <pre>
+ *   PHONE_PASSWORD   identity=手机号   credential=明文密码
+ *   EMAIL_PASSWORD   identity=邮箱     credential=明文密码
+ *   EMAIL_CODE       identity=邮箱     credential=邮箱验证码
+ * </pre>
+ *
+ * <p>🔴 <b>字段名刻意是中性的</b>。原来这里叫 {@code phone}，加邮箱通道时最省事的做法是
+ * 「继续叫 phone，但有时候放的是邮箱」—— 那种字段名迟早会骗到某个人，
+ * 而它骗人的方式是让他写出一段「按手机号规范化一个邮箱」的代码，且不报错。
+ *
+ * @param loginType  登录方式，决定 identity/credential 怎么解释。<b>调用方显式传，不从格式猜</b>
+ * @param identity   手机号或邮箱，任意格式，域内会按 loginType 规范化
+ * @param credential 明文密码或邮箱验证码
  * @param deviceType 设备端 APP/H5/WECHAT/PC，为空按 H5 记
  * @param clientIp   客户端 IP，允许为 null
  * @param deviceId   验签通过的设备号，允许为 null（老客户端）
  */
-public record MemberAuthCmd(String phone, String password, String deviceType, String clientIp, String deviceId) {
+public record MemberAuthCmd(
+        MemberLoginType loginType,
+        String identity,
+        String credential,
+        String deviceType,
+        String clientIp,
+        String deviceId) {
+
+    /** 兼容既有调用点的手机号密码登录。 */
+    public static MemberAuthCmd byPhonePassword(String phone, String password,
+                                                String deviceType, String clientIp, String deviceId) {
+        return new MemberAuthCmd(MemberLoginType.PHONE_PASSWORD, phone, password, deviceType, clientIp, deviceId);
+    }
 }

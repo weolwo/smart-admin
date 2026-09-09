@@ -13,6 +13,7 @@ import solvela.member.api.EmailCodeFailReason;
 import solvela.member.api.EmailCodeScene;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.EmailCodeVerifyResult;
+import solvela.member.api.MailDelivery;
 import solvela.member.util.MemberEmailUtil;
 
 import java.security.MessageDigest;
@@ -85,6 +86,18 @@ public class MemberEmailCodeService {
      *                 一律拒绝会让任何一次取 IP 失败变成「全站收不到验证码」
      */
     public EmailCodeSendResult send(EmailCodeScene scene, String rawEmail, String clientIp) {
+        return send(scene, rawEmail, clientIp, MailDelivery.DELIVER);
+    }
+
+    /**
+     * 发一封验证码邮件，可以指定<b>不真的寄出去</b>。
+     *
+     * <p>{@link MailDelivery#SUPPRESS} 用于「这个邮箱没有对应会员」的情形：
+     * 照常存码、照常计入限频，只是不寄信。这样有账号和没账号两条路径的<b>后续行为逐字相同</b>，
+     * 否则校验那一步会把发送这一步藏住的东西漏出去。理由见 {@link MailDelivery} 的类注释。
+     */
+    public EmailCodeSendResult send(EmailCodeScene scene, String rawEmail, String clientIp,
+                                    MailDelivery delivery) {
         String email = MemberEmailUtil.normalize(rawEmail);
         if (email == null) {
             return EmailCodeSendResult.fail(EmailCodeFailReason.BAD_EMAIL_FORMAT);
@@ -102,7 +115,7 @@ public class MemberEmailCodeService {
             return quota;
         }
 
-        return generateAndSend(scene, email, codeKey);
+        return generateAndSend(scene, email, codeKey, delivery);
     }
 
     /**
@@ -221,10 +234,19 @@ public class MemberEmailCodeService {
      * <p>发信失败时把刚存的码<b>删掉</b>：留着它会让 60 秒冷却生效，
      * 于是用户在收不到信的同时还被告知「请稍后再试」。
      */
-    private EmailCodeSendResult generateAndSend(EmailCodeScene scene, String email, String codeKey) {
+    private EmailCodeSendResult generateAndSend(EmailCodeScene scene, String email, String codeKey,
+                                                MailDelivery delivery) {
         String code = SolvelaRandomUtil.secureRandomNumbers(properties.length());
         redisService.set(codeKey, code + SEP + System.currentTimeMillis() + SEP + 0,
                 properties.ttl().toSeconds());
+
+        if (delivery == MailDelivery.SUPPRESS) {
+            // 码存了、限频计了，就是不寄。调用方（登录/重置密码）已经确认这个邮箱没有会员，
+            // 而它必须返回一个与「有会员」完全一致的结果
+            log.info("【邮箱验证码】邮箱无对应会员，已静默计入但不发信, scene: {}, email: {}",
+                    scene, MemberEmailUtil.mask(email));
+            return EmailCodeSendResult.ok();
+        }
 
         try {
             Map<String, Object> params = new HashMap<>();

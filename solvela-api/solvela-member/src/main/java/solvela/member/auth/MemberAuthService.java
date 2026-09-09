@@ -27,6 +27,14 @@ import solvela.member.loginlog.dao.MemberLoginLogDao;
 import solvela.member.operationlimit.service.MemberOperationLimitService;
 import solvela.member.device.DeviceGuard;
 import solvela.member.device.DeviceGuardVerdict;
+import solvela.member.api.EmailCodeScene;
+import solvela.member.api.EmailCodeVerifyResult;
+import solvela.member.api.MemberLoginType;
+import solvela.member.api.EmailCodeSendCmd;
+import solvela.member.api.EmailCodeSendResult;
+import solvela.member.email.MemberEmailCodeIssuer;
+import solvela.member.email.MemberEmailCodeService;
+import solvela.member.util.MemberEmailUtil;
 import solvela.member.util.MemberPhoneUtil;
 
 import java.time.Duration;
@@ -74,6 +82,8 @@ public class MemberAuthService implements MemberAuthApi {
     private final MemberOperationLimitService operationLimitService;
     private final PiiHasher piiHasher;
     private final DeviceGuard deviceGuard;
+    private final MemberEmailCodeService emailCodeService;
+    private final MemberEmailCodeIssuer emailCodeIssuer;
 
     /**
      * 手机号 + 密码注册。逻辑全在 {@link MemberRegisterService}，本方法只是契约的落点。
@@ -84,20 +94,34 @@ public class MemberAuthService implements MemberAuthApi {
     }
 
     /**
-     * 手机号 + 密码认证。
+     * 认证。三种登录方式走<b>同一条主干</b>，只有「怎么找人」和「怎么验凭据」按类型分派。
      *
-     * <p>分支顺序是<b>有讲究的</b>，别调换：账号状态在验密码之前（被冻结的账号不该还能
-     * 用来试探密码对不对），限制检查也在验密码之前（被限制期间连试的机会都没有，
+     * <p>分支顺序是<b>有讲究的</b>，别调换：账号状态在验凭据之前（被冻结的账号不该还能
+     * 用来试探密码对不对），限制检查也在验凭据之前（被限制期间连试的机会都没有，
      * 否则限制形同虚设）。
+     *
+     * <h3>为什么不是三个并行方法</h3>
+     * 设备闸、三道闸、登录日志、一机多号判定<b>三种方式完全一样</b>。
+     * 各写一遍的话，那些逻辑就有了三份，而它们漂移的第一天不会有任何报错。
+     *
+     * <p>类型由调用方<b>显式传</b>，不从输入格式猜 —— 见 {@link MemberLoginType} 的类注释。
      */
     @Override
     public MemberAuthResult authenticate(MemberAuthCmd cmd) {
 
-        // ---------- 规范化手机号 ----------
-        // 必须先规范化再算摘要，否则 "138 0000 0000" 与 "13800000000" 是两个不同的 hash
-        String phone = MemberPhoneUtil.normalize(cmd.phone());
-        if (phone == null) {
-            return MemberAuthResult.fail(AuthFailReason.BAD_PHONE_FORMAT);
+        // 老调用点可能没传（本字段 2026-09-09 才加），按最早的那条通道兜底
+        MemberLoginType loginType = cmd.loginType() == null
+                ? MemberLoginType.PHONE_PASSWORD
+                : cmd.loginType();
+
+        // ---------- 规范化身份 ----------
+        // 必须先规范化再算摘要：手机号 "138 0000 0000" 与 "13800000000"、
+        // 邮箱 "A@Example.com" 与 "A@example.com" 都会算出不同的 hash
+        String identity = normalizeIdentity(loginType, cmd.identity());
+        if (identity == null) {
+            return MemberAuthResult.fail(loginType == MemberLoginType.PHONE_PASSWORD
+                    ? AuthFailReason.BAD_PHONE_FORMAT
+                    : AuthFailReason.BAD_EMAIL_FORMAT);
         }
 
         // ---------- 设备闸 ----------
@@ -110,11 +134,26 @@ public class MemberAuthService implements MemberAuthApi {
         }
 
         // ---------- 按摘要找人 ----------
-        Member member = memberAuthDao.selectForLogin(piiHasher.hash(phone));
+        Member member = findMember(loginType, identity);
         if (member == null) {
+            // 🔴 验证码登录时，即使查无此人也要照常验一次码，【而且要返回验码本身的结果】。
+            //    发码那一步对没有会员的邮箱也存了码（MailDelivery.SUPPRESS），
+            //    这里如果一律回 BAD_CREDENTIALS，两条路径的回答又不一样了 ——
+            //    随便输个错码，有账号回「验证码错误」、没账号回「邮箱或密码错误」，
+            //    发码那一步藏住的东西在这里漏光。这条有用例钉着（输错码的回答一致）。
+            //
+            //    码【对】了才落到下面的 BAD_CREDENTIALS。那需要猜中一个六位数
+            //    （百万分之一，且只有 5 次机会），不构成可用的枚举手段。
+            if (loginType == MemberLoginType.EMAIL_CODE) {
+                AuthFailReason codeProblem = toAuthFailReason(
+                        emailCodeService.verify(EmailCodeScene.LOGIN, identity, cmd.credential()));
+                if (codeProblem != null) {
+                    return MemberAuthResult.fail(codeProblem);
+                }
+            }
             // 这里刻意不写登录日志：t_member_login_log.member_id 是 NOT NULL，
-            // 没有会员就没有可写的行。「不存在的手机号被反复尝试」属于风控范畴，
-            // 要防的话得另建一张按 IP/手机号聚合的表，不是往会员日志里塞假 member_id。
+            // 没有会员就没有可写的行。「不存在的账号被反复尝试」属于风控范畴，
+            // 要防的话得另建一张按 IP/身份聚合的表，不是往会员日志里塞假 member_id。
             return MemberAuthResult.fail(AuthFailReason.BAD_CREDENTIALS);
         }
 
@@ -131,7 +170,7 @@ public class MemberAuthService implements MemberAuthApi {
         if (limited != null) {
             return limited;
         }
-        MemberAuthResult credentialProblem = verifyPassword(member, cmd);
+        MemberAuthResult credentialProblem = verifyCredential(loginType, identity, member, cmd);
         if (credentialProblem != null) {
             return credentialProblem;
         }
@@ -189,6 +228,99 @@ public class MemberAuthService implements MemberAuthApi {
     }
 
     /**
+     * 发一封邮箱验证码。逻辑全在 {@link MemberEmailCodeIssuer}，本方法只是契约的落点 ——
+     * 与 {@link #register} 委托给 {@code MemberRegisterService} 同一个做法。
+     */
+    @Override
+    public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
+        return emailCodeIssuer.issue(cmd.scene(), cmd.email(), cmd.clientIp(), cmd.currentMemberId());
+    }
+
+    /**
+     * 按登录方式规范化身份；非法返回 null。
+     *
+     * <p>用 switch 表达式：新增一种登录方式时<b>编译不过</b>，
+     * 而不是悄悄落进某个兜底分支去按手机号规范化一个邮箱。
+     */
+    private static String normalizeIdentity(MemberLoginType loginType, String rawIdentity) {
+        return switch (loginType) {
+            case PHONE_PASSWORD -> MemberPhoneUtil.normalize(rawIdentity);
+            case EMAIL_PASSWORD, EMAIL_CODE -> MemberEmailUtil.normalize(rawIdentity);
+        };
+    }
+
+    /**
+     * 按登录方式找人；查无此人返回 null。
+     *
+     * <p>两个查询各查各的：邮箱注册出来的会员<b>没有手机号</b>（{@code phone_hash} 为 NULL），
+     * 反过来也一样。不要指望其中一个能兜住另一个。
+     */
+    private Member findMember(MemberLoginType loginType, String identity) {
+        String hash = piiHasher.hash(identity);
+        return switch (loginType) {
+            case PHONE_PASSWORD -> memberAuthDao.selectForLogin(hash);
+            case EMAIL_PASSWORD, EMAIL_CODE -> memberAuthDao.selectForLoginByEmail(hash);
+        };
+    }
+
+    /**
+     * 验凭据：密码或邮箱验证码。返回 null 表示通过。
+     */
+    private MemberAuthResult verifyCredential(MemberLoginType loginType, String identity,
+                                              Member member, MemberAuthCmd cmd) {
+        return switch (loginType) {
+            case PHONE_PASSWORD, EMAIL_PASSWORD -> verifyPassword(member, cmd);
+            case EMAIL_CODE -> verifyEmailCode(identity, member, cmd);
+        };
+    }
+
+    /**
+     * 验邮箱验证码。返回 null 表示通过。
+     *
+     * <h3>失败原因可以说得具体，而且不泄露账号是否存在</h3>
+     * 「验证码错误」「验证码已失效」「错太多次了」三者对用户的意义完全不同 ——
+     * 含糊成一句会让他反复重试一件必然失败的事。
+     *
+     * <p>之所以敢说具体，是因为<b>没有会员的邮箱也存了码</b>
+     * （见 {@code MailDelivery.SUPPRESS}），两条路径给出的这三种回答分布一致。
+     *
+     * <p>⚠️ 仍有一个<b>无法消除</b>的差别：攻击者用<b>自己拥有的</b>邮箱发码时，
+     * 收不收得到信本身就说明了有没有账号。但那个邮箱他本来就能拿去注册一次，
+     * 而注册接口必须如实回答「已被注册」（藏了用户就没法用，见 {@code RegisterFailReason}）——
+     * 也就是说这条信息对他控制的邮箱本来就是可得的。SUPPRESS 要堵的是
+     * <b>他不控制的</b>那些邮箱，那里没有任何信号漏出去。
+     */
+    private MemberAuthResult verifyEmailCode(String email, Member member, MemberAuthCmd cmd) {
+        EmailCodeVerifyResult result = emailCodeService.verify(EmailCodeScene.LOGIN, email, cmd.credential());
+        if (result == EmailCodeVerifyResult.OK) {
+            return null;
+        }
+        // 验证码错也算一次登录失败：账号锁挡「这个号被爆破」，设备计数挡
+        // 「这台机器在挨个试不同的号」，两者都该看到这一次
+        operationLimitService.recordFail(member.getMemberId(), MemberOperationTypeEnum.LOGIN, "邮箱验证码错误");
+        deviceGuard.recordLoginFailure(cmd.deviceId());
+        saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "邮箱验证码" + result.name());
+
+        return MemberAuthResult.fail(toAuthFailReason(result));
+    }
+
+    /**
+     * 验码结果 → 失败原因；通过时返回 null。
+     *
+     * <p>抽出来是因为它有<b>两个调用点</b>：查到会员时走一次，查无此人时也走一次 ——
+     * 而两处必须给出<b>完全一样</b>的映射，否则「有账号 / 没账号」就能被区分出来。
+     * 两份 switch 迟早漂移，而漂移的表现是一个悄悄打开的账号枚举接口。
+     */
+    private static AuthFailReason toAuthFailReason(EmailCodeVerifyResult result) {
+        return switch (result) {
+            case OK -> null;
+            case NOT_FOUND -> AuthFailReason.EMAIL_CODE_EXPIRED;
+            case MISMATCH -> AuthFailReason.EMAIL_CODE_MISMATCH;
+            case TOO_MANY_ATTEMPTS -> AuthFailReason.EMAIL_CODE_LOCKED;
+        };
+    }
+
+    /**
      * 验密码。返回 null 表示通过。
      *
      * <p>「没设过密码」单独一个原因，不混进「密码错误」—— 混了的话用户会一直重试
@@ -199,7 +331,7 @@ public class MemberAuthService implements MemberAuthApi {
             saveLoginLog(member.getMemberId(), cmd, LoginLogResultEnum.LOGIN_FAIL, "未设置登录密码");
             return MemberAuthResult.fail(AuthFailReason.NO_PASSWORD);
         }
-        if (PasswordCipher.matches(cmd.password(), member.getPassword())) {
+        if (PasswordCipher.matches(cmd.credential(), member.getPassword())) {
             return null;
         }
         MemberOperationLimit triggered = operationLimitService.recordFail(

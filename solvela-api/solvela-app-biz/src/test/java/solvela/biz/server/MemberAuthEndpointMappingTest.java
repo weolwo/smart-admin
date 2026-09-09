@@ -52,7 +52,7 @@ class MemberAuthEndpointMappingTest {
     @DisplayName("认证端点已映射，且请求真的走到了域里")
     void 认证端点已映射且转发到位() throws Exception {
         String body = """
-                {"phone":"13800000000","password":"__mapping_test__","deviceType":"H5","clientIp":"127.0.0.1"}
+                {"loginType":"PHONE_PASSWORD","identity":"13800000000","credential":"__mapping_test__",                 "deviceType":"H5","clientIp":"127.0.0.1"}
                 """;
 
         HttpResponse<String> response = http.send(

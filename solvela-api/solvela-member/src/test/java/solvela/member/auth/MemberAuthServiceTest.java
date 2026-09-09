@@ -277,7 +277,7 @@ class MemberAuthServiceTest {
     @Test
     @DisplayName("设备类型缺省成 H5，客户端 IP 原样落库")
     void 日志字段缺省() {
-        service.authenticate(new MemberAuthCmd(PHONE, RAW_PASSWORD, null, "10.0.0.7", DEVICE_ID));
+        service.authenticate(MemberAuthCmd.byPhonePassword(PHONE, RAW_PASSWORD, null, "10.0.0.7", DEVICE_ID));
 
         MemberLoginLog log = savedLog();
         assertEquals("H5", log.getDeviceType());
@@ -311,7 +311,7 @@ class MemberAuthServiceTest {
     }
 
     private MemberAuthCmd cmd(String phone, String password) {
-        return new MemberAuthCmd(phone, password, "H5", "127.0.0.1", DEVICE_ID);
+        return MemberAuthCmd.byPhonePassword(phone, password, "H5", "127.0.0.1", DEVICE_ID);
     }
 
     private MemberOperationLimit limitExpiringIn(long seconds) {
