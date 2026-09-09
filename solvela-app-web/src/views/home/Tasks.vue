@@ -321,7 +321,7 @@ const grouped = computed(() => {
   flex: none;
   width: 44px;
   font-size: 13px;
-  color: var(--sv-text-tertiary);
+  color: var(--sv-text-placeholder);
 }
 
 .meta__val {
@@ -371,7 +371,7 @@ const grouped = computed(() => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--sv-text-tertiary);
+  color: var(--sv-text-placeholder);
 }
 
 /* 已拿到的那档要看得出来 —— 否则用户签到 1 天拿了奖，界面上毫无变化 */

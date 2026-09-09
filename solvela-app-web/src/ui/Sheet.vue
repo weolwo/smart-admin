@@ -124,7 +124,7 @@ function onKeydown(event: KeyboardEvent): void {
   width: 32px;
   height: 32px;
   padding: 0;
-  color: var(--sv-text-tertiary);
+  color: var(--sv-text-placeholder);
   background: none;
   border: none;
   border-radius: 50%;

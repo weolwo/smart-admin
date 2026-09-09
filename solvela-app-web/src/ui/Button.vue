@@ -13,8 +13,14 @@
 
 withDefaults(
   defineProps<{
-    /** primary=主操作（实心胶囊）；text=次要出口（一行字，不占视觉重量） */
-    variant?: 'primary' | 'text'
+    /**
+     * primary 主操作 / text 次要文字按钮 / danger 破坏性操作。
+     *
+     * 🔴 danger 不是「红色的 text」：破坏性操作要看得出<b>可点</b>，
+     * 所以它有描边和底色。做成一行灰字的话，用户既看不出它危险，
+     * 也看不出它是个按钮 —— 而「下线」这种动作恰恰要两样都看得出来。
+     */
+    variant?: 'primary' | 'text' | 'danger'
     loading?: boolean
     disabled?: boolean
     /**
@@ -22,6 +28,14 @@ withDefaults(
      * 否则浏览器会把表单里第一个 button 当提交按钮，行为随 DOM 顺序漂
      */
     type?: 'button' | 'submit'
+    /**
+     * 占满整行。<b>默认 true</b> —— 本项目的按钮大多是表单主按钮。
+     *
+     * 🔴 放进一行 flex 布局里时<b>必须显式关掉</b>：
+     * {@code width: 100%} 会让它把同排的文字列挤成 0 宽，
+     * 而那一列会变成「每行一个字」竖着排下来。
+     * 2026-09-10 登录设备那一页就是这么被挤坏的 —— 页面不报错，只是很丑。
+     */
     block?: boolean
   }>(),
   {
@@ -95,6 +109,42 @@ withDefaults(
 
 .sv-btn--text:active:not(:disabled) {
   opacity: 0.6;
+}
+
+/*
+ * 破坏性操作：描边 + 浅底，不是实心红。
+ * 实心红在列表里会变成最抢眼的东西 —— 而这一页真正要抢眼的是
+ * 「哪台是我的」，不是每一行的下线按钮。
+ */
+/*
+ * danger 天生是【行内】的操作按钮（列表某一行右侧那个），
+ * 所以它自己把 block 撑开的宽度收回来。调用方仍可显式传 block 覆盖。
+ */
+.sv-btn--danger.sv-btn--block {
+  display: inline-flex;
+  width: auto;
+}
+
+.sv-btn--danger {
+  flex: none;
+  height: 32px;
+  padding: 0 var(--sv-space-md);
+  border: 1px solid var(--sv-color-danger);
+  background: transparent;
+  color: var(--sv-color-danger);
+  font-size: var(--sv-font-caption);
+}
+
+@media (hover: hover) {
+  .sv-btn--danger:hover:not(:disabled) {
+    background: var(--sv-color-danger);
+    color: var(--sv-text-on-primary);
+  }
+}
+
+.sv-btn--danger:active:not(:disabled) {
+  background: var(--sv-color-danger);
+  color: var(--sv-text-on-primary);
 }
 
 /*

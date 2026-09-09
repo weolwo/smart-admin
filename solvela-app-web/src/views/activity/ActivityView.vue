@@ -317,7 +317,7 @@ function goBack(): void {
 }
 
 .rec + .rec {
-  border-top: 1px solid var(--sv-border-subtle);
+  border-top: 1px solid var(--sv-border-color);
 }
 
 .rec__main {
@@ -333,7 +333,7 @@ function goBack(): void {
 .rec__time {
   margin: 4px 0 0;
   font-size: 12px;
-  color: var(--sv-text-tertiary);
+  color: var(--sv-text-placeholder);
   font-variant-numeric: tabular-nums;
 }
 

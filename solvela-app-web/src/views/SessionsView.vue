@@ -7,13 +7,15 @@
  * 在它之前，答案分别是「看不到」和「改密码」—— 而改密码会把自己也登出，
  * 代价高到大多数人宁可什么都不做。
  *
- * <h3>只列活着的会话</h3>
- * 历史登录记录是另一件事（后台的登录日志）。混进来的话，用户会看到一堆早已失效的
- * 设备，对着一个点不动的「下线」按钮发愁。
+ * <h3>一台设备一张卡，不是一张长列表</h3>
+ * 列表行适合「一屏十几项、快速扫读」的设置页；而这一页通常只有两三条，
+ * 每一条都要读三行信息（设备、位置、时间）再做一个有后果的决定。
+ * 独立的卡片把每一条围成一个可以单独判断的单元，行与行之间不会看串。
  *
- * <h3>🔴 当前这一台必须标出来</h3>
+ * <h3>🔴 当前这一台必须一眼认出来</h3>
  * 不标的话，用户很容易把自己这台点下线，然后当场被踢出去 —— 而他会以为是页面出了 bug。
- * 所以当前这一条排最前、带标签、**没有下线按钮**（要退出登录走「我的」页那一项）。
+ * 所以当前这一条排最前、图标高亮、带「本机」标签、**没有下线按钮**
+ *（要退出当前设备走「我的」页那一项）。
  */
 import { onMounted, ref } from 'vue'
 
@@ -24,6 +26,7 @@ import {
   type MemberSession,
 } from '@/api/session'
 import { ApiError } from '@/api/errors'
+import type { IconName } from '@/ui/Icon.vue'
 
 const sessions = ref<MemberSession[]>([])
 const loading = ref(true)
@@ -41,12 +44,29 @@ const DEVICE_LABELS: Record<string, string> = {
   PC: '电脑',
 }
 
+/**
+ * 图标按设备端分。
+ *
+ * 图标集里没有「电脑」，PC 借用 home（一个方框，读起来像屏幕）——
+ * 比给所有端一个相同的手机图标强：那样这一列就完全没有信息量了。
+ */
+const DEVICE_ICONS: Record<string, IconName> = {
+  APP: 'phone',
+  H5: 'phone',
+  WECHAT: 'phone',
+  PC: 'home',
+}
+
 /** 老会话可能没有设备端。显示「未知设备」而不是留白 —— 留白像是页面坏了 */
 function deviceLabel(session: MemberSession): string {
   if (session.deviceType === null) {
     return '未知设备'
   }
   return DEVICE_LABELS[session.deviceType] ?? session.deviceType
+}
+
+function deviceIcon(session: MemberSession): IconName {
+  return (session.deviceType === null ? undefined : DEVICE_ICONS[session.deviceType]) ?? 'user'
 }
 
 /**
@@ -123,28 +143,37 @@ onMounted(load)
     <div class="page__body">
       <p class="page__intro">这些设备当前登录着你的账号。不认识的，直接让它下线。</p>
 
-      <!--
-        加载 / 出错 / 空三态交给 Section —— 尤其是「出错」：
-        手写最容易漏的就是它，漏了的表现是后端挂掉时页面永远停在「加载中」。
-        它还自带重试按钮，而我原来那版只显示一行红字，用户除了退出去没有别的办法。
-      -->
-      <Section
-        title="当前登录的设备"
-        :loading="loading"
-        :error="errorMessage === '' ? null : errorMessage"
-        :empty="sessions.length === 0"
-        empty-text="没有其它设备登录"
-        @retry="load"
-      >
-        <ul class="list">
-          <li v-for="session in sessions" :key="session.sessionId" class="row">
-            <div class="row__main">
-              <div class="row__title">
+      <!-- 骨架屏而不是转圈：它把「马上会出现什么形状」提前告诉了用户 -->
+      <div v-if="loading" class="cards" aria-hidden="true">
+        <div v-for="i in 2" :key="i" class="card card--skeleton" />
+      </div>
+
+      <div v-else-if="errorMessage !== ''" class="state">
+        <p class="state__error" role="alert">{{ errorMessage }}</p>
+        <Button variant="text" @click="load">重试</Button>
+      </div>
+
+      <p v-else-if="sessions.length === 0" class="state__empty">当前没有登录中的设备</p>
+
+      <template v-else>
+        <ul class="cards">
+          <li
+            v-for="session in sessions"
+            :key="session.sessionId"
+            class="card"
+            :class="{ 'card--current': session.current }"
+          >
+            <span class="card__icon" :class="{ 'card__icon--current': session.current }">
+              <Icon :name="deviceIcon(session)" :size="20" />
+            </span>
+
+            <div class="card__main">
+              <div class="card__title">
                 {{ deviceLabel(session) }}
-                <span v-if="session.current" class="row__badge">本机</span>
+                <span v-if="session.current" class="card__badge">本机</span>
               </div>
-              <div class="row__sub">{{ locationLabel(session) }}</div>
-              <div class="row__sub">{{ loginLabel(session) }}</div>
+              <div class="card__meta">{{ locationLabel(session) }}</div>
+              <div class="card__meta">{{ loginLabel(session) }}</div>
             </div>
 
             <!--
@@ -153,7 +182,8 @@ onMounted(load)
             -->
             <Button
               v-if="!session.current"
-              variant="text"
+              variant="danger"
+              :block="false"
               :loading="revoking === session.sessionId"
               @click="revoke(session)"
             >
@@ -161,24 +191,38 @@ onMounted(load)
             </Button>
           </li>
         </ul>
-      </Section>
 
-      <!--
-        只有真的存在其它设备时才出现。只有一台时给一个「下线其它设备」，
-        点下去什么都不会发生 —— 那种按钮会让人以为功能坏了
-      -->
-      <div v-if="sessions.length > 1" class="page__actions">
-        <Button v-if="!confirmingOthers" variant="text" @click="confirmingOthers = true">
-          下线其它所有设备
-        </Button>
-        <template v-else>
-          <p class="page__confirm">
-            除本机外的 {{ sessions.length - 1 }} 台设备都会被登出，你自己不受影响。
-          </p>
-          <Button :loading="revokingOthers" @click="revokeOthers">确认下线</Button>
-          <Button variant="text" @click="confirmingOthers = false">取消</Button>
-        </template>
-      </div>
+        <!--
+          只有真的存在其它设备时才出现。只有一台时给一个「下线其它设备」，
+          点下去什么都不会发生 —— 那种按钮会让人以为功能坏了
+        -->
+        <div v-if="sessions.length > 1" class="actions">
+          <Button
+            v-if="!confirmingOthers"
+            variant="danger"
+            :block="false"
+            @click="confirmingOthers = true"
+          >
+            下线其它所有设备
+          </Button>
+          <template v-else>
+            <p class="actions__confirm">
+              除本机外的 {{ sessions.length - 1 }} 台设备都会被登出，你自己不受影响。
+            </p>
+            <div class="actions__row">
+              <Button
+                variant="danger"
+                :block="false"
+                :loading="revokingOthers"
+                @click="revokeOthers"
+              >
+                确认下线
+              </Button>
+              <Button variant="text" :block="false" @click="confirmingOthers = false">取消</Button>
+            </div>
+          </template>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -192,8 +236,7 @@ onMounted(load)
 
 .page__body {
   flex: 1;
-  padding: var(--sv-space-page);
-  padding-bottom: calc(var(--sv-safe-bottom) + var(--sv-space-lg));
+  padding: var(--sv-space-md) var(--sv-space-page) calc(var(--sv-safe-bottom) + var(--sv-space-lg));
 }
 
 .page__intro {
@@ -203,50 +246,82 @@ onMounted(load)
   line-height: 1.5;
 }
 
-.list {
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sv-space-md);
   margin: 0;
   padding: 0;
   list-style: none;
-  border-radius: var(--sv-radius-card);
-  background: var(--sv-bg-surface);
-  overflow: hidden;
 }
 
-.row {
+/*
+ * 一台设备一张卡。卡之间留空隙而不是用分隔线 ——
+ * 每一条都要单独读、单独判断，挤在一起容易看串行。
+ */
+.card {
   display: flex;
   align-items: center;
   gap: var(--sv-space-md);
   padding: var(--sv-space-md);
+  border: 1px solid transparent;
+  border-radius: var(--sv-radius-lg);
+  background: var(--sv-bg-surface);
 }
 
-.row + .row {
-  border-top: 1px solid var(--sv-border-color);
+/* 本机那张描一圈主色：用户第一眼要找的就是它 */
+.card--current {
+  border-color: var(--sv-color-primary);
 }
 
-.row__main {
+.card--skeleton {
+  height: 72px;
+  opacity: 0.6;
+}
+
+.card__icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--sv-bg-fill);
+  color: var(--sv-text-secondary);
+}
+
+.card__icon--current {
+  background: var(--sv-color-primary-soft);
+  color: var(--sv-color-primary);
+}
+
+.card__main {
   flex: 1;
   min-width: 0;
 }
 
-.row__title {
+.card__title {
   display: flex;
   align-items: center;
   gap: var(--sv-space-xs);
   font-size: var(--sv-font-body);
+  font-weight: 500;
 }
 
 /* 「本机」标签要一眼看见 —— 它是用户敢不敢点下线的全部依据 */
-.row__badge {
-  padding: 0 6px;
+.card__badge {
+  padding: 1px 6px;
   border-radius: var(--sv-radius-pill);
-  background: var(--sv-color-primary);
-  color: #fff;
+  background: var(--sv-color-primary-soft);
+  color: var(--sv-color-primary);
   font-size: var(--sv-font-footnote);
+  font-weight: 500;
   line-height: 1.6;
 }
 
-.row__sub {
-  margin-top: 2px;
+.card__meta {
+  margin-top: 3px;
   color: var(--sv-text-placeholder);
   font-size: var(--sv-font-footnote);
   overflow: hidden;
@@ -254,17 +329,47 @@ onMounted(load)
   white-space: nowrap;
 }
 
-.page__actions {
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sv-space-sm);
+  padding: var(--sv-space-xl) 0;
+}
+
+.state__error {
+  margin: 0;
+  color: var(--sv-color-danger);
+  font-size: var(--sv-font-caption);
+}
+
+.state__empty {
+  margin: 0;
+  padding: var(--sv-space-xl) 0;
+  text-align: center;
+  color: var(--sv-text-placeholder);
+  font-size: var(--sv-font-caption);
+}
+
+.actions {
   margin-top: var(--sv-space-lg);
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--sv-space-sm);
 }
 
-.page__confirm {
+.actions__confirm {
   margin: 0;
+  text-align: center;
   color: var(--sv-text-secondary);
   font-size: var(--sv-font-caption);
   line-height: 1.5;
+}
+
+.actions__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sv-space-sm);
 }
 </style>

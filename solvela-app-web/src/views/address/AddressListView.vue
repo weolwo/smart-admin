@@ -183,15 +183,22 @@ async function onDelete(address: Address): Promise<void> {
 </template>
 
 <style scoped>
+/*
+ * 🔴 左右内边距在这里，不在每个子块上。
+ *
+ * 2026-09-10 之前这一页【整个没有左右留白】，地址卡直接贴着屏幕边缘 ——
+ * 而 .page__hint 当时专门写了 `margin: 0 var(--sv-space-page)` 去绕开它，
+ * 那一行本身就是证据：有人发现了不对，但只修了自己那一块。
+ */
 .page {
   display: flex;
   flex-direction: column;
   gap: var(--sv-space-md);
-  padding-bottom: calc(96px + var(--sv-safe-bottom));
+  padding: var(--sv-space-md) var(--sv-space-page) calc(96px + var(--sv-safe-bottom));
 }
 
 .page__hint {
-  margin: 0 var(--sv-space-page);
+  margin: 0;
   color: var(--sv-color-danger);
   font-size: var(--sv-font-caption);
 }
@@ -252,6 +259,7 @@ async function onDelete(address: Address): Promise<void> {
 /* 默认标既有底色也有文字：只靠颜色区分对色觉障碍用户等于没区分 */
 .row__default {
   padding: 1px var(--sv-space-sm);
+  line-height: 1.6;
   border-radius: var(--sv-radius-pill);
   background: var(--sv-color-primary-soft);
   color: var(--sv-color-primary);
@@ -264,16 +272,27 @@ async function onDelete(address: Address): Promise<void> {
   line-height: 1.5;
 }
 
+/* 一条细线把「地址」和「对它的操作」分开：不分的话操作像是地址的第三行 */
 .row__ops {
   display: flex;
   justify-content: flex-end;
-  gap: var(--sv-space-md);
-  padding: 0 var(--sv-space-md) var(--sv-space-md);
+  gap: var(--sv-space-sm);
+  margin: 0 var(--sv-space-md);
+  padding: var(--sv-space-sm) 0 var(--sv-space-md);
+  border-top: 1px solid var(--sv-border-color);
 }
 
+/*
+ * 操作做成描边小胶囊，不是一行灰字。
+ *
+ * 灰字既看不出可点、也看不出轻重 —— 而这一排里「删除」是不可逆的，
+ * 「设为默认」只是换个默认值，两者的分量差得很远。
+ */
 .op {
-  border: 0;
-  padding: 0;
+  padding: 0 var(--sv-space-md);
+  height: 28px;
+  border: 1px solid var(--sv-border-color);
+  border-radius: var(--sv-radius-pill);
   background: transparent;
   color: var(--sv-text-secondary);
   font: inherit;
@@ -281,8 +300,18 @@ async function onDelete(address: Address): Promise<void> {
   cursor: pointer;
 }
 
+.op:active:not(:disabled) {
+  background: var(--sv-bg-pressed);
+}
+
 .op--danger {
+  border-color: var(--sv-color-danger);
   color: var(--sv-color-danger);
+}
+
+.op--danger:active:not(:disabled) {
+  background: var(--sv-color-danger);
+  color: var(--sv-text-on-primary);
 }
 
 .op:disabled {

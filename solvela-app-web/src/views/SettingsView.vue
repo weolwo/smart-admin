@@ -47,7 +47,7 @@
 }
 
 .page__card {
-  border-radius: var(--sv-radius-card);
+  border-radius: var(--sv-radius-lg);
   background: var(--sv-bg-surface);
   overflow: hidden;
 }
