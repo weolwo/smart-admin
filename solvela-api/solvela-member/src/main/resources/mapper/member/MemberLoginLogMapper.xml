@@ -10,6 +10,7 @@
         <result column="client_ip" property="clientIp"/>
         <result column="ip_region" property="ipRegion"/>
         <result column="device_type" property="deviceType"/>
+        <result column="device_id" property="deviceId"/>
         <result column="os_name" property="osName"/>
         <result column="browser_name" property="browserName"/>
         <result column="status" property="status"/>
@@ -28,6 +29,7 @@
                 l.client_ip,
                 l.ip_region,
                 l.device_type,
+                l.device_id,
                 l.os_name,
                 l.browser_name,
                 l.status,
@@ -78,6 +80,14 @@
             </if>
             <if test="queryForm.deviceType != null and queryForm.deviceType != ''">
                 AND l.device_type = #{queryForm.deviceType}
+            </if>
+            <!--
+              精确匹配，不用 LIKE：device_id 是 32 位 hex，运营是从另一条记录上
+              复制粘贴过来的，不会只记得一半。而 LIKE '%xxx%' 用不上索引，
+              在一张按月分区的大表上就是全表扫。
+            -->
+            <if test="queryForm.deviceId != null and queryForm.deviceId != ''">
+                AND l.device_id = #{queryForm.deviceId}
             </if>
             <if test="queryForm.traceId != null and queryForm.traceId != ''">
                 AND l.trace_id = #{queryForm.traceId}

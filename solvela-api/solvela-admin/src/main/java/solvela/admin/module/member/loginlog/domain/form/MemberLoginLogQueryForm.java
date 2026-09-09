@@ -40,11 +40,14 @@ public class MemberLoginLogQueryForm extends PageParam {
     @Schema(description = "发生时间（即登录时间）")
     private LocalDate createTimeEnd;
 
-    @Schema(description = "状态：0-失败, 1-成功, 2-登出。⚠️与tLoginLog.loginResult取值相反")
+    @Schema(description = "状态：0-成功, 1-失败, 2-登出（LoginLogResultEnum）")
     private LoginLogResultEnum status;
 
     @Schema(description = "设备端：APP/H5/WECHAT/PC")
     private String deviceType;
+
+    @Schema(description = "设备号。查「这台设备碰过哪些账号」用它 —— 那正是这一列存在的理由")
+    private String deviceId;
 
     @Schema(description = "全链路追踪ID，对应 LogTraceFilter 的 MDC traceId")
     private String traceId;

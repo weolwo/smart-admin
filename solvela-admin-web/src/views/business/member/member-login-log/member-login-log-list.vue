@@ -33,6 +33,13 @@
       <a-form-item label="客户端IP" class="solvela-query-form-item">
         <a-input style="width: 150px" v-model:value="queryForm.clientIp" placeholder="精确匹配" allow-clear @press-enter="onSearch" />
       </a-form-item>
+      <!--
+        按设备号筛：这一项就是「这台设备碰过哪些账号」的入口。
+        在 device_id 存在之前，这个问题根本问不出口。
+      -->
+      <a-form-item label="设备号" class="solvela-query-form-item">
+        <a-input style="width: 180px" v-model:value="queryForm.deviceId" placeholder="32 位，从列表复制" allow-clear @press-enter="onSearch" />
+      </a-form-item>
       <a-form-item label="登录时间" class="solvela-query-form-item">
         <a-range-picker v-model:value="createTime" :presets="defaultTimeRanges" style="width: 230px" @change="onChangeCreateTime" />
       </a-form-item>
@@ -100,6 +107,20 @@
           <div>{{ record.deviceType || '—' }}</div>
           <div class="cell-sub">{{ [record.osName, record.browserName].filter(Boolean).join(' / ') }}</div>
         </template>
+
+        <!--
+          点一下就按这台设备筛。省掉「选中 32 位 hex → 复制 → 粘到筛选框」那三步 ——
+          而这三步正是运营实际会做的事，做起来越麻烦，这一列就越没人用。
+
+          老客户端没有设备令牌时为空，显示成灰色的「—」而不是留白：
+          留白让人以为是页面没加载出来。
+        -->
+        <template v-else-if="column.dataIndex === 'deviceId'">
+          <a v-if="record.deviceId" :title="record.deviceId" @click="filterByDevice(record.deviceId)">
+            {{ record.deviceId.slice(0, 12) }}…
+          </a>
+          <span v-else class="cell-sub">—</span>
+        </template>
       </template>
     </a-table>
 
@@ -131,6 +152,7 @@
     { title: '状态', dataIndex: 'status', width: 90 },
     { title: '客户端IP / 归属地', dataIndex: 'clientIp', width: 200 },
     { title: '设备端 / 系统', dataIndex: 'deviceType', width: 180 },
+    { title: '设备号', dataIndex: 'deviceId', width: 160, ellipsis: true },
     { title: '提示信息', dataIndex: 'remark', width: 220, ellipsis: true },
     { title: '登录时间', dataIndex: 'createTime', width: 170, ellipsis: true },
     { title: 'traceId', dataIndex: 'traceId', width: 200, ellipsis: true },
@@ -154,6 +176,7 @@
     status: undefined,
     deviceType: undefined,
     clientIp: undefined,
+    deviceId: undefined,
     createTimeBegin: today,
     createTimeEnd: today,
     pageNum: 1,
@@ -168,6 +191,20 @@
   function onChangeCreateTime(dates, dateStrings) {
     queryForm.createTimeBegin = dateStrings[0] || undefined;
     queryForm.createTimeEnd = dateStrings[1] || undefined;
+  }
+
+  /**
+   * 按某台设备筛。<b>顺带把时间范围放开</b> ——
+   * 「这台设备碰过哪些账号」问的是历史，而这个页面默认只看当天；
+   * 不放开的话点下去多半是一条也搜不到，用户会以为这个功能坏了。
+   */
+  function filterByDevice(deviceId) {
+    queryForm.deviceId = deviceId;
+    queryForm.createTimeBegin = undefined;
+    queryForm.createTimeEnd = undefined;
+    createTime.value = [];
+    queryForm.pageNum = 1;
+    queryData();
   }
 
   function resetQuery() {

@@ -44,13 +44,16 @@ public class MemberLoginLogVO {
     @Schema(description = "设备端：APP/H5/WECHAT/PC")
     private String deviceType;
 
+    @Schema(description = "设备号（服务端签发的 32 位 hex）。老客户端没有设备令牌时为空")
+    private String deviceId;
+
     @Schema(description = "操作系统：iOS/Android/Windows")
     private String osName;
 
     @Schema(description = "浏览器：Chrome/Safari")
     private String browserName;
 
-    @Schema(description = "状态：0-失败, 1-成功, 2-登出。⚠️与t_login_log.login_result取值相反")
+    @Schema(description = "状态：0-成功, 1-失败, 2-登出（LoginLogResultEnum）")
     private LoginLogResultEnum status;
 
     @Schema(description = "提示信息：成功可为空，失败写具体原因")

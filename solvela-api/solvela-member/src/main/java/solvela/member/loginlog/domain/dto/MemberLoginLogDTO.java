@@ -40,6 +40,8 @@ public class MemberLoginLogDTO {
     /** 设备端：APP/H5/WECHAT/PC */
     private String deviceType;
 
+    private String deviceId;
+
     /** 操作系统：iOS/Android/Windows */
     private String osName;
 

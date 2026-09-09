@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="solvela.member.device.dao.DeviceDao">
+
+    <sql id="query_conditions">
+        <where>
+            <if test="queryForm.deviceId != null and queryForm.deviceId != ''">
+                AND device_id = #{queryForm.deviceId}
+            </if>
+            <!--
+              批量领设备最直接的信号就是「同一个 IP 下有多少台」。
+              idx_dev_ip(register_ip, create_time) 正是为这个查询建的。
+            -->
+            <if test="queryForm.registerIp != null and queryForm.registerIp != ''">
+                AND register_ip = #{queryForm.registerIp}
+            </if>
+            <if test="queryForm.deviceType != null and queryForm.deviceType != ''">
+                AND device_type = #{queryForm.deviceType}
+            </if>
+            <if test="queryForm.status != null">
+                AND status = #{queryForm.status}
+            </if>
+            <if test="queryForm.createTimeBegin != null">
+                AND create_time &gt;= #{queryForm.createTimeBegin}
+            </if>
+            <!--
+              🔴 结束日期用「< 次日零点」，不能用「<= 当天」。
+              createTimeEnd 是 LocalDate，绑进 datetime 列是当天 00:00:00 ——
+              「查今天」写成 <= 的话结果恒为 0，而且不报错。
+              判据与 MemberLoginLogMapper 那条完全一样。
+            -->
+            <if test="queryForm.createTimeEnd != null">
+                AND create_time &lt; DATE_ADD(#{queryForm.createTimeEnd}, INTERVAL 1 DAY)
+            </if>
+        </where>
+    </sql>
+
+    <select id="queryPage" resultType="solvela.member.Device">
+        SELECT id, device_id, device_type, model, os_version, app_version,
+               register_ip, register_region, key_version, attest_level,
+               status, remark, operator, last_active_time, create_time, update_time
+        FROM t_device
+        <include refid="query_conditions"/>
+        ORDER BY create_time DESC
+    </select>
+
+    <!--
+      这台设备碰过哪些账号。整套设备方案最终要产出的就是这张表。
+
+      按 member_id 聚合而不是把日志原样列出来：运营要看的是「几个账号」，
+      不是「几百条登录记录」。COUNT(1) 顺带给出每个账号在这台机器上登了多少次 ——
+      一台设备上有 20 个账号各登 1 次，和 1 个账号登 20 次，是完全不同的两件事。
+
+      LIMIT 兜底：一台被刷子用的设备可能关联几百个账号，
+      不设上限的话这个接口会把后台点崩，而运营看前 50 个就已经能下判断了。
+    -->
+    <select id="listMembers" resultType="solvela.member.device.domain.dto.DeviceMemberDTO">
+        SELECT l.member_id                                                          AS memberId,
+               (SELECT m.member_name FROM t_member m WHERE m.member_id = l.member_id) AS memberName,
+               (SELECT m.nickname FROM t_member m WHERE m.member_id = l.member_id)  AS nickname,
+               COUNT(1)                                                             AS loginCount,
+               MIN(l.create_time)                                                   AS firstLoginTime,
+               MAX(l.create_time)                                                   AS lastLoginTime
+        FROM t_member_login_log l
+        WHERE l.device_id = #{deviceId}
+        GROUP BY l.member_id
+        ORDER BY lastLoginTime DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

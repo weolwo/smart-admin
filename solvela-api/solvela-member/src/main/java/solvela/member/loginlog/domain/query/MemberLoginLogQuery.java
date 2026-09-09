@@ -44,6 +44,8 @@ public class MemberLoginLogQuery extends PageParam {
     /** 设备端：APP/H5/WECHAT/PC */
     private String deviceType;
 
+    private String deviceId;
+
     /** 全链路追踪ID，对应 LogTraceFilter 的 MDC traceId */
     private String traceId;
 

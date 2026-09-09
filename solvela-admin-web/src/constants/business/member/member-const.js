@@ -49,14 +49,25 @@ export const REGISTER_SOURCE_OPTIONS = [
 ];
 
 /**
- * 登录日志状态。
+ * 登录日志状态。取值口径 **0-成功, 1-失败, 2-登出**。
  *
- * ⚠️ 与 t_login_log.login_result **取值相反**（DDL 注释里专门标了这一条）：
- * 那张是员工登录日志，这张是会员登录日志，别照着另一张的语义读这一列。
+ * <h3>🔴 2026-09-10 修正：这里原来是反的</h3>
+ * 原先写成 FAIL:0 / SUCCESS:1，并附了一句「与 t_login_log.login_result 取值相反」——
+ * 两句都不对：
+ * <ul>
+ *   <li>两张表**同口径**（DDL 注释：`0-成功, 1-失败, 2-登出。与 t_login_log.login_result
+ *       同口径，共用 LoginLogResultEnum`），不是相反；</li>
+ *   <li>后端 `LoginLogResultEnum` 是 `LOGIN_SUCCESS(0)`，且 `BaseEnum.getValue()`
+ *       上有 `@JsonValue` —— 下发给前端的就是这个整数。</li>
+ * </ul>
+ * 于是后台把**每一条成功登录都标成了红色的「失败」**，反之亦然。
+ * 它不会报错，只会让人把一张健康的登录日志读成一片失败。
+ *
+ * 改这里之前先看 DDL 注释，那是唯一真源。
  */
 export const LOGIN_STATUS_ENUM = {
-  FAIL: { value: 0, desc: '失败', color: 'red' },
-  SUCCESS: { value: 1, desc: '成功', color: 'green' },
+  SUCCESS: { value: 0, desc: '成功', color: 'green' },
+  FAIL: { value: 1, desc: '失败', color: 'red' },
   LOGOUT: { value: 2, desc: '登出', color: 'default' },
 };
 
