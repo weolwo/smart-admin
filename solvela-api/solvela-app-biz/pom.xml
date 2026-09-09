@@ -113,6 +113,15 @@
             <version>3.0.0</version>
         </dependency>
 
+        <!-- 邮件：会员的邮箱验证码（注册/登录/绑定/重置密码）。
+             与 admin 共用同一份 MailService 与 t_mail_template ——
+             复制一份出去，两处的模板解析、测试环境标题前缀、异常处理迟早不一致 -->
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-base-mail</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
         <!--
         直接依赖 web 栈，不碰管理端那套 HTTP 层（solvela.web 包，2026-08-31 起住在
         solvela-admin 里）—— 它的 GlobalExceptionHandler 一律返回 200 + ResponseDTO，

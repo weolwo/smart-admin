@@ -1,4 +1,4 @@
-package solvela.admin.module.system.mail;
+package solvela.base.mail;
 
 
 import solvela.exception.BusinessException;
@@ -13,9 +13,6 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import solvela.base.domain.SystemEnvironment;
 import solvela.base.util.SolvelaTemplateUtil;
-import solvela.admin.module.system.mail.constant.MailTemplateCodeEnum;
-import solvela.admin.module.system.mail.constant.MailTemplateTypeEnum;
-import solvela.admin.module.system.mail.domain.MailTemplateEntity;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;

@@ -69,18 +69,11 @@
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId>
         </dependency>
-        <dependency>
-            <groupId>org.jsoup</groupId>
-            <artifactId>jsoup</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.freemarker</groupId>
-            <artifactId>freemarker</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
+        <!-- 🔴 2026-09-09 摘掉了 jsoup / freemarker / spring-boot-starter-mail 三个依赖：
+             本模块【一个都没用过】（连 jsoup 都只是一句「用正则而不是引 jsoup」的注释）。
+             它们挂在这里，是为了让当时长在 solvela-admin 里的 MailService 传递拿到 ——
+             而那是一条谁也看不出来的依赖路径。现在它们在 solvela-base-mail 上，
+             跟真正用它们的代码在一起。 -->
 
         <dependency>
             <groupId>org.projectlombok</groupId>

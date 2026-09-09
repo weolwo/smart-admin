@@ -34,6 +34,7 @@
         <module>solvela-base-redis</module>
         <module>solvela-base-data</module>
         <module>solvela-base-file</module>
+        <module>solvela-base-mail</module>
         <module>solvela-base-mq</module>
         <module>solvela-base-web</module>
 

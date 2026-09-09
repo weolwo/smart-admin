@@ -1,4 +1,4 @@
-package solvela.admin.module.system.mail.domain;
+package solvela.base.mail;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;

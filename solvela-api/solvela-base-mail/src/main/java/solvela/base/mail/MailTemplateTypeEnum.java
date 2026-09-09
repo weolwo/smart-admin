@@ -1,4 +1,4 @@
-package solvela.admin.module.system.mail.constant;
+package solvela.base.mail;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

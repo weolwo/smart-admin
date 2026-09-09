@@ -1,8 +1,7 @@
-package solvela.admin.module.system.mail;
+package solvela.base.mail;
 
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import solvela.admin.module.system.mail.domain.MailTemplateEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.springframework.stereotype.Component;
 

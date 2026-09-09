@@ -69,6 +69,14 @@
             <artifactId>solvela-base-file</artifactId>
             <version>3.0.0</version>
         </dependency>
+
+        <!-- 邮件：员工登录的双因子验证码。2026-09-09 从本模块内部搬到 base-mail，
+             因为会员域也要发邮箱验证码，而它够不着 solvela-admin -->
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-base-mail</artifactId>
+            <version>3.0.0</version>
+        </dependency>
         <dependency>
             <groupId>solvela</groupId>
             <artifactId>solvela-marketing</artifactId>

@@ -1,0 +1,85 @@
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>solvela</groupId>
+        <artifactId>solvela-parent</artifactId>
+        <version>3.0.0</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <groupId>solvela</groupId>
+    <artifactId>solvela-base-mail</artifactId>
+    <version>3.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>solvela-base-mail</name>
+    <description>基础设施-邮件：模板渲染与发送。</description>
+
+    <!--
+    <h3>为什么单独一块</h3>
+    与 mq / file 同一个判据：<b>依赖它就等于这个进程要连 SMTP</b>。
+    网关不发邮件，把它塞进 core 会让每个进程都平白多一份邮件配置。
+
+    <h3>2026-09-09 从 solvela-admin 搬出来</h3>
+    此前 MailService 长在 {@code solvela.admin.module.system.mail} 下，
+    于是「发一封邮件」这件事<b>只有管理端做得到</b>。会员域要发邮箱验证码时够不着它 ——
+    而复制一份出去，两处的模板解析、测试环境标题前缀、异常处理迟早不一致。
+
+    <p>🔴 三个依赖（spring-boot-starter-mail / freemarker / jsoup）此前挂在
+    <b>solvela-base-file</b> 上，而那个模块<b>一个都没用</b>
+    （它连 jsoup 都是「用正则而不是引 jsoup」）。它们在那儿纯粹是为了让 admin 的
+    MailService 传递拿到 —— 这次一并挪到真正用它们的地方。
+
+    <h3>谁会依赖它</h3>
+    admin（员工登录的双因子验证码）与 app-biz（会员的邮箱验证码）。
+    网关不要引：它的 classpath 由 AppBoundaryTest 锁着，一个 base 模块都不许有。
+    -->
+    <dependencies>
+
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-base-core</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
+        <!-- 模板表 t_mail_template 的 Dao 走 MyBatis-Plus，与其它 base 模块一致 -->
+        <dependency>
+            <groupId>solvela</groupId>
+            <artifactId>solvela-base-data</artifactId>
+            <version>3.0.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- 两种模板解析方式：freemarker 走完整语法，string 走简单占位符替换 -->
+        <dependency>
+            <groupId>org.freemarker</groupId>
+            <artifactId>freemarker</artifactId>
+        </dependency>
+
+        <!-- string 模式下把渲染结果规范成合法 XML/HTML，避免半个标签发出去 -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+    </dependencies>
+
+</project>
