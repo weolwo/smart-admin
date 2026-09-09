@@ -11,6 +11,7 @@ import solvela.member.api.MemberPasswordResetResult;
 import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
+import solvela.member.api.MemberContactView;
 import solvela.member.api.MemberIdentity;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
@@ -74,6 +75,11 @@ public class MemberAuthInternalController implements MemberAuthApi {
     @Override
     public MemberIdentity getAuthIdentity(Long memberId) {
         return memberAuthService.getAuthIdentity(memberId);
+    }
+
+    @Override
+    public MemberContactView getContact(Long memberId) {
+        return memberAuthService.getContact(memberId);
     }
 
     @Override

@@ -86,6 +86,20 @@ public interface MemberAuthDao {
     Member selectForEmailBind(@Param("memberId") Long memberId);
 
     /**
+     * 取联系方式，供「账号安全」页展示。
+     *
+     * <p>连 {@code password} 一起查，是因为页面要知道「有没有设过密码」——
+     * 换绑邮箱时没设过密码的人只能走旧邮箱验证码那条路。
+     * 查出来的密码<b>只用来判空</b>，一个字符都不会离开服务端。
+     */
+    @Select("""
+            SELECT member_id, phone, email, password
+            FROM t_member
+            WHERE member_id = #{memberId}
+            """)
+    Member selectContact(@Param("memberId") Long memberId);
+
+    /**
      * 换绑邮箱。
      *
      * <p>🔴 {@code UNHEX} 同样不能省，理由见 {@link #selectForLogin}。

@@ -32,6 +32,7 @@ import solvela.member.api.MemberPasswordResetCmd;
 import solvela.member.api.MemberPasswordResetResult;
 import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
+import solvela.member.api.MemberContactView;
 import solvela.member.api.MemberAuthResult;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
@@ -205,6 +206,11 @@ public class MemberLoginService {
      * 「说自己是谁就是谁」。这条与 {@code MemberLoginService.register} 里
      * 「register_source 由这一层推导，不收客户端的」是同一条规矩。
      */
+    /** 我的联系方式，域里已经打过码。 */
+    public MemberContactView contact(Long memberId) {
+        return memberAuthApi.getContact(memberId);
+    }
+
     public void bindEmail(EmailBindRequest request, String ip) {
         MemberEmailBindResult result = memberAuthApi.bindEmail(new MemberEmailBindCmd(
                 CurrentMember.require().memberId(),

@@ -15,6 +15,7 @@ import solvela.app.auth.MemberPrincipal;
 import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.SessionRevokeRequest;
+import solvela.member.api.MemberContactView;
 import solvela.app.domain.SmsCodeRequest;
 import solvela.auth.member.MemberSession;
 
@@ -128,6 +129,17 @@ public class MemberLoginController {
                                           HttpServletRequest servletRequest) {
         memberLoginService.bindEmail(request, ClientIp.of(servletRequest));
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 我的联系方式（手机号 / 邮箱，<b>都是脱敏的</b>）。<b>要登录</b>。
+     *
+     * <p>单独一条路由而不是塞进 {@code /auth/me}：那个结果会进网关缓存和日志，
+     * 而手机号邮箱是 PII。代价是多一次往返，换的是明文一次都不出域。
+     */
+    @PostMapping("/contact")
+    public MemberContactView contact() {
+        return memberLoginService.contact(CurrentMember.require().memberId());
     }
 
     /**

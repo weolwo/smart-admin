@@ -10,6 +10,7 @@ import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.EmailBindFailReason;
 import solvela.member.api.MemberAuthApi;
+import solvela.member.api.MemberContactView;
 import solvela.member.api.SmsCodeFailReason;
 import solvela.member.api.SmsCodeSendCmd;
 import solvela.member.api.SmsCodeSendResult;
@@ -113,6 +114,11 @@ public class ApiContractDownstreamStub {
                     return SmsCodeSendResult.fail(SmsCodeFailReason.SEND_FAILED);
                 }
                 return SmsCodeSendResult.ok();
+            }
+
+            @Override
+            public MemberContactView getContact(Long memberId) {
+                return new MemberContactView("138****8000", "a***@example.com", true);
             }
 
             @Override

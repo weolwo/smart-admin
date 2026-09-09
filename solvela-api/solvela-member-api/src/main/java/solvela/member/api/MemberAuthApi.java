@@ -96,6 +96,16 @@ public interface MemberAuthApi {
     MemberEmailBindResult bindEmail(@RequestBody MemberEmailBindCmd cmd);
 
     /**
+     * 当前会员的联系方式，<b>全部脱敏</b>。
+     *
+     * <p>刻意不合并进 {@link #getAuthIdentity}：那个结果会进网关的缓存和日志，
+     * 而手机号邮箱是 PII。分开一次调用，代价是多一个往返，
+     * 换的是「明文一次都不出域」。
+     */
+    @GetExchange("/contact/{memberId}")
+    MemberContactView getContact(@PathVariable Long memberId);
+
+    /**
      * 用邮箱验证码重置密码。<b>匿名</b> —— 用户正是因为进不去才走这条路。
      *
      * <p>⚠️ 这条链路的验证码威力最大：拿到它就能改密码，等于账号易主。

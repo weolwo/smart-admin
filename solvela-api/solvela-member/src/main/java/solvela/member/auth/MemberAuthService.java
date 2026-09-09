@@ -7,6 +7,7 @@ import solvela.base.trace.Trace;
 import solvela.base.util.SolvelaIpUtil;
 import solvela.base.util.SolvelaStringUtil;
 import solvela.crypto.PasswordCipher;
+import solvela.crypto.PiiCipher;
 import solvela.crypto.PiiHasher;
 import solvela.enums.LoginLogResultEnum;
 import solvela.enums.MemberOperationTypeEnum;
@@ -21,6 +22,7 @@ import solvela.member.api.MemberAuthResult;
 import solvela.member.api.MemberIdentity;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
+import solvela.member.api.MemberContactView;
 import solvela.member.api.MemberRegisterResult;
 import solvela.enums.DeviceStatusEnum;
 import solvela.member.api.SmsCodeVerifyResult;
@@ -93,6 +95,8 @@ public class MemberAuthService implements MemberAuthApi {
     private final MemberLoginLogDao memberLoginLogDao;
     private final MemberOperationLimitService operationLimitService;
     private final PiiHasher piiHasher;
+
+    private final PiiCipher piiCipher;
     private final DeviceGuard deviceGuard;
     private final MemberEmailCodeService emailCodeService;
     private final MemberEmailCodeIssuer emailCodeIssuer;
@@ -321,6 +325,38 @@ public class MemberAuthService implements MemberAuthApi {
     @Override
     public SmsCodeSendResult sendSmsCode(SmsCodeSendCmd cmd) {
         return smsCodeService.send(cmd.scene(), cmd.phone(), cmd.clientIp());
+    }
+
+    /**
+     * 当前会员的联系方式，<b>脱敏之后</b>再出域。
+     *
+     * <p>🔴 解密只发生在这一个方法里，而且解出来的明文<b>立刻被打码</b>，
+     * 不进返回值、不进日志。整套 PiiCipher 的意义就在于此 ——
+     * 页面上要显示的本来就只是 {@code 138****8000}。
+     */
+    @Override
+    public MemberContactView getContact(Long memberId) {
+        Member member = memberAuthDao.selectContact(memberId);
+        if (member == null) {
+            return new MemberContactView(null, null, false);
+        }
+        return new MemberContactView(
+                maskCipher(member.getPhone(), MemberPhoneUtil::mask),
+                maskCipher(member.getEmail(), MemberEmailUtil::mask),
+                !SolvelaStringUtil.isEmpty(member.getPassword()));
+    }
+
+    /** 密文 → 明文 → 打码。解不出来时返回 null，不抛：一个展示接口不该因此 500。 */
+    private String maskCipher(String cipher, java.util.function.UnaryOperator<String> mask) {
+        if (SolvelaStringUtil.isEmpty(cipher)) {
+            return null;
+        }
+        try {
+            return mask.apply(piiCipher.decrypt(cipher));
+        } catch (Exception e) {
+            log.warn("【联系方式】解密失败, memberId 已省略", e);
+            return null;
+        }
     }
 
     /**
