@@ -5,7 +5,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
+import solvela.trace.DeviceContract;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * 钉住 yaml 里那两行真的绑进来了。
@@ -35,16 +38,40 @@ class DeviceAuthPropertiesTest {
     private DeviceAuthProperties properties;
 
     @Test
-    @DisplayName("默认档是 off —— 服务端先上线时不能影响任何存量客户端")
-    void 默认档() {
-        assertEquals(DeviceAuthProperties.Mode.OFF, properties.mode(),
-                "默认必须是 OFF。漏配的后果不对称：OFF 只是「防刷还没生效」，"
+    @DisplayName("当前档是 observe —— 客户端已经在带令牌了，覆盖率必须开始记")
+    void 当前档() {
+        assertEquals(DeviceAuthProperties.Mode.OBSERVE, properties.mode(),
+                "observe 与 off 对请求的处理完全一样（都放行），差别只是记不记覆盖率。"
+                        + "而那个比例是决定「能不能切 enforce」的唯一依据 —— "
+                        + "停在 off 等于把整套方案的产出关着");
+    }
+
+    @Test
+    @DisplayName("兜底档仍是 off —— 漏配的后果不对称")
+    void 兜底档() {
+        assertEquals(DeviceAuthProperties.Mode.OFF, new DeviceAuthProperties(null, null).mode(),
+                "漏配的后果不对称：OFF 只是「防刷还没生效」，"
                         + "ENFORCE 是「所有老客户端立刻用不了」");
     }
 
     @Test
-    @DisplayName("头名从 yaml 读，不是硬编码")
+    @DisplayName("🔴 头名是 X-Device-Token，与进程间那个 X-Device-Id 不是一回事")
     void 头名() {
         assertEquals("X-Device-Token", properties.header());
+
+        /*
+         * 🔴 这两个头方向不同、内容不同，【不能合并】：
+         *   · X-Device-Token  客户端 → 网关，装【令牌】，网关要验签
+         *   · X-Device-Id     网关 → 内部服务，装【验签通过的设备号】
+         * 令牌绝不原样透传下去 —— 那等于把凭证散给所有内部服务
+         * （见 DownstreamClientConfig 的注释）。
+         *
+         * 写混的代价是【静默的】：网关读不到自己要的那个头，就当作「没有设备身份」
+         * 照常放行，请求全部成功，只是 device_id 恒为 NULL、覆盖率恒为 0%。
+         * 2026-09-10 客户端第一版就是把令牌塞进了 X-Device-Id，
+         * 一整套设备身份空转，没有任何报错。
+         */
+        assertNotEquals(DeviceContract.HEADER, properties.header(),
+                "两个头一旦同名，「令牌不透传」这条就没法在代码上表达了");
     }
 }
