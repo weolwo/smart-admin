@@ -20,6 +20,8 @@ import solvela.member.api.EmailCodeFailReason;
 import solvela.member.api.EmailCodeScene;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.EmailCodeVerifyResult;
+import solvela.member.code.VerificationCodeProperties;
+import solvela.member.code.VerificationCodeStore;
 
 import java.util.HashMap;
 import java.util.List;
@@ -70,7 +72,7 @@ class MemberEmailCodeServiceTest {
     @Mock
     private PiiHasher piiHasher;
 
-    private MemberEmailCodeProperties properties;
+    private VerificationCodeProperties properties;
     private MemberEmailCodeService service;
 
     /** 模拟 Redis 的一个键值对；测试只用得到一个码键。 */
@@ -79,9 +81,10 @@ class MemberEmailCodeServiceTest {
 
     @BeforeEach
     void setUp() {
-        properties = new MemberEmailCodeProperties();
+        properties = new VerificationCodeProperties();
         SystemEnvironment env = new SystemEnvironment(false, "solvela", SystemEnvironmentEnum.DEV);
-        service = new MemberEmailCodeService(redisService, mailService, piiHasher, properties, env);
+        service = new MemberEmailCodeService(new VerificationCodeStore(redisService, properties),
+                mailService, piiHasher, properties, env);
 
         when(piiHasher.hash(anyString())).thenReturn(HASH);
         when(redisService.generateRedisKey(anyString(), anyString()))
@@ -173,7 +176,7 @@ class MemberEmailCodeServiceTest {
     @DisplayName("当天发送超限 → DAILY_LIMIT_REACHED")
     void 日限() {
         when(redisService.increment(anyString(), anyLong()))
-                .thenReturn((long) properties.getMaxSendPerEmailPerDay() + 1);
+                .thenReturn((long) properties.getMaxSendPerTargetPerDay() + 1);
 
         EmailCodeSendResult r = service.send(EmailCodeScene.REGISTER, EMAIL, "10.0.0.1");
 
@@ -329,11 +332,12 @@ class MemberEmailCodeServiceTest {
     // ============================== LOG 通道 ==============================
 
     /** 换一个通道 / 环境重建 service。 */
-    private MemberEmailCodeService serviceWith(MemberEmailCodeProperties.Transport transport, boolean prod) {
-        properties.setTransport(transport);
+    private MemberEmailCodeService serviceWith(VerificationCodeProperties.Transport transport, boolean prod) {
+        properties.setEmailTransport(transport);
         SystemEnvironment env = new SystemEnvironment(prod, "solvela",
                 prod ? SystemEnvironmentEnum.PROD : SystemEnvironmentEnum.DEV);
-        MemberEmailCodeService s = new MemberEmailCodeService(redisService, mailService, piiHasher, properties, env);
+        MemberEmailCodeService s = new MemberEmailCodeService(new VerificationCodeStore(redisService, properties),
+                mailService, piiHasher, properties, env);
         s.checkTransport();
         return s;
     }
@@ -342,7 +346,7 @@ class MemberEmailCodeServiceTest {
     @DisplayName("LOG 通道：不调 MailService，但码【照样存】—— 否则校验就过不了")
     void log通道不发信但存码() {
         captureSets();
-        MemberEmailCodeService logService = serviceWith(MemberEmailCodeProperties.Transport.LOG, false);
+        MemberEmailCodeService logService = serviceWith(VerificationCodeProperties.Transport.LOG, false);
 
         assertTrue(logService.send(EmailCodeScene.LOGIN, EMAIL, "10.0.0.1").success());
 
@@ -358,7 +362,7 @@ class MemberEmailCodeServiceTest {
     void 生产不许用log通道() {
         IllegalStateException e = org.junit.jupiter.api.Assertions.assertThrows(
                 IllegalStateException.class,
-                () -> serviceWith(MemberEmailCodeProperties.Transport.LOG, true));
+                () -> serviceWith(VerificationCodeProperties.Transport.LOG, true));
 
         assertTrue(e.getMessage().contains("transport=LOG"), "报错要说清是哪个配置项，实际：" + e.getMessage());
         // 静默降级成 MAIL 的话，有人在生产配了 LOG 却什么都没发生，
@@ -367,14 +371,14 @@ class MemberEmailCodeServiceTest {
 
     @Test
     @DisplayName("生产环境 + MAIL 通道 → 正常")
-    void 生产用mail通道() {
+    void 生产用real通道() {
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
-                () -> serviceWith(MemberEmailCodeProperties.Transport.MAIL, true));
+                () -> serviceWith(VerificationCodeProperties.Transport.REAL, true));
     }
 
     @Test
-    @DisplayName("默认是 MAIL —— 新的调试开关不该默认生效")
-    void 默认mail() {
-        assertEquals(MemberEmailCodeProperties.Transport.MAIL, new MemberEmailCodeProperties().getTransport());
+    @DisplayName("默认是 REAL —— 新的调试开关不该默认生效")
+    void 默认real() {
+        assertEquals(VerificationCodeProperties.Transport.REAL, new VerificationCodeProperties().getEmailTransport());
     }
 }

@@ -200,11 +200,13 @@ solvela:
   # 会员号发号
   # -------------------------------------------------------------------------
   member:
-    email-code:
-      # 生产必须真发信。配 LOG 会启动失败 —— 见 MemberEmailCodeService.checkTransport。
-      # ⚠️ 上线前记得把 spring.mail.* 换成自己的 SMTP：
-      #    现在那份还是上游 demo 的账号（lab1024@163.com），发不出去。
-      transport: MAIL
+    code:
+      # 生产必须真发出去。配 LOG 会启动失败。
+      # ⚠️ email 上线前把 spring.mail.* 换成自己的 SMTP（现在还是上游 demo 账号）。
+      # ⚠️ sms 至今【没有接任何服务商】，配成 REAL 就是发不出去 ——
+      #    手机号验证码要上线，先接厂商，见 SmsSender 的类注释。
+      email-transport: REAL
+      sms-transport: REAL
     device:
       guard:
         # 🔴 只观察不拦截。下面四个阈值全是【拍出来的】，没有任何真实分布支撑。

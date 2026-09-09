@@ -58,13 +58,13 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
 /*
- * ⚠️ 强制 MAIL 通道。test profile 默认是 LOG（省掉配 SMTP 这一步），
+ * ⚠️ 强制 REAL 通道。test profile 默认是 LOG（省掉配 SMTP 这一步），
  * 但本类里有几条断言是「不该调用 MailService」—— LOG 模式下它本来就不会被调用，
  * 那些断言会变成永真，等于什么都没验。集成测试要跑的是【生产那条路径】。
  * MailService 本身仍是 @MockitoBean，所以不会真发信。
  */
 @org.springframework.test.context.TestPropertySource(
-        properties = "solvela.member.email-code.transport=MAIL")
+        properties = "solvela.member.code.email-transport=REAL")
 class EmailRegisterAndLoginTest {
 
     private static final String PASSWORD = "SvEmail2026";
@@ -115,8 +115,8 @@ class EmailRegisterAndLoginTest {
     }
 
     private String readCode(EmailCodeScene scene, String targetEmail) {
-        String key = redisService.generateRedisKey("mbr:email:code:",
-                scene.name() + ":" + piiHasher.hash(MemberEmailUtil.normalize(targetEmail)));
+        String key = redisService.generateRedisKey("mbr:code:",
+                "email:" + scene.name() + ":" + piiHasher.hash(MemberEmailUtil.normalize(targetEmail)));
         String stored = redisService.get(key);
         return stored == null ? null : stored.split("\\|")[0];
     }

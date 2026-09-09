@@ -1,4 +1,4 @@
-package solvela.member.email;
+package solvela.member.code;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -7,12 +7,12 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 
 /**
- * 会员邮箱验证码的参数。
+ * 会员验证码的参数。<b>邮箱与短信共用</b> —— 除了 IP 日限（两条通道的成本差着量级）。
  *
  * <pre>
  * solvela:
  *   member:
- *     email-code:
+ *     code:
  *       length: 6
  *       ttl: 5m
  *       resend-cooldown: 60s
@@ -25,8 +25,8 @@ import java.time.Duration;
  */
 @Data
 @Component
-@ConfigurationProperties(prefix = "solvela.member.email-code")
-public class MemberEmailCodeProperties {
+@ConfigurationProperties(prefix = "solvela.member.code")
+public class VerificationCodeProperties {
 
     /**
      * 验证码位数。
@@ -62,13 +62,13 @@ public class MemberEmailCodeProperties {
     private int maxVerifyAttempts = 5;
 
     /**
-     * 同一邮箱一天最多收几封。
+     * 同一个目标（邮箱或手机号）一天最多收几条。
      *
      * <p>不限量的后果不只是骚扰：发件人显示的是我们的域名，被拿去发垃圾之后
      * <b>整个域名进黑名单</b>，此后所有系统邮件（含管理端的登录验证码）都进垃圾箱。
      * 那是个要几周才能洗白的坑。
      */
-    private int maxSendPerEmailPerDay = 10;
+    private int maxSendPerTargetPerDay = 10;
 
     /**
      * 同一 IP 一天最多发几封。
@@ -80,32 +80,60 @@ public class MemberEmailCodeProperties {
     private int maxSendPerIpPerDay = 20;
 
     /**
-     * 验证码<b>怎么送到用户手上</b>。
+     * 同一 IP 一天最多发几条<b>短信</b>。
      *
-     * <p>🔴 与 {@code MailDelivery} 是<b>两个正交的东西</b>，别混：
+     * <p>🔴 比邮件那档紧得多，因为<b>成本差着量级</b>：邮件不要钱，
+     * 短信一条几分钱 —— 被刷一天就是实打实的账单，而且短信厂商那边
+     * 也有自己的风控，量一大整个签名会被限。
+     *
+     * <p>邮件被刷的后果是域名进黑名单（要几周洗白），短信被刷的后果是当场花钱。
+     * 两者都不好，但一个能事后补救、一个不能。
+     */
+    private int maxSmsSendPerIpPerDay = 5;
+
+    /** 按通道取 IP 日限。 */
+    public int maxSendPerIpPerDay(String channel) {
+        return "sms".equals(channel) ? maxSmsSendPerIpPerDay : maxSendPerIpPerDay;
+    }
+
+    /**
+     * <b>邮件</b>怎么送到用户手上。
+     *
+     * <p>🔴 与 {@code CodeDelivery} 是<b>两个正交的东西</b>，别混：
      * <ul>
-     *   <li>{@code MailDelivery} 回答「这封信该不该寄」—— 那是<b>安全</b>决定
-     *       （寄给一个没有账号的邮箱等于泄露账号是否存在）；</li>
-     *   <li>本项回答「寄的时候走什么通道」—— 那是<b>环境</b>决定。</li>
+     *   <li>{@code CodeDelivery} 回答「这条码该不该送出去」—— 那是<b>安全</b>决定
+     *       （送给一个没有账号的目标等于泄露账号是否存在）；</li>
+     *   <li>本项回答「送的时候走什么通道」—— 那是<b>环境</b>决定。</li>
      * </ul>
      * 合成一个枚举的话，一个为了本地调试加的取值就会出现在安全判断的 switch 里。
      */
-    private Transport transport = Transport.MAIL;
+    private Transport emailTransport = Transport.REAL;
+
+    /**
+     * <b>短信</b>怎么送到用户手上。
+     *
+     * <p>⚠️ 默认 REAL，而<b>全仓还没有接任何短信服务商</b> —— 也就是说
+     * 生产环境走这条路会发送失败。这是刻意的：默认值应当描述「正确的世界」，
+     * 而不是迁就当前的缺口。真要上线手机号验证码，先接厂商。
+     *
+     * <p>dev / test 配 LOG，不用等厂商也能把整条链路跑通。
+     */
+    private Transport smsTransport = Transport.REAL;
 
     /** 送达通道。 */
     public enum Transport {
 
-        /** 真发信。 */
-        MAIL,
+        /** 真发出去。邮件走 MailService，短信走厂商。 */
+        REAL,
 
         /**
-         * <b>不发信，把验证码打进日志。</b>本地开发与联调用，省掉配 SMTP 这一步。
+         * <b>不发，把验证码打进日志。</b>本地开发与联调用，省掉配 SMTP / 接短信厂商这一步。
          *
          * <p>🔴 <b>生产环境用它会启动失败</b>，这是刻意的：日志里躺着每个人的验证码，
          * 拿到日志（或 ELK 权限）就能接管任意账号 —— 而日志的访问面通常比数据库宽得多，
          * 还会被采集、被转发、被长期保留。
          *
-         * <p>做成「启动即失败」而不是「静默降级成 MAIL」：降级的话，
+         * <p>做成「启动即失败」而不是「静默降级成 REAL」：降级的话，
          * 有人在生产配了 LOG 却什么都没发生，他会以为这个开关不生效，
          * 转头去别处找原因 —— 而真正的问题（配置文件里躺着一个危险开关）没人知道。
          */
