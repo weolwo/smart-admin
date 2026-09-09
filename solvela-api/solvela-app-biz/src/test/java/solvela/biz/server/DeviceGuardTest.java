@@ -1,6 +1,7 @@
 package solvela.biz.server;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,14 +44,25 @@ class DeviceGuardTest {
 
     private boolean originalDryRun;
 
+    /**
+     * 🔴 原值必须在【每条用例开始前】记，不能等到 enforce() 里记。
+     *
+     * <p>DeviceGuardProperties 是共享 bean。原来写在 enforce() 里，没调用它的那几条用例
+     * 会让 originalDryRun 停在字段默认值 false，@AfterEach 于是把 dry-run
+     * 永久写成 false 泄漏给后面的用例 —— 而这种污染只在特定执行顺序下才暴露。
+     */
+    @BeforeEach
+    void remember() {
+        originalDryRun = properties.isDryRun();
+    }
+
     @AfterEach
     void restore() {
         properties.setDryRun(originalDryRun);
     }
 
-    /** 切到真拦截档，并记住原值好还原。 */
+    /** 切到真拦截档。 */
     private void enforce() {
-        originalDryRun = properties.isDryRun();
         properties.setDryRun(false);
     }
 
@@ -85,7 +97,6 @@ class DeviceGuardTest {
     @DisplayName("dry-run：登录超限【命中但放行】—— 这一档的全部意义")
     void 登录超限时dryRun照常放行() {
         properties.setDryRun(true);
-        originalDryRun = true;
         String device = freshDevice();
 
         for (int i = 0; i < properties.getMaxLoginPerDay(); i++) {
@@ -194,7 +205,6 @@ class DeviceGuardTest {
     @DisplayName("关联集合每次都续期 —— 否则一台持续活跃的设备会在 24h 后计数归零")
     void 关联集合续期() throws Exception {
         properties.setDryRun(true);
-        originalDryRun = true;
         String device = freshDevice();
 
         guard.checkMemberFanout(device, 1L);

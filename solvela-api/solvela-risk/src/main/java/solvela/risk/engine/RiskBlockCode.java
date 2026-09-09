@@ -58,6 +58,20 @@ public enum RiskBlockCode implements BaseEnum {
      * 运营必须知道并决定加不加预算，否则活动就是在空转。
      */
     GLOBAL_BUDGET_LIMIT("GLOBAL_BUDGET_LIMIT", "预算已耗尽"),
+
+    /**
+     * 同一设备参与频次超过 {@code device_limit}。
+     *
+     * <p>🔴 <b>这一列从 DDL 建好那天起就是死配置</b>：Model 有字段、后台表单能填、
+     * VO 能返回，但没有任何一行代码读它 —— 运营填上「单设备每日限领 1 次」、保存成功、
+     * 列表里也显示着，而真实行为是完全不限。根因是发奖链路上拿不到设备号。
+     * 2026-09-09 补齐了那条链路（网关验签 → 请求头 → MDC → 本过滤器），这一列才真正生效。
+     *
+     * <p>与 {@link #USER_FREQUENCY_LIMIT} 分开而不是共用一个编码：编码是给漏斗聚类用的，
+     * 「被会员维度拦掉」和「被设备维度拦掉」是两种完全不同的信号 —— 前者是正常的限领，
+     * 后者说明有人在一台机器上换号薅。混成一个，这个区别就永远看不出来了。
+     */
+    DEVICE_FREQUENCY_LIMIT("DEVICE_FREQUENCY_LIMIT", "同一设备参与过于频繁"),
     ;
 
     private final String value;

@@ -120,23 +120,30 @@
       <a-form-item label="单会员限领" class="mb-1">
         <a-input-number v-model:value="item.identifyLimit" class="w-full" size="small" :min="-1" :precision="0" placeholder="-1 不限" />
       </a-form-item>
+      <!-- 2026-09-09 从「暂未生效」折叠区提上来：设备维度的限流真的跑起来了 -->
+      <a-form-item label="单设备号限领" class="mb-1">
+        <a-input-number v-model:value="item.deviceLimit" class="w-full" size="small" :min="-1" :precision="0" placeholder="-1 不限" />
+      </a-form-item>
 
       <!--
-        其余四个防刷维度默认折叠。
-        它们在 t_promotion_config 上都有列、表单也一直能填，但风控链路里
-        FrequencyRiskFilter 只读 identifyLimit 一个 —— 这四个没有任何消费方。
-        既不能装作没有（库里有列、单条表单里也在），也不该跟生效的那个平起平坐，
+        剩下三个防刷维度默认折叠。
+        它们在 t_promotion_config 上都有列、表单也一直能填，但风控链路里没有消费方。
+        既不能装作没有（库里有列、单条表单里也在），也不该跟生效的那两个平起平坐，
         所以收进折叠面板，标题里写明未生效。
+
+        2026-09-09：deviceLimit 从这里【移出去】了 —— 补齐「网关验签 →
+        X-Device-Id 请求头 → MDC → FrequencyRiskFilter」这条链路之后它真的生效了。
+        逐项不生效的原因见 promotion-config-form.vue 的 LIMIT_FIELDS.why。
       -->
       <a-collapse ghost size="small" class="extra-limits">
         <a-collapse-panel key="more">
           <template #header>
-            <span class="text-xs text-slate-500">其他防刷维度（4 项，暂未生效）</span>
+            <span class="text-xs text-slate-500">其他防刷维度（3 项，暂未生效）</span>
           </template>
           <a-form-item v-for="f in INEFFECTIVE_LIMIT_FIELDS" :key="f.field" :label="f.label" class="mb-1">
             <a-input-number v-model:value="item[f.field]" class="w-full" size="small" :min="-1" :precision="0" placeholder="-1 不限" />
           </a-form-item>
-          <div class="hint">风控链路目前只消费「单会员限领」，这四项填了不会生效。</div>
+          <div class="hint">风控链路目前只消费「单会员限领」与「单设备号限领」，这三项填了不会生效。</div>
         </a-collapse-panel>
       </a-collapse>
     </a-form>
@@ -170,7 +177,6 @@
   const INEFFECTIVE_LIMIT_FIELDS = [
     { field: 'phoneLimit', label: '单手机号' },
     { field: 'ipLimit', label: '单IP' },
-    { field: 'deviceLimit', label: '单设备号' },
     { field: 'fingerprintLimit', label: '单端指纹' },
   ];
 

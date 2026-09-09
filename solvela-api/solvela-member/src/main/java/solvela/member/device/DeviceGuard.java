@@ -19,9 +19,15 @@ import solvela.base.util.SolvelaStringUtil;
  * 管的是<b>会员</b>的功能级冻结（带人工解冻、要审计），语义和成本都不一样：
  * 把设备计数写进去只会让它变成一张热点表。
  *
- * <h3>🔴 deviceId 为 null 时一律放行</h3>
- * 灰度期间老客户端还没带设备令牌。把「没有设备号」当成可疑，等于在 enforce 之前
- * 就把老版本用户全挡在外面 —— 而那正是三档灰度要避免的事故。
+ * <h3>🔴 deviceId 为空时一律放行，而且判的是 isBlank 不是 isEmpty</h3>
+ * 判成 {@code isEmpty} 的话，一个全是空白的设备号会被当成真设备去计数 ——
+ * 于是<b>所有这样的请求共用同一个计数器</b>，很快集体撞上限，
+ * 而日志里那个 deviceId 看起来只是「空的」。
+ * 生产上走不到（{@code DeviceContract.sanitize} 只放 32 位 hex 过），
+ * 但这类「兜底判空判得不够」的写法值得一次就写对。
+ *
+ * <p>而「为空」本身是<b>常态</b>：灰度期间老客户端还没带设备令牌。把它当成可疑，
+ * 等于在 enforce 之前就把老版本用户全挡在外面 —— 那正是三档灰度要避免的事故。
  *
  * @Date 2026-09-09
  */
@@ -59,7 +65,7 @@ public class DeviceGuard {
      * 「这个手机号注册过没有」——那正是 {@code BAD_CREDENTIALS} 刻意合并三种原因要堵的口子。
      */
     public DeviceGuardVerdict checkLogin(String deviceId) {
-        if (SolvelaStringUtil.isEmpty(deviceId)) {
+        if (SolvelaStringUtil.isBlank(deviceId)) {
             return DeviceGuardVerdict.pass();
         }
         // 🔴 失败计数【只读不加】：它由 recordLoginFailure 在真的失败时才 +1。
@@ -82,7 +88,7 @@ public class DeviceGuard {
      * <p>手机号格式不对不算 —— 那是客户端 bug 或用户手滑，算进去只会让阈值失真。
      */
     public void recordLoginFailure(String deviceId) {
-        if (SolvelaStringUtil.isEmpty(deviceId)) {
+        if (SolvelaStringUtil.isBlank(deviceId)) {
             return;
         }
         redisService.increment(key(KEY_FAIL, deviceId), properties.hourWindow().toSeconds());
@@ -96,7 +102,7 @@ public class DeviceGuard {
      * 账号本来就是攻击者自己的，不构成泄露。
      */
     public DeviceGuardVerdict checkMemberFanout(String deviceId, Long memberId) {
-        if (SolvelaStringUtil.isEmpty(deviceId) || memberId == null) {
+        if (SolvelaStringUtil.isBlank(deviceId) || memberId == null) {
             return DeviceGuardVerdict.pass();
         }
         String key = key(KEY_MEMBER, deviceId);
@@ -120,7 +126,7 @@ public class DeviceGuard {
      * IP 走代理池就换，设备号得先过一次签发限频才拿得到。
      */
     public DeviceGuardVerdict checkRegister(String deviceId) {
-        if (SolvelaStringUtil.isEmpty(deviceId)) {
+        if (SolvelaStringUtil.isBlank(deviceId)) {
             return DeviceGuardVerdict.pass();
         }
         long count = redisService.increment(key(KEY_REGISTER, deviceId), properties.dayWindow().toSeconds());

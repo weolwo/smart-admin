@@ -144,7 +144,7 @@
           <a-form-item v-for="item in LIMIT_FIELDS" :key="item.field" :name="item.field">
             <template #label>
               {{ item.label }}
-              <a-tooltip v-if="!item.effective" title="风控链路目前只消费「单会员ID限制」，其余四个维度还没有实现方，填了不会生效">
+              <a-tooltip v-if="!item.effective" :title="item.why">
                 <a-tag color="default" class="ml-1">暂未生效</a-tag>
               </a-tooltip>
             </template>
@@ -212,15 +212,39 @@
 
   /**
    * effective：这个维度在风控链路里<b>真的有消费方</b>。
-   * 目前只有 identifyLimit —— FrequencyRiskFilter 只读它一个，
-   * 其余四个从来没有任何代码读取过。标出来是为了别让人花时间去配一个不生效的值。
+   *
+   * 🔴 标出来不是为了好看，是因为「能填但不生效」是运营事故的种子：
+   * 填上「单设备每日限领 1 次」、保存成功、列表里也显示着，然后以为限住了 ——
+   * 而真实行为是完全不限，直到活动被薅完才发现。
+   *
+   * why 逐项写清楚原因，不要笼统一句「还没实现」：运营要据此判断
+   * 「这是快要有了，还是根本不会有」。
+   *
+   * 2026-09-09：deviceLimit 转为生效。此前的根因是发奖链路上拿不到设备号，
+   * 补齐「网关验签 → X-Device-Id 请求头 → MDC → FrequencyRiskFilter」这条链路之后
+   * 才真正有东西可读。
    */
   const LIMIT_FIELDS = [
     { field: 'identifyLimit', label: '单会员ID限制', effective: true },
-    { field: 'phoneLimit', label: '单手机号限制', effective: false },
-    { field: 'ipLimit', label: '单IP限制', effective: false },
-    { field: 'deviceLimit', label: '单设备号限制', effective: false },
-    { field: 'fingerprintLimit', label: '单端指纹限制', effective: false },
+    {
+      field: 'phoneLimit',
+      label: '单手机号限制',
+      effective: false,
+      why: '风控模块只拿得到会员号，取手机号要反查会员域，那是一条不该开的跨域依赖。而会员与手机号是一对一，「单会员ID限制」已覆盖绝大多数场景 —— 两者只在「注销释放号码后被别人注册」时才有差别。',
+    },
+    {
+      field: 'ipLimit',
+      label: '单IP限制',
+      effective: false,
+      why: '客户端 IP 目前只在网关那一层拿得到，没有传到发奖链路。而且 X-Forwarded-For 客户端可伪造，只有入口网关覆盖它时第一段才可信 —— 这一维即使实现了也只能当辅助信号，阈值要给得宽松。',
+    },
+    { field: 'deviceLimit', label: '单设备号限制', effective: true },
+    {
+      field: 'fingerprintLimit',
+      label: '单端指纹限制',
+      effective: false,
+      why: '没有接任何厂商指纹服务，这个值永远是空的。要它生效得先买厂商指纹 —— 而那个决定应该等设备维度的数据积累一段时间之后再做。',
+    },
   ];
 
   // ------------------------ 自定义限制窗口 ------------------------

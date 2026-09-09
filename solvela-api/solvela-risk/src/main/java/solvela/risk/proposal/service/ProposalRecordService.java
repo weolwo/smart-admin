@@ -21,6 +21,7 @@ import solvela.enums.ProposalSourceTypeEnum;
 import solvela.risk.spi.AssetDispatcher;
 import solvela.member.service.MemberService;
 import solvela.risk.engine.RiskBlockCode;
+import solvela.base.trace.DeviceTrace;
 import solvela.risk.engine.RiskChainEngine;
 import solvela.risk.engine.RiskContext;
 import solvela.risk.engine.RiskResult;
@@ -150,7 +151,7 @@ public class ProposalRecordService {
      * 此前它只进了日志，于是拦截原因分布只能按 remark 自由文本聚类。
      */
     private void checkRisk(ProposalRecordAddCommand req, PromotionConfig config) {
-        RiskResult riskResult = riskChainEngine.execute(new RiskContext(req, config));
+        RiskResult riskResult = riskChainEngine.execute(new RiskContext(req, config, DeviceTrace.id()));
         if (riskResult.isPassed()) {
             return;
         }
@@ -293,6 +294,10 @@ public class ProposalRecordService {
         // 让调用方自己传名字的话，名字与会员号迟早会对不上，而且对不上时不报错
         record.setMemberId(req.getMemberId());
         record.setMemberName(memberService.requireMemberName(req.getMemberId()));
+        // 设备号从 MDC 取，不从 req 取：它是网关经请求头一路带下来的上下文，
+        // 不是调用方要落库的业务数据。理由同 traceId，见 DeviceContract 的类注释。
+        // 🔴 拦截路径也要落 —— 「被拦下的那些是不是同一批设备」正是最该看的
+        record.setDeviceId(DeviceTrace.id());
 
         // 发什么：assetType 决定下发走哪个策略，assetRef 指向具体资产（值类资产为空）
         record.setAssetType(req.getAssetType());

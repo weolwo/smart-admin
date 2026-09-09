@@ -52,6 +52,17 @@ public class ProposalRecord {
     private String memberName;
 
     /**
+     * 发起发奖的设备号，关联 t_device.device_id。
+     *
+     * <p><b>不参与风控拦截判断</b> —— 设备维度的限流走 Redis 计数
+     * （见 {@code FrequencyRiskFilter}）。这一列只服务离线分析：
+     * 「这 200 笔奖是从几台设备发出去的」。
+     *
+     * <p>为空是正常的：老客户端没带设备令牌，内部补发与定时任务根本不在请求线程上。
+     */
+    private String deviceId;
+
+    /**
      * SCORE/BALANCE/COUPON/PHYSICAL
      */
     private String assetType;

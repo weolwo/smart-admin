@@ -10,7 +10,9 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.support.RestClientAdapter;
 import org.springframework.web.service.invoker.HttpServiceProxyFactory;
+import solvela.app.auth.CurrentDevice;
 import solvela.app.web.Trace;
+import solvela.trace.DeviceContract;
 import solvela.marketing.api.ActivityApi;
 import solvela.marketing.api.MallApi;
 import solvela.marketing.api.PrizeRecordApi;
@@ -170,6 +172,16 @@ public class DownstreamClientConfig {
                     String traceId = Trace.id();
                     if (traceId != null) {
                         request.getHeaders().add(Trace.KEY, traceId);
+                    }
+                    // 设备号同走请求头，不进任何 DTO —— 它要一路带到发奖风控，
+                    // 中间经过活动、抽奖、奖品派发、提案四层，每层 DTO 都加字段
+                    // 等于开四个「忘了填就静默失效」的口子。见 DeviceContract 类注释。
+                    //
+                    // 🔴 这里传的是【验签通过的设备号】，不是客户端发来的设备令牌。
+                    // 令牌绝不能原样透传下去 —— 那等于把凭证散给所有内部服务。
+                    String deviceId = CurrentDevice.deviceIdOrNull();
+                    if (deviceId != null) {
+                        request.getHeaders().add(DeviceContract.HEADER, deviceId);
                     }
                     return execution.execute(request, body);
                 })
