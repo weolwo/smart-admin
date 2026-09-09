@@ -38,6 +38,13 @@ const router = createRouter({
     { path: '/', name: 'feed', component: { template: '<div/>' } },
     { path: '/login', name: 'login', component: { template: '<div/>' } },
     { path: '/register', name: 'register', component: { template: '<div/>' } },
+    /*
+     * 登录页上「忘记密码」是一个 RouterLink。
+     * 🔴 少了这条路由，整个 LoginView 会在渲染时抛 "No match for password-reset" ——
+     * 而报错发生在 RouterLink 里，看起来像是路由库坏了。
+     * 路由名是页面之间的契约，测试里的假路由表也得跟着它走。
+     */
+    { path: '/password/reset', name: 'password-reset', component: { template: '<div/>' } },
   ],
 })
 

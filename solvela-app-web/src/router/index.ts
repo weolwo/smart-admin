@@ -87,6 +87,23 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/SettingsView.vue'),
     meta: { title: '设置' },
   },
+  /*
+   * 🔴 忘记密码必须匿名可访问 —— 用户正是因为进不去才走这条路。
+   * 要求登录才能重置密码是个死循环，而这个错误在实现时一点都不明显：
+   * 开发自己总是登录着的。
+   */
+  {
+    path: '/password/reset',
+    name: 'password-reset',
+    component: () => import('@/views/PasswordResetView.vue'),
+    meta: { anonymous: true, title: '重置密码' },
+  },
+  {
+    path: '/settings/phone',
+    name: 'phone-bind',
+    component: () => import('@/views/PhoneBindView.vue'),
+    meta: { title: '手机号' },
+  },
   {
     path: '/settings/email',
     name: 'email-bind',

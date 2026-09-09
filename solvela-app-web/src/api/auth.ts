@@ -174,7 +174,7 @@ export async function login(payload: LoginPayload): Promise<LoginResult> {
  * 🔴 场景必须显式传，服务端不给默认值：默认成注册的话，
  * 用户拿去重置密码时验不过，而两边看起来都很正常。
  */
-export const SMS_SCENES = ['REGISTER', 'LOGIN', 'RESET_PASSWORD'] as const
+export const SMS_SCENES = ['REGISTER', 'LOGIN', 'RESET_PASSWORD', 'BIND'] as const
 export type SmsScene = (typeof SMS_SCENES)[number]
 
 /** 邮箱验证码的用途。对齐后端 EmailCodeScene */
@@ -254,6 +254,51 @@ export interface EmailBindPayload {
 
 export async function bindEmail(payload: EmailBindPayload): Promise<void> {
   await requestVoid({ url: '/auth/email/bind', method: 'POST', data: payload })
+}
+
+/**
+ * 绑定 / 更换手机号。成功返回 204。
+ *
+ * <h3>🔴 与绑定邮箱同一条规矩，而且手机号更重</h3>
+ * `uk_mbr_phone_hash` 是唯一约束，手机号还是注册的默认身份 ——
+ * 换绑意味着「原来那个号从此登不了、也注册不了这个账号」。
+ * 所以换绑要多证明一次「你是原主」：`currentPassword` 或 `oldPhoneCode` 二选一。
+ */
+export interface PhoneBindPayload {
+  phone: string
+  /** 新手机号收到的验证码 */
+  code: string
+  currentPassword?: string | undefined
+  /** 旧手机号收到的验证码。没设过密码的会员只有这一条路 */
+  oldPhoneCode?: string | undefined
+}
+
+export async function bindPhone(payload: PhoneBindPayload): Promise<void> {
+  await requestVoid({ url: '/auth/phone/bind', method: 'POST', data: payload })
+}
+
+/**
+ * 用邮箱验证码重置密码。**匿名接口** —— 用户正是因为进不去才走这条路。
+ *
+ * <p>🔴 成功之后他在**所有设备**上的会话都会被吊销，返回被吊销的数量。
+ * 这个数字要展示出来：点「忘记密码」的最常见原因之一就是「我怀疑号被人动过」，
+ * 而「已在 3 台设备上退出登录」正是他要的那个答案。只回一句「修改成功」，
+ * 这条信息就白丢了。
+ */
+export interface PasswordResetResult {
+  revokedSessions: number
+}
+
+export async function resetPassword(payload: {
+  email: string
+  code: string
+  newPassword: string
+}): Promise<PasswordResetResult> {
+  return request<PasswordResetResult>({
+    url: '/auth/password/reset',
+    method: 'POST',
+    data: payload,
+  })
 }
 
 /** 后端返回 204，没有响应体 */

@@ -352,11 +352,8 @@ async function submit(): Promise<void> {
 
       <div class="page__options">
         <Checkbox v-model="remember" label="记住我" />
-        <!--
-          忘记密码还没有页面。做成灰色不可点，而不是给一个点了没反应的蓝色链接——
-          后者是在骗用户，他会一直点。等找回流程做完再放开
-        -->
-        <span class="page__forgot" aria-disabled="true">忘记密码？</span>
+        <!-- 2026-09-10 放开：找回流程做完了，见 PasswordResetView -->
+        <RouterLink class="page__forgot" :to="{ name: 'password-reset' }">忘记密码？</RouterLink>
       </div>
     </form>
 
@@ -449,8 +446,13 @@ async function submit(): Promise<void> {
 }
 
 .page__forgot {
-  color: var(--sv-text-placeholder);
+  color: var(--sv-color-primary);
   font-size: var(--sv-font-caption);
+  text-decoration: none;
+}
+
+.page__forgot:active {
+  opacity: 0.6;
 }
 
 /*
