@@ -78,5 +78,23 @@ public enum RegisterFailReason {
     EMAIL_CODE_MISMATCH,
 
     /** 验证码连续输错次数用尽，已作废，必须重新发送。 */
-    EMAIL_CODE_LOCKED
+    EMAIL_CODE_LOCKED,
+
+    // ------------------------------------------------------------------ 手机号注册验证码（2026-09-10）
+
+    /**
+     * 没有待校验的短信验证码：从没发过，或已过期。
+     *
+     * <h3>🔴 这一档的出现，意味着手机号注册终于被验证了</h3>
+     * 在它之前，任何人都能拿别人的手机号建账号 —— 而 {@code uk_mbr_phone_hash}
+     * 是唯一约束，号被占了真机主就再也注册不了。那段话在
+     * {@code MemberRegisterService} 的类注释上挂了整整一个月。
+     */
+    SMS_CODE_EXPIRED,
+
+    /** 短信验证码错误。 */
+    SMS_CODE_MISMATCH,
+
+    /** 短信验证码连续输错次数用尽，已作废，必须重新发送。 */
+    SMS_CODE_LOCKED
 }

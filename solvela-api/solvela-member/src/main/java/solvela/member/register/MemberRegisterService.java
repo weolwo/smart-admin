@@ -24,6 +24,9 @@ import solvela.member.api.EmailCodeScene;
 import solvela.member.api.EmailCodeVerifyResult;
 import solvela.member.api.MemberRegisterType;
 import solvela.member.email.MemberEmailCodeService;
+import solvela.member.api.SmsCodeVerifyResult;
+import solvela.member.sms.MemberSmsCodeService;
+import solvela.member.api.SmsScene;
 import solvela.member.util.MemberEmailUtil;
 import solvela.member.util.MemberPhoneUtil;
 
@@ -34,15 +37,17 @@ import solvela.member.util.MemberPhoneUtil;
  * 与 {@code MemberAuthService} 同一个划法 —— 本服务回答「能不能给这个手机号建一个会员，
  * 建好了他是谁」。令牌怎么签是接入层的事。
  *
- * <h3>🔴 目前没有短信验证码，这意味着什么</h3>
- * 全仓没有任何短信基础设施。所以现在<b>任何人都能拿别人的手机号注册</b>，
- * 而 {@code uk_mbr_phone_hash} 是唯一约束 —— 号被占了，真机主就注册不了了。
+ * <h3>手机号注册的验证码（2026-09-10 补上）</h3>
+ * 这个方法上曾经挂着一整段「全仓没有短信基础设施，所以任何人都能拿别人的手机号注册」——
+ * 那段话挂了一个月。现在校验就在下面，与邮箱那条<b>并排放在同一节里</b>：
+ * 限频<b>之后</b>、查重<b>之前</b>。那个位置不是随手放的，两个边界各有理由，
+ * 写在那一节的注释里。
  *
- * <p>唯一的缓解是 {@link MemberRegisterProperties} 的 IP 限频，它只能压低速率，
- * <b>拦不住定向占号</b>。上线前必须补验证码：加一步「校验验证码」放在本方法最前面，
- * 其余逻辑一行不用动。
- *
- * <p>这段话写在代码里而不是只写在文档里，是因为文档不会在有人 review 这个方法时出现。
+ * <p>⚠️ 但它<b>受一个开关控制</b>：{@link MemberRegisterProperties#isPhoneCodeRequired()}。
+ * 短信服务商还没接上（见 {@code UnavailableSmsSender}），dev / test 靠
+ * {@code sms-transport: LOG} 把码打进日志跑通链路；生产在接厂商之前若要放行注册，
+ * 得把那个开关按成 false —— <b>而那是一个需要有人明确决定的事</b>，
+ * 不再是一个谁也没注意到的现状。
  *
  * <h3>账号与昵称自动生成</h3>
  * {@code member_name} 由会员号派生（{@code sv} + 10 位会员号），满足 DDL 的
@@ -74,6 +79,7 @@ public class MemberRegisterService {
     private final PiiCipher piiCipher;
     private final DeviceGuard deviceGuard;
     private final MemberEmailCodeService emailCodeService;
+    private final MemberSmsCodeService smsCodeService;
 
     /**
      * 注册。
@@ -131,11 +137,26 @@ public class MemberRegisterService {
             return MemberRegisterResult.tooManyAttempts(retryAfter);
         }
 
-        // ---------- 邮箱验证码 ----------
-        // 🔴 排在【查重之前】：不然一个没有验证码的人也能拿注册接口
-        //    反复问「这个邮箱注册过没有」—— 而 EMAIL_TAKEN 是必须如实回答的
-        //    （藏了用户就没法用，见 RegisterFailReason 类注释），
-        //    那个枚举口子只能靠「先证明你拥有这个邮箱」把成本抬上去
+        // ---------- 验证码 ----------
+        // 🔴 两条通道各验各的，都排在【查重之前】：不然一个没有验证码的人也能拿注册接口
+        //    反复问「这个身份注册过没有」—— 而 EMAIL_TAKEN / PHONE_TAKEN 是必须
+        //    如实回答的（藏了用户就没法用，见 RegisterFailReason 类注释），
+        //    那个枚举口子只能靠「先证明你拥有这个身份」把成本抬上去。
+        //
+        // 而它排在限频【之后】：验码要读 Redis、还要写回失败计数，
+        // 让一个已经被限频挡下的请求去做这些事没有意义 —— 便宜的筛子先用
+        if (!byEmail && properties.isPhoneCodeRequired()) {
+            SmsCodeVerifyResult codeResult =
+                    smsCodeService.verify(SmsScene.REGISTER, identity, cmd.smsCode());
+            if (codeResult != SmsCodeVerifyResult.OK) {
+                return MemberRegisterResult.fail(switch (codeResult) {
+                    case NOT_FOUND -> RegisterFailReason.SMS_CODE_EXPIRED;
+                    case MISMATCH -> RegisterFailReason.SMS_CODE_MISMATCH;
+                    case TOO_MANY_ATTEMPTS -> RegisterFailReason.SMS_CODE_LOCKED;
+                    case OK -> throw new IllegalStateException("不可能走到：OK 已在上面判掉");
+                });
+            }
+        }
         if (byEmail) {
             EmailCodeVerifyResult codeResult =
                     emailCodeService.verify(EmailCodeScene.REGISTER, identity, cmd.emailCode());

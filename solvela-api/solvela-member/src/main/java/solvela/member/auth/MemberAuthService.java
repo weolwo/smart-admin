@@ -22,6 +22,9 @@ import solvela.member.api.MemberIdentity;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
 import solvela.member.api.MemberRegisterResult;
+import solvela.member.api.SmsCodeSendCmd;
+import solvela.member.api.SmsCodeSendResult;
+import solvela.member.sms.MemberSmsCodeService;
 import solvela.member.register.MemberRegisterService;
 import solvela.member.loginlog.dao.MemberLoginLogDao;
 import solvela.member.operationlimit.service.MemberOperationLimitService;
@@ -90,6 +93,8 @@ public class MemberAuthService implements MemberAuthApi {
     private final DeviceGuard deviceGuard;
     private final MemberEmailCodeService emailCodeService;
     private final MemberEmailCodeIssuer emailCodeIssuer;
+
+    private final MemberSmsCodeService smsCodeService;
     private final MemberEmailBindService emailBindService;
     private final MemberPasswordResetService passwordResetService;
 
@@ -242,6 +247,18 @@ public class MemberAuthService implements MemberAuthApi {
     @Override
     public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
         return emailCodeIssuer.issue(cmd.scene(), cmd.email(), cmd.clientIp(), cmd.currentMemberId());
+    }
+
+    /**
+     * 发一条短信验证码。逻辑全在 {@link MemberSmsCodeService}，本方法只是契约的落点。
+     *
+     * <p>这里<b>没有</b>邮箱那边的 issuer 那一层：issuer 的全部职责是「该不该静默」，
+     * 而短信目前不需要那个决定（见 {@link MemberAuthApi#sendSmsCode} 的注释）。
+     * 先不建一个只会转发的类。
+     */
+    @Override
+    public SmsCodeSendResult sendSmsCode(SmsCodeSendCmd cmd) {
+        return smsCodeService.send(cmd.scene(), cmd.phone(), cmd.clientIp());
     }
 
     /**

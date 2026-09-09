@@ -68,6 +68,21 @@ public interface MemberAuthApi {
     EmailCodeSendResult sendEmailCode(@RequestBody EmailCodeSendCmd cmd);
 
     /**
+     * 发一条短信验证码。
+     *
+     * <p>⚠️ <b>短信是要花钱的</b>，这是它与邮箱最实质的区别：邮件被刷只是难看，
+     * 短信被刷是账单。所以 IP 日限比邮箱紧得多（见 {@code VerificationCodeProperties}），
+     * 而且这条路由和 {@code /register} 一样<b>不需要任何身份</b> ——
+     * {@code /internal/**} 必须整体挡在公网之外。
+     *
+     * <p>🔴 与 {@link #sendEmailCode} 不同，这里<b>没有静默成功那一档</b>：
+     * 短信目前只有注册在用，而注册的「这个号已被占用」本来就藏不掉。
+     * 等手机号登录 / 重置上线，得照邮箱那边补上，否则这个接口会变成账号枚举器。
+     */
+    @PostExchange("/sms-code")
+    SmsCodeSendResult sendSmsCode(@RequestBody SmsCodeSendCmd cmd);
+
+    /**
      * 绑定 / 更换邮箱。
      *
      * <p>放在<b>认证契约</b>里而不是某个「会员资料」契约：绑定邮箱不是改昵称，

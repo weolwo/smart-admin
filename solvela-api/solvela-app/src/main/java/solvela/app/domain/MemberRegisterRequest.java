@@ -31,6 +31,10 @@ import solvela.member.api.MemberRegisterType;
  *                     {@code MemberPhoneUtil} / {@code MemberEmailUtil} 的 normalize 里，
  *                     与登录同一份规则
  * @param emailCode    邮箱验证码，仅 {@link MemberRegisterType#EMAIL_CODE} 时必填
+ * @param smsCode      短信验证码，仅 {@link MemberRegisterType#PHONE_PASSWORD} 时必填。
+ *                     是否真的必填由服务端的
+ *                     {@code solvela.member.register.phone-code-required} 决定 ——
+ *                     客户端<b>永远传</b>就行，服务端不要它时多传一个字段没有代价
  * @param password     密码明文，依赖 HTTPS 传输。<b>强度规则不在这里</b>，
  *                     在会员域的 {@code MemberPasswordPolicy}，只有那一处。
  *                     <b>邮箱注册时可以不填</b> —— 那种会员之后走验证码登录
@@ -47,6 +51,9 @@ public record MemberRegisterRequest(
 
         @Schema(description = "邮箱验证码，邮箱注册时必填")
         String emailCode,
+
+        @Schema(description = "短信验证码，手机号注册时必填")
+        String smsCode,
 
         @Schema(description = "密码。手机号注册必填；邮箱注册可不填，之后走验证码登录")
         String password,

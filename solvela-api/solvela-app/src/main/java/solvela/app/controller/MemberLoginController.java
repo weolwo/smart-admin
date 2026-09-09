@@ -14,6 +14,7 @@ import solvela.app.auth.CurrentMember;
 import solvela.app.auth.MemberPrincipal;
 import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
+import solvela.app.domain.SmsCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
@@ -76,6 +77,24 @@ public class MemberLoginController {
     public ResponseEntity<Void> sendEmailCode(@RequestBody @Valid EmailCodeRequest request,
                                               HttpServletRequest servletRequest) {
         memberLoginService.sendEmailCode(request, ClientIp.of(servletRequest));
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 索取短信验证码。
+     *
+     * <p>与邮箱那条分成两条路由，而不是一条带 channel 参数：两条通道的场景集合不一样
+     * （短信没有 BIND）、限频不一样、失败措辞不一样。合成一条会得到一个
+     * 「大部分字段在大部分情况下没用」的入参。
+     *
+     * <p>⚠️ 短信是<b>要花钱</b>的接口。它匿名、无成本地暴露在公网上，
+     * 唯一的保护是域里的 IP 与目标日限（比邮箱紧得多）。改动那两个配置前先想清楚。
+     */
+    @Anonymous
+    @PostMapping("/sms/code")
+    public ResponseEntity<Void> sendSmsCode(@RequestBody @Valid SmsCodeRequest request,
+                                            HttpServletRequest servletRequest) {
+        memberLoginService.sendSmsCode(request, ClientIp.of(servletRequest));
         return ResponseEntity.noContent().build();
     }
 

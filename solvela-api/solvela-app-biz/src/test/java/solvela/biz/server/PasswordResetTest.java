@@ -120,7 +120,7 @@ class PasswordResetTest {
         email = freshEmail();
         MemberRegisterResult r = memberAuthService.register(new MemberRegisterCmd(
                 MemberRegisterType.EMAIL_CODE, email, sendAndReadCode(EmailCodeScene.REGISTER, email),
-                OLD_PASSWORD, "H5", freshIp(), "H5", null));
+                null, OLD_PASSWORD, "H5", freshIp(), "H5", null));
         assertTrue(r.success(), "前提不成立：" + r.reason());
         memberId = r.identity().memberId();
     }

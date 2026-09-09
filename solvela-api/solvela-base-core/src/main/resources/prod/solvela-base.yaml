@@ -207,6 +207,19 @@ solvela:
       #    手机号验证码要上线，先接厂商，见 SmsSender 的类注释。
       email-transport: REAL
       sms-transport: REAL
+    register:
+      # 🔴 手机号注册是否必须验短信验证码。
+      #
+      # 配 false 的后果要说清楚：【任何人都能拿别人的手机号建账号】，
+      # 而 uk_mbr_phone_hash 是唯一约束 —— 号被占了，真机主就再也注册不了，
+      # 且没有自助解开的办法。IP 与设备限频只能压速率，拦不住定向占号
+      # （占一个号只需要成功一次）。
+      #
+      # 保持 true 意味着：上生产之前必须先接短信厂商，否则注册全线失败
+      # （而且 sms-transport: REAL + 没有 SmsSender 实现会直接启动失败，
+      #  见 MemberSmsCodeService.checkTransport —— 那是刻意的，
+      #  让它在部署时炸，而不是在第一个真实用户点「获取验证码」时炸）。
+      phone-code-required: true
     device:
       guard:
         # 🔴 只观察不拦截。下面四个阈值全是【拍出来的】，没有任何真实分布支撑。

@@ -10,6 +10,9 @@ import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.EmailBindFailReason;
 import solvela.member.api.MemberAuthApi;
+import solvela.member.api.SmsCodeFailReason;
+import solvela.member.api.SmsCodeSendCmd;
+import solvela.member.api.SmsCodeSendResult;
 import solvela.member.api.MemberEmailBindCmd;
 import solvela.member.api.MemberPasswordResetCmd;
 import solvela.member.api.MemberPasswordResetResult;
@@ -89,6 +92,27 @@ public class ApiContractDownstreamStub {
                     return EmailCodeSendResult.fail(EmailCodeFailReason.SEND_FAILED);
                 }
                 return EmailCodeSendResult.ok();
+            }
+
+            /**
+             * 发短信码桩：与邮箱那个同一个做法，按手机号前缀分派到各个 reason，
+             * 让网关那张短信翻译表每条分支都能被真实 HTTP 请求走一遍。
+             */
+            @Override
+            public SmsCodeSendResult sendSmsCode(SmsCodeSendCmd cmd) {
+                if (cmd.phone() == null || !cmd.phone().matches("[0-9]{11}")) {
+                    return SmsCodeSendResult.fail(SmsCodeFailReason.BAD_PHONE_FORMAT);
+                }
+                if (cmd.phone().startsWith("13800")) {
+                    return SmsCodeSendResult.tooFrequent(42L);
+                }
+                if (cmd.phone().startsWith("13900")) {
+                    return SmsCodeSendResult.dailyLimit(3600L);
+                }
+                if (cmd.phone().startsWith("13700")) {
+                    return SmsCodeSendResult.fail(SmsCodeFailReason.SEND_FAILED);
+                }
+                return SmsCodeSendResult.ok();
             }
 
             @Override

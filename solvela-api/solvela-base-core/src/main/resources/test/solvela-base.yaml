@@ -208,6 +208,12 @@ solvela:
       #    看得到日志的人就能接管任意账号 —— 而日志的访问面通常比数据库宽得多。
       email-transport: LOG
       sms-transport: LOG
+    register:
+      # 手机号注册是否必须验短信验证码。默认 true。
+      #
+      # dev / test 保持 true：配合上面的 sms-transport: LOG，不需要任何厂商，
+      # 码打进日志就能把整条链路跑通 —— 也就顺带保证了它不会悄悄退化。
+      phone-code-required: true
     device:
       guard:
         # 🔴 只观察不拦截。下面四个阈值全是【拍出来的】，没有任何真实分布支撑。

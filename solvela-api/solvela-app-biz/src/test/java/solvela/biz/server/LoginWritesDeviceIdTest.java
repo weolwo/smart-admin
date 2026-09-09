@@ -9,6 +9,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import solvela.auth.device.DeviceTokenCodec;
+import solvela.base.module.redis.RedisService;
+import solvela.crypto.PiiHasher;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
 import solvela.member.api.MemberRegisterCmd;
@@ -51,6 +53,12 @@ class LoginWritesDeviceIdTest {
     private MemberAuthService memberAuthService;
 
     @Autowired
+    private RedisService redisService;
+
+    @Autowired
+    private PiiHasher piiHasher;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private Long memberId;
@@ -77,8 +85,11 @@ class LoginWritesDeviceIdTest {
 
     private void register(String deviceId) {
         phone = freshPhone();
-        MemberRegisterResult result = memberAuthService.register(
-                MemberRegisterCmd.byPhonePassword(phone, PASSWORD, "APP", freshIp(), "APP", deviceId));
+        String ip = freshIp();
+        MemberRegisterResult result = memberAuthService.register(MemberRegisterCmd.byPhonePassword(
+                phone, PASSWORD,
+                TestSmsCode.issue(memberAuthService, redisService, piiHasher, phone, ip),
+                "APP", ip, "APP", deviceId));
         assertTrue(result.success(), "前提不成立，注册就失败了：" + result.reason());
         memberId = result.identity().memberId();
     }

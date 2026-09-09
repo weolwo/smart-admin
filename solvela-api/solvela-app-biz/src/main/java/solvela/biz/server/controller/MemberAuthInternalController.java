@@ -15,6 +15,8 @@ import solvela.member.api.MemberIdentity;
 import solvela.member.api.MemberLogoutCmd;
 import solvela.member.api.MemberRegisterCmd;
 import solvela.member.api.MemberRegisterResult;
+import solvela.member.api.SmsCodeSendCmd;
+import solvela.member.api.SmsCodeSendResult;
 import solvela.member.auth.MemberAuthService;
 
 /**
@@ -52,6 +54,11 @@ public class MemberAuthInternalController implements MemberAuthApi {
     @Override
     public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
         return memberAuthService.sendEmailCode(cmd);
+    }
+
+    @Override
+    public SmsCodeSendResult sendSmsCode(SmsCodeSendCmd cmd) {
+        return memberAuthService.sendSmsCode(cmd);
     }
 
     @Override

@@ -123,7 +123,7 @@ class EmailRegisterAndLoginTest {
 
     private MemberRegisterResult register(String code, String password) {
         MemberRegisterResult result = memberAuthService.register(new MemberRegisterCmd(
-                MemberRegisterType.EMAIL_CODE, email, code, password, "H5", freshIp(), "H5", null));
+                MemberRegisterType.EMAIL_CODE, email, code, null, password, "H5", freshIp(), "H5", null));
         if (result.success()) {
             memberId = result.identity().memberId();
         }
@@ -285,8 +285,11 @@ class EmailRegisterAndLoginTest {
     @DisplayName("手机号那条通道没受影响 —— 不传 loginType 时仍按它兜底")
     void 手机号通道不受影响() {
         String phone = "13" + (100_000_000 + ThreadLocalRandom.current().nextInt(800_000_000));
-        MemberRegisterResult reg = memberAuthService.register(
-                MemberRegisterCmd.byPhonePassword(phone, PASSWORD, "APP", freshIp(), "APP", null));
+        String ip = freshIp();
+        MemberRegisterResult reg = memberAuthService.register(MemberRegisterCmd.byPhonePassword(
+                phone, PASSWORD,
+                TestSmsCode.issue(memberAuthService, redisService, piiHasher, phone, ip),
+                "APP", ip, "APP", null));
         assertTrue(reg.success());
         memberId = reg.identity().memberId();
 

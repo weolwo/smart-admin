@@ -108,8 +108,12 @@ class EmailBindTest {
 
     /** 建一个手机号会员（没有邮箱），用来验首次绑定。 */
     private void registerByPhone(String password) {
-        MemberRegisterResult r = memberAuthService.register(
-                MemberRegisterCmd.byPhonePassword(freshPhone(), password, "APP", freshIp(), "APP", null));
+        String phone = freshPhone();
+        String ip = freshIp();
+        MemberRegisterResult r = memberAuthService.register(MemberRegisterCmd.byPhonePassword(
+                phone, password,
+                TestSmsCode.issue(memberAuthService, redisService, piiHasher, phone, ip),
+                "APP", ip, "APP", null));
         assertTrue(r.success(), "前提不成立：" + r.reason());
         memberId = r.identity().memberId();
     }
@@ -162,7 +166,7 @@ class EmailBindTest {
         String email = freshEmail();
         MemberRegisterResult owner = memberAuthService.register(new MemberRegisterCmd(
                 MemberRegisterType.EMAIL_CODE, email,
-                sendAndReadCode(EmailCodeScene.REGISTER, email, null), null, "H5", freshIp(), "H5", null));
+                sendAndReadCode(EmailCodeScene.REGISTER, email, null), null, null, "H5", freshIp(), "H5", null));
         assertTrue(owner.success());
         Long ownerId = owner.identity().memberId();
 
@@ -241,7 +245,7 @@ class EmailBindTest {
         String first = freshEmail();
         MemberRegisterResult r = memberAuthService.register(new MemberRegisterCmd(
                 MemberRegisterType.EMAIL_CODE, first,
-                sendAndReadCode(EmailCodeScene.REGISTER, first, null), null, "H5", freshIp(), "H5", null));
+                sendAndReadCode(EmailCodeScene.REGISTER, first, null), null, null, "H5", freshIp(), "H5", null));
         assertTrue(r.success());
         memberId = r.identity().memberId();
 

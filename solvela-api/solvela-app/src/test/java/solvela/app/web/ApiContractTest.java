@@ -142,6 +142,54 @@ class ApiContractTest {
     }
 
     @Test
+    @DisplayName("索取短信验证码 → 204，响应体里【什么都没有】")
+    void 短信发码返回204() {
+        HttpResponse<String> response =
+                post("/auth/sms/code", "{\"scene\":\"REGISTER\",\"phone\":\"13612345678\"}", null);
+
+        assertEquals(204, response.statusCode(), "实际响应：" + response.body());
+        assertTrue(response.body() == null || response.body().isBlank(),
+                "🔴 不能回任何关于这个号的信息。「已发送」「该号未注册」这类区分"
+                        + "会把它变成账号枚举接口。实际：" + response.body());
+    }
+
+    @Test
+    @DisplayName("短信发码漏传 scene → 400，而不是给一个「能用但不是他要的」码")
+    void 短信发码缺场景返回400() {
+        HttpResponse<String> response =
+                post("/auth/sms/code", "{\"phone\":\"13612345678\"}", null);
+
+        assertEquals(400, response.statusCode(),
+                "scene 刻意不给默认值：默认成注册的话，用户拿去重置密码时验不过，"
+                        + "而两边看起来都很正常。实际响应：" + response.body());
+    }
+
+    @Test
+    @DisplayName("短信发码被冷却 → 429，并告诉还差多少秒")
+    void 短信发码冷却返回429() {
+        HttpResponse<String> response =
+                post("/auth/sms/code", "{\"scene\":\"REGISTER\",\"phone\":\"13800000000\"}", null);
+
+        assertEquals(429, response.statusCode(), "实际响应：" + response.body());
+        JsonNode body = parse(response);
+        assertEquals("OPERATION_LIMITED", body.path("code").asText());
+        // 冷却给的是【秒】，不是分钟：等 42 秒的事说成「1 分钟」会让用户多等一倍
+        assertTrue(body.path("message").asText().contains("42 秒"),
+                "实际：" + body.path("message").asText());
+    }
+
+    @Test
+    @DisplayName("🔴 短信发不出去是【我们的】问题 → 500，不能说成用户填错了号码")
+    void 短信发送失败返回500() {
+        HttpResponse<String> response =
+                post("/auth/sms/code", "{\"scene\":\"REGISTER\",\"phone\":\"13700000000\"}", null);
+
+        assertEquals(500, response.statusCode(), "实际响应：" + response.body());
+        assertTrue(parse(response).path("message").asText().contains("稍后"),
+                "让用户以为是自己号码填错了，他会反复改号码重试 —— 而问题在服务端");
+    }
+
+    @Test
     @DisplayName("参数校验失败 → 400，且带上具体哪个字段不对")
     void 参数错误返回400() {
         HttpResponse<String> response = post("/auth/login", "{\"identity\":\"\",\"credential\":\"\"}", null);

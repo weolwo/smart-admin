@@ -11,6 +11,9 @@ import solvela.auth.member.MemberTokenStore;
 import solvela.app.auth.CurrentMember;
 import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
+import solvela.app.domain.SmsCodeRequest;
+import solvela.member.api.SmsCodeSendCmd;
+import solvela.member.api.SmsCodeSendResult;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
@@ -98,7 +101,8 @@ public class MemberLoginService {
                 : request.deviceType();
 
         MemberRegisterResult result = memberAuthApi.register(new MemberRegisterCmd(
-                request.typeOrDefault(), request.identity(), request.emailCode(), request.password(),
+                request.typeOrDefault(), request.identity(), request.emailCode(), request.smsCode(),
+                request.password(),
                 deviceType, ip, deviceType,
                 // 灰度期间可能为 null（老客户端还没带设备令牌），域里会直接放行
                 CurrentDevice.deviceIdOrNull()));
@@ -158,6 +162,35 @@ public class MemberLoginService {
             case DAILY_LIMIT_REACHED -> new ApiException(ApiErrors.OPERATION_LIMITED,
                     "今日验证码发送次数已用完，请明天再试");
             // 这是【我们自己】的问题，如实说「稍后再试」而不是让用户以为自己填错了
+            case SEND_FAILED -> new ApiException(ApiErrors.INTERNAL, "验证码发送失败，请稍后再试");
+        };
+    }
+
+    /**
+     * 索取短信验证码。
+     *
+     * <p>与 {@link #sendEmailCode} 的一个实质差别：这里<b>没有静默成功</b>那一层，
+     * 因为短信目前只有注册在用。加手机号登录 / 重置时，域里要先补上静默，
+     * 这一层的措辞才继续成立。
+     */
+    public void sendSmsCode(SmsCodeRequest request, String ip) {
+        SmsCodeSendResult result = memberAuthApi.sendSmsCode(
+                new SmsCodeSendCmd(request.scene(), request.phone(), ip));
+        if (!result.success()) {
+            throw translateSmsCode(result);
+        }
+    }
+
+    /** 发码失败原因 → HTTP 契约。 */
+    private ApiException translateSmsCode(SmsCodeSendResult result) {
+        return switch (result.reason()) {
+            case BAD_PHONE_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "手机号格式不正确");
+            case TOO_FREQUENT -> new ApiException(ApiErrors.OPERATION_LIMITED,
+                    String.format("验证码已发送，请 %d 秒后再试", Math.max(1, result.retryAfterSeconds())));
+            case DAILY_LIMIT_REACHED -> new ApiException(ApiErrors.OPERATION_LIMITED,
+                    "今日验证码发送次数已用完，请明天再试");
+            // 这是【我们自己】的问题（没接厂商、余额不足、签名被限），
+            // 如实说「稍后再试」而不是让用户以为自己填错了号码
             case SEND_FAILED -> new ApiException(ApiErrors.INTERNAL, "验证码发送失败，请稍后再试");
         };
     }
@@ -296,6 +329,10 @@ public class MemberLoginService {
             case EMAIL_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
             case EMAIL_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
             case EMAIL_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
+            // 措辞与邮箱那三条一致：用户看到的是「验证码」，不需要知道它从哪条通道来
+            case SMS_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
+            case SMS_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case SMS_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
         };
     }
 

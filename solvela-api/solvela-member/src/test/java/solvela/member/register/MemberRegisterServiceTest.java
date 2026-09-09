@@ -15,6 +15,9 @@ import solvela.crypto.PiiCipher;
 import solvela.crypto.PiiHasher;
 import solvela.member.device.DeviceGuard;
 import solvela.member.email.MemberEmailCodeService;
+import solvela.member.sms.MemberSmsCodeService;
+import solvela.member.api.SmsCodeVerifyResult;
+import solvela.member.api.SmsScene;
 import solvela.member.device.DeviceGuardRule;
 import solvela.member.device.DeviceGuardVerdict;
 import solvela.member.api.MemberRegisterCmd;
@@ -66,6 +69,7 @@ class MemberRegisterServiceTest {
     private static final String CLIENT_IP = "10.0.0.7";
     private static final long MEMBER_ID = 900001L;
     private static final String DEVICE_ID = "0123456789abcdef0123456789abcdef";
+    private static final String SMS_CODE = "123456";
 
     @Mock
     private MemberRegisterDao memberRegisterDao;
@@ -81,6 +85,8 @@ class MemberRegisterServiceTest {
     private DeviceGuard deviceGuard;
     @Mock
     private MemberEmailCodeService emailCodeService;
+    @Mock
+    private MemberSmsCodeService smsCodeService;
 
     private MemberRegisterProperties properties;
     private MemberRegisterService service;
@@ -89,7 +95,7 @@ class MemberRegisterServiceTest {
     void setUp() {
         properties = new MemberRegisterProperties();
         service = new MemberRegisterService(memberRegisterDao, memberIdAllocator, properties,
-                redisService, piiHasher, piiCipher, deviceGuard, emailCodeService);
+                redisService, piiHasher, piiCipher, deviceGuard, emailCodeService, smsCodeService);
 
         when(piiHasher.hash(PHONE)).thenReturn(PHONE_HASH);
         when(piiCipher.encrypt(PHONE)).thenReturn("加密后的号");
@@ -103,6 +109,8 @@ class MemberRegisterServiceTest {
         when(deviceGuard.checkRegister(any())).thenReturn(DeviceGuardVerdict.pass());
         // 默认放行：第 1 次尝试，上限 10
         when(redisService.increment(anyString(), anyLong())).thenReturn(1L);
+        // 默认验证码正确：本类的其余用例关心的是【顺序】，不是验证码本身
+        when(smsCodeService.verify(any(), anyString(), any())).thenReturn(SmsCodeVerifyResult.OK);
     }
 
     // ------------------------------------------------------------------ 正常路径
@@ -131,7 +139,7 @@ class MemberRegisterServiceTest {
     @Test
     @DisplayName("注册来源缺省不为空：留空的话来源统计从第一天起就是错的")
     void 来源缺省() {
-        service.register(MemberRegisterCmd.byPhonePassword(PHONE, STRONG_PASSWORD, "H5", CLIENT_IP, null, DEVICE_ID));
+        service.register(MemberRegisterCmd.byPhonePassword(PHONE, STRONG_PASSWORD, SMS_CODE, "H5", CLIENT_IP, null, DEVICE_ID));
 
         verify(memberRegisterDao).insertMember(anyLong(), anyString(), anyString(), anyInt(),
                 any(), any(), any(), any(), any(), anyInt(),
@@ -222,7 +230,7 @@ class MemberRegisterServiceTest {
     @DisplayName("🔴 拿不到客户端 IP 时放行，不是一律拒绝")
     void 没有IP时放行() {
         MemberRegisterResult result =
-                service.register(MemberRegisterCmd.byPhonePassword(PHONE, STRONG_PASSWORD, "H5", null, "APP", DEVICE_ID));
+                service.register(MemberRegisterCmd.byPhonePassword(PHONE, STRONG_PASSWORD, SMS_CODE, "H5", null, "APP", DEVICE_ID));
 
         // 一律拒绝会让任何一次取 IP 失败变成「全站注册不可用」，那种故障比放过几个注册严重得多
         assertTrue(result.success());
@@ -254,8 +262,68 @@ class MemberRegisterServiceTest {
                 "这是完全预期内的结果，抛出去就变成 500 了");
     }
 
+    // ------------------------------------------------------------------ 短信验证码
+
+    @Test
+    @DisplayName("🔴 验证码不对 → 拒绝，而且【不查重、不建号】")
+    void 验证码不对() {
+        when(smsCodeService.verify(any(), anyString(), any()))
+                .thenReturn(SmsCodeVerifyResult.MISMATCH);
+
+        MemberRegisterResult result = service.register(cmd(PHONE, STRONG_PASSWORD));
+
+        assertFalse(result.success());
+        assertEquals(RegisterFailReason.SMS_CODE_MISMATCH, result.reason());
+        verify(memberRegisterDao, never()).countByPhoneHash(anyString());
+    }
+
+    @Test
+    @DisplayName("三种验证码失败各自映射到自己的 reason —— 客户端据此决定「重填」还是「重发」")
+    void 验证码三种失败() {
+        when(smsCodeService.verify(any(), anyString(), any()))
+                .thenReturn(SmsCodeVerifyResult.NOT_FOUND);
+        assertEquals(RegisterFailReason.SMS_CODE_EXPIRED,
+                service.register(cmd(PHONE, STRONG_PASSWORD)).reason());
+
+        when(smsCodeService.verify(any(), anyString(), any()))
+                .thenReturn(SmsCodeVerifyResult.TOO_MANY_ATTEMPTS);
+        assertEquals(RegisterFailReason.SMS_CODE_LOCKED,
+                service.register(cmd(PHONE, STRONG_PASSWORD)).reason());
+    }
+
+    @Test
+    @DisplayName("🔴 验证码夹在限频【之后】、查重【之前】—— 两个边界各有理由")
+    void 验证码的位置() {
+        service.register(cmd(PHONE, STRONG_PASSWORD));
+
+        InOrder order = inOrder(deviceGuard, smsCodeService, memberRegisterDao);
+        // 之后：验码要读 Redis 还要写回失败计数，已经被限频挡下的请求不该做这些
+        order.verify(deviceGuard).checkRegister(any());
+        order.verify(smsCodeService).verify(eq(SmsScene.REGISTER), eq(PHONE), any());
+        // 之前：否则没有验证码的人也能拿注册接口反复问「这个号注册过没有」
+        order.verify(memberRegisterDao).countByPhoneHash(PHONE_HASH);
+    }
+
+    @Test
+    @DisplayName("验证码用【规范化后】的号码去验 —— 发码那边也是规范化后的，两边必须同一个键")
+    void 验证码用规范化后的号码() {
+        service.register(cmd("+86 138 0000 0000", STRONG_PASSWORD));
+
+        verify(smsCodeService).verify(eq(SmsScene.REGISTER), eq(PHONE), any());
+    }
+
+    @Test
+    @DisplayName("phone-code-required=false → 完全不碰验证码服务（接厂商之前的过渡开关）")
+    void 开关关掉时不验码() {
+        properties.setPhoneCodeRequired(false);
+
+        assertTrue(service.register(cmd(PHONE, STRONG_PASSWORD)).success());
+
+        verify(smsCodeService, never()).verify(any(), anyString(), any());
+    }
+
     private MemberRegisterCmd cmd(String phone, String password) {
-        return MemberRegisterCmd.byPhonePassword(phone, password, "H5", CLIENT_IP, "APP", DEVICE_ID);
+        return MemberRegisterCmd.byPhonePassword(phone, password, SMS_CODE, "H5", CLIENT_IP, "APP", DEVICE_ID);
     }
 
     // ------------------------------------------------------------------ 设备闸

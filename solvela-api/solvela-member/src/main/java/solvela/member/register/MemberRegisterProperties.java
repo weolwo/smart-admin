@@ -37,4 +37,22 @@ public class MemberRegisterProperties {
      * 而 10 次/小时对枚举来说慢到没有意义。
      */
     private int maxAttemptsPerIp = 10;
+
+    /**
+     * 手机号注册<b>是否必须验短信验证码</b>。
+     *
+     * <h3>🔴 默认 true，而全仓还没接短信服务商 —— 这是刻意的</h3>
+     * 默认值应当描述<b>正确的世界</b>，而不是迁就当前的缺口。
+     * 配成 false 是一个<b>需要有人明确按下去</b>的决定，而不是一个谁也没注意到的现状。
+     *
+     * <p>配 false 的后果要说清楚：<b>任何人都能拿别人的手机号建账号</b>，
+     * 而 {@code uk_mbr_phone_hash} 是唯一约束 —— 号被占了，真机主就再也注册不了。
+     * 唯一的缓解是 IP 与设备限频，它们只能压速率，<b>拦不住定向占号</b>
+     * （占一个号只需要成功一次）。
+     *
+     * <p>过渡期建议：dev / test 配 true 并把 {@code sms-transport} 配成 LOG，
+     * 链路照样跑得通；生产在接上厂商之前如果必须放行注册，就把这一项配成 false，
+     * <b>并且知道自己在放行什么</b>。
+     */
+    private boolean phoneCodeRequired = true;
 }

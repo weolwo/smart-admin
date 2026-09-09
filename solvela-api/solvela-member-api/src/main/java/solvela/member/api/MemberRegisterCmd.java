@@ -28,6 +28,9 @@ package solvela.member.api;
  * @param registerType   注册方式，决定 identity 怎么解释。<b>调用方显式传，不从格式猜</b>
  * @param identity       手机号或邮箱，任意格式，域内会按 registerType 规范化
  * @param emailCode      邮箱验证码，仅 {@link MemberRegisterType#EMAIL_CODE} 时有意义
+ * @param smsCode        短信验证码，仅 {@link MemberRegisterType#PHONE_PASSWORD} 时有意义。
+ *                       是否必填由 {@code solvela.member.register.phone-code-required} 决定 ——
+ *                       短信服务商还没接上，那个开关是过渡期的唯一出口
  * @param password       用户输入的明文密码，强度校验在域内。
  *                       <b>邮箱注册时可以为空</b> —— 那种会员之后走验证码登录
  * @param deviceType     设备端 APP/H5/WECHAT/PC，为空按 H5 记
@@ -41,16 +44,25 @@ public record MemberRegisterCmd(
         MemberRegisterType registerType,
         String identity,
         String emailCode,
+        String smsCode,
         String password,
         String deviceType,
         String clientIp,
         String registerSource,
         String deviceId) {
 
-    /** 兼容既有调用点的手机号密码注册。 */
-    public static MemberRegisterCmd byPhonePassword(String phone, String password, String deviceType,
-                                                    String clientIp, String registerSource, String deviceId) {
-        return new MemberRegisterCmd(MemberRegisterType.PHONE_PASSWORD, phone, null, password,
+    /**
+     * 手机号 + 密码注册。
+     *
+     * <p>🔴 {@code smsCode} 是<b>显式参数而不是默认 null</b>：2026-09-10 加验证码时，
+     * 让它有默认值意味着所有既有调用点<b>一声不响地继续编译</b>，
+     * 而它们传的正是「没有验证码」—— 一个刚补上的洞会以「测试全绿」的样子重新张开。
+     * 加进签名里，每个调用点都得回答一次「你这里的码从哪来」。
+     */
+    public static MemberRegisterCmd byPhonePassword(String phone, String password, String smsCode,
+                                                    String deviceType, String clientIp,
+                                                    String registerSource, String deviceId) {
+        return new MemberRegisterCmd(MemberRegisterType.PHONE_PASSWORD, phone, null, smsCode, password,
                 deviceType, clientIp, registerSource, deviceId);
     }
 }
