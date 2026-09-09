@@ -198,6 +198,11 @@ solvela:
   # 会员号发号
   # -------------------------------------------------------------------------
   member:
+    email-code:
+      # 生产必须真发信。配 LOG 会启动失败 —— 见 MemberEmailCodeService.checkTransport。
+      # ⚠️ 上线前记得把 spring.mail.* 换成自己的 SMTP：
+      #    现在那份还是上游 demo 的账号（lab1024@163.com），发不出去。
+      transport: MAIL
     device:
       guard:
         # 🔴 只观察不拦截。下面四个阈值全是【拍出来的】，没有任何真实分布支撑。

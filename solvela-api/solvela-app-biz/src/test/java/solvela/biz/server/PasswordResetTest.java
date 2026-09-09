@@ -49,6 +49,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest
+/*
+ * ⚠️ 强制 MAIL 通道。test profile 默认是 LOG（省掉配 SMTP 这一步），
+ * 但本类里有几条断言是「不该调用 MailService」—— LOG 模式下它本来就不会被调用，
+ * 那些断言会变成永真，等于什么都没验。集成测试要跑的是【生产那条路径】。
+ * MailService 本身仍是 @MockitoBean，所以不会真发信。
+ */
+@org.springframework.test.context.TestPropertySource(
+        properties = "solvela.member.email-code.transport=MAIL")
 class PasswordResetTest {
 
     private static final String OLD_PASSWORD = "SvOld2026x";

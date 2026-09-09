@@ -11,7 +11,9 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import solvela.base.mail.MailService;
 import solvela.base.mail.MailTemplateCodeEnum;
+import solvela.base.domain.SystemEnvironment;
 import solvela.base.module.redis.RedisService;
+import solvela.base.enumeration.SystemEnvironmentEnum;
 import solvela.crypto.PiiHasher;
 import solvela.exception.BusinessException;
 import solvela.member.api.EmailCodeFailReason;
@@ -78,7 +80,8 @@ class MemberEmailCodeServiceTest {
     @BeforeEach
     void setUp() {
         properties = new MemberEmailCodeProperties();
-        service = new MemberEmailCodeService(redisService, mailService, piiHasher, properties);
+        SystemEnvironment env = new SystemEnvironment(false, "solvela", SystemEnvironmentEnum.DEV);
+        service = new MemberEmailCodeService(redisService, mailService, piiHasher, properties, env);
 
         when(piiHasher.hash(anyString())).thenReturn(HASH);
         when(redisService.generateRedisKey(anyString(), anyString()))
@@ -321,5 +324,57 @@ class MemberEmailCodeServiceTest {
         String key = store.keySet().iterator().next();
         assertFalse(key.contains(EMAIL), "键里出现了明文邮箱：" + key);
         assertTrue(key.contains(HASH), "应当用 PiiHasher 的摘要，与 t_member.email_hash 同一个值");
+    }
+
+    // ============================== LOG 通道 ==============================
+
+    /** 换一个通道 / 环境重建 service。 */
+    private MemberEmailCodeService serviceWith(MemberEmailCodeProperties.Transport transport, boolean prod) {
+        properties.setTransport(transport);
+        SystemEnvironment env = new SystemEnvironment(prod, "solvela",
+                prod ? SystemEnvironmentEnum.PROD : SystemEnvironmentEnum.DEV);
+        MemberEmailCodeService s = new MemberEmailCodeService(redisService, mailService, piiHasher, properties, env);
+        s.checkTransport();
+        return s;
+    }
+
+    @Test
+    @DisplayName("LOG 通道：不调 MailService，但码【照样存】—— 否则校验就过不了")
+    void log通道不发信但存码() {
+        captureSets();
+        MemberEmailCodeService logService = serviceWith(MemberEmailCodeProperties.Transport.LOG, false);
+
+        assertTrue(logService.send(EmailCodeScene.LOGIN, EMAIL, "10.0.0.1").success());
+
+        verify(mailService, never()).sendMail(any(), any(), any());
+        assertFalse(store.isEmpty(), "码没存的话，从日志里抄出来也验不过");
+        assertEquals(EmailCodeVerifyResult.OK,
+                logService.verify(EmailCodeScene.LOGIN, EMAIL, store.values().iterator().next().split("\\|")[0]),
+                "日志里那个码必须真的能用 —— 这是这个通道的全部意义");
+    }
+
+    @Test
+    @DisplayName("🔴 生产环境 + LOG 通道 → 启动即失败，不是静默降级")
+    void 生产不许用log通道() {
+        IllegalStateException e = org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalStateException.class,
+                () -> serviceWith(MemberEmailCodeProperties.Transport.LOG, true));
+
+        assertTrue(e.getMessage().contains("transport=LOG"), "报错要说清是哪个配置项，实际：" + e.getMessage());
+        // 静默降级成 MAIL 的话，有人在生产配了 LOG 却什么都没发生，
+        // 他会以为这个开关不生效、转头去别处找原因，而真正的问题没人知道
+    }
+
+    @Test
+    @DisplayName("生产环境 + MAIL 通道 → 正常")
+    void 生产用mail通道() {
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> serviceWith(MemberEmailCodeProperties.Transport.MAIL, true));
+    }
+
+    @Test
+    @DisplayName("默认是 MAIL —— 新的调试开关不该默认生效")
+    void 默认mail() {
+        assertEquals(MemberEmailCodeProperties.Transport.MAIL, new MemberEmailCodeProperties().getTransport());
     }
 }

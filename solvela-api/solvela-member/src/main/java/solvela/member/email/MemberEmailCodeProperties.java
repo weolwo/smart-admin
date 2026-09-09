@@ -79,6 +79,39 @@ public class MemberEmailCodeProperties {
      */
     private int maxSendPerIpPerDay = 20;
 
+    /**
+     * 验证码<b>怎么送到用户手上</b>。
+     *
+     * <p>🔴 与 {@code MailDelivery} 是<b>两个正交的东西</b>，别混：
+     * <ul>
+     *   <li>{@code MailDelivery} 回答「这封信该不该寄」—— 那是<b>安全</b>决定
+     *       （寄给一个没有账号的邮箱等于泄露账号是否存在）；</li>
+     *   <li>本项回答「寄的时候走什么通道」—— 那是<b>环境</b>决定。</li>
+     * </ul>
+     * 合成一个枚举的话，一个为了本地调试加的取值就会出现在安全判断的 switch 里。
+     */
+    private Transport transport = Transport.MAIL;
+
+    /** 送达通道。 */
+    public enum Transport {
+
+        /** 真发信。 */
+        MAIL,
+
+        /**
+         * <b>不发信，把验证码打进日志。</b>本地开发与联调用，省掉配 SMTP 这一步。
+         *
+         * <p>🔴 <b>生产环境用它会启动失败</b>，这是刻意的：日志里躺着每个人的验证码，
+         * 拿到日志（或 ELK 权限）就能接管任意账号 —— 而日志的访问面通常比数据库宽得多，
+         * 还会被采集、被转发、被长期保留。
+         *
+         * <p>做成「启动即失败」而不是「静默降级成 MAIL」：降级的话，
+         * 有人在生产配了 LOG 却什么都没发生，他会以为这个开关不生效，
+         * 转头去别处找原因 —— 而真正的问题（配置文件里躺着一个危险开关）没人知道。
+         */
+        LOG,
+    }
+
     private Duration dailyWindow = Duration.ofDays(1);
 
     public Duration ttl() {

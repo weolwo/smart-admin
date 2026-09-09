@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import solvela.base.mail.MailService;
 import solvela.base.mail.MailTemplateCodeEnum;
+import solvela.base.domain.SystemEnvironment;
 import solvela.base.module.redis.RedisService;
 import solvela.base.util.SolvelaRandomUtil;
 import solvela.base.util.SolvelaStringUtil;
@@ -73,6 +74,36 @@ public class MemberEmailCodeService {
     private final PiiHasher piiHasher;
 
     private final MemberEmailCodeProperties properties;
+
+    private final SystemEnvironment systemEnvironment;
+
+    /**
+     * 🔴 生产环境不许用 LOG 通道，<b>启动即失败</b>。
+     *
+     * <p>把验证码打进日志，等于把「接管任意账号」的能力交给每一个能看日志的人 ——
+     * 而日志的访问面通常比数据库宽得多，还会被采集到 ELK、被转发、被长期保留。
+     *
+     * <p>为什么是失败而不是静默降级成 MAIL：降级的话，有人在生产配了 LOG
+     * 却什么都没发生，他会以为这个开关不生效、转头去别处找原因 ——
+     * 而真正的问题（生产配置文件里躺着一个危险开关）没有任何人知道。
+     * 判据同 {@code PiiHasher} / {@code DeviceTokenCodec} 的「不给默认密钥」。
+     */
+    @jakarta.annotation.PostConstruct
+    void checkTransport() {
+        if (properties.getTransport() != MemberEmailCodeProperties.Transport.LOG) {
+            return;
+        }
+        if (systemEnvironment.isProd()) {
+            throw new IllegalStateException(
+                    "solvela.member.email-code.transport=LOG 不允许在生产环境使用："
+                            + "它会把每个人的验证码打进日志，而看得到日志的人就能接管任意账号。"
+                            + "生产请配成 MAIL，并配好 spring.mail.*。");
+        }
+        log.warn("【邮箱验证码】当前是 LOG 通道：不发信，验证码直接打进日志。"
+                + "搜关键字【邮箱验证码-LOG】。当前环境 {}。"
+                + "🔴 这个开关只允许在非生产环境使用，配到生产会启动失败。",
+                systemEnvironment.getCurrentEnvironment());
+    }
 
     /**
      * 发一封验证码邮件。
@@ -245,6 +276,14 @@ public class MemberEmailCodeService {
             // 而它必须返回一个与「有会员」完全一致的结果
             log.info("【邮箱验证码】邮箱无对应会员，已静默计入但不发信, scene: {}, email: {}",
                     scene, MemberEmailUtil.mask(email));
+            return EmailCodeSendResult.ok();
+        }
+
+        if (properties.getTransport() == MemberEmailCodeProperties.Transport.LOG) {
+            // 🔴 这里打【完整的邮箱和完整的码】—— 那就是这个通道的全部用途，
+            //    打码就没法用了。生产环境走不到这里（checkTransport 已经拦下）
+            log.warn("【邮箱验证码-LOG】scene={}, email={}, code={}, 有效期 {} 分钟",
+                    scene, email, code, properties.ttl().toMinutes());
             return EmailCodeSendResult.ok();
         }
 
