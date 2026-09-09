@@ -13,6 +13,19 @@
 export const API_ERROR_CODES = [
   'LOGIN_REQUIRED',
   'BAD_CREDENTIALS',
+  /**
+   * 没有有效的设备令牌。服务端 device.mode 切到 enforce 之后才会出现 ——
+   * 正常情况下客户端启动时就领过了，见 api/device.ts。
+   */
+  'DEVICE_REQUIRED',
+  /**
+   * 🔴 这台设备处在**观察档**，登录要多验一道验证码。
+   *
+   * **它不是登录失败**：密码是对的，只是还差一步。当成失败处理的话，
+   * 用户会被退回登录页从头再来，而他每次都会走到同一个地方 ——
+   * 那正是「用户卡死但服务端一切正常」。
+   */
+  'DEVICE_VERIFICATION_REQUIRED',
   'ACCOUNT_DISABLED',
   'FORBIDDEN',
   'OPERATION_LIMITED',

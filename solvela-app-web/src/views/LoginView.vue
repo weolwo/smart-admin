@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { sendSmsCode } from '@/api/auth'
 import { ApiError } from '@/api/errors'
+import { useCodeSender } from '@/composables/useCodeSender'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -11,6 +13,16 @@ const auth = useAuthStore()
 
 const phone = ref('')
 const password = ref('')
+
+/**
+ * 这台设备处在观察档，本次登录要多验一道短信验证码。
+ *
+ * 🔴 **不是登录失败**：密码已经验过了，只是还差一步。所以这一栏是
+ * 「冒出来的第二步」，而不是把用户退回去重来 —— 手机号和密码都保持原样。
+ */
+const challengeRequired = ref(false)
+const verificationCode = ref('')
+const verificationError = ref<string | undefined>(undefined)
 /**
  * 默认勾上。令牌有效期 30 天就是为了让人别每次都登，
  * 默认不勾等于把那个配置作废了。共用设备的人会自己取消。
@@ -25,6 +37,30 @@ const errorMessage = ref('')
 const errorTraceId = ref<string | null>(null)
 const phoneError = ref<string | undefined>(undefined)
 const passwordError = ref<string | undefined>(undefined)
+
+/** 二次验证的「获取验证码」。场景是 LOGIN，与注册那条码互不相干 */
+const codeSender = useCodeSender(() => sendSmsCode('LOGIN', phone.value.trim()), {
+  precheck: () => {
+    if (phone.value.trim() === '') {
+      phoneError.value = '请先输入手机号'
+      return false
+    }
+    return true
+  },
+})
+
+/*
+ * 换了手机号，这一整轮二次验证就作废了 —— 那道码是发给上一个号的。
+ * 不收起来的话，用户会拿着 A 号的码去登 B 号，得到一句「验证码错误」，
+ * 而他完全不知道自己错在哪。
+ */
+watch(phone, () => {
+  challengeRequired.value = false
+  verificationCode.value = ''
+  verificationError.value = undefined
+  phoneError.value = undefined
+  codeSender.reset()
+})
 
 /** 成功提示停留多久再跳。够看清，又不至于让人等 */
 const SUCCESS_DWELL_MS = 700
@@ -51,7 +87,12 @@ async function submit(): Promise<void> {
   }
   errorMessage.value = ''
   errorTraceId.value = null
+  verificationError.value = undefined
   if (!validate()) {
+    return
+  }
+  if (challengeRequired.value && verificationCode.value.trim() === '') {
+    verificationError.value = '请输入验证码'
     return
   }
 
@@ -64,6 +105,8 @@ async function submit(): Promise<void> {
         loginType: 'PHONE_PASSWORD',
         identity: phone.value.trim(),
         credential: password.value,
+        // 正常设备上这一项永远是 undefined —— 绝大多数登录不受影响
+        verificationCode: verificationCode.value.trim() || undefined,
         deviceType: 'H5',
       },
       remember.value,
@@ -74,9 +117,22 @@ async function submit(): Promise<void> {
     await router.replace(typeof redirect === 'string' ? redirect : '/')
   } catch (error) {
     if (error instanceof ApiError) {
-      // BAD_CREDENTIALS / ACCOUNT_DISABLED / OPERATION_LIMITED 都在这里展示后端给的人话。
-      // 注意它们里有 401，但拦截器不会把它们当成「掉登录态」，所以能走到这一行。
-      errorMessage.value = error.message
+      if (error.code === 'DEVICE_VERIFICATION_REQUIRED') {
+        /*
+         * 🔴 密码是对的，只是这台设备要多验一道。
+         * 把验证码那一栏亮出来，手机号和密码原样留着 ——
+         * 当成登录失败清空重来的话，用户每次都会走到同一个地方。
+         */
+        challengeRequired.value = true
+        errorMessage.value = error.message
+      } else if (challengeRequired.value && error.code === 'BAD_CREDENTIALS') {
+        // 已经进到二次验证这一步了，此时的 401 说的是【验证码】不对，不是密码
+        verificationError.value = error.message
+      } else {
+        // BAD_CREDENTIALS / ACCOUNT_DISABLED / OPERATION_LIMITED 都在这里展示后端给的人话。
+        // 注意它们里有 401，但拦截器不会把它们当成「掉登录态」，所以能走到这一行。
+        errorMessage.value = error.message
+      }
       errorTraceId.value = error.traceId
     } else {
       errorMessage.value = '登录失败，请稍后再试'
@@ -120,6 +176,32 @@ async function submit(): Promise<void> {
         autocomplete="current-password"
         :error="passwordError"
       />
+
+      <!--
+        只在服务端明确要求时才出现。默认就摆在这里的话，
+        绝大多数用户会以为每次登录都要验一道码。
+      -->
+      <Field
+        v-if="challengeRequired"
+        v-model="verificationCode"
+        icon="lock"
+        type="tel"
+        placeholder="短信验证码"
+        autocomplete="one-time-code"
+        :maxlength="6"
+        :error="verificationError ?? codeSender.error.value"
+      >
+        <template #suffix>
+          <Button
+            variant="text"
+            type="button"
+            :disabled="!codeSender.canSend.value"
+            @click="codeSender.send"
+          >
+            {{ codeSender.label.value }}
+          </Button>
+        </template>
+      </Field>
 
       <p v-if="errorMessage !== ''" class="page__error" role="alert">
         {{ errorMessage }}

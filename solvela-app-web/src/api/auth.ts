@@ -32,6 +32,20 @@ export interface LoginPayload {
   loginType?: LoginType
   identity: string
   credential: string
+  /**
+   * 二次验证码。**只在服务端回过 DEVICE_VERIFICATION_REQUIRED 之后才需要带**。
+   *
+   * 与 `credential` 不是一回事：credential 是「你知道什么」（密码），
+   * 这一项是「这台设备最近可疑，再证明一次你能收到本人的短信」。
+   *
+   * 客户端不必先问一次「要不要验」—— 先不带地提交，被回绝了再补。
+   * 多一次往返，换的是绝大多数登录不受影响。
+   *
+   * 🔴 类型带上 `| undefined` 不是啰嗦：tsconfig 开了 exactOptionalPropertyTypes，
+   * 在那个开关下「没传这个字段」和「传了 undefined」是两件事，
+   * 而调用方最自然的写法就是 `verificationCode: code || undefined`。
+   */
+  verificationCode?: string | undefined
   deviceType?: DeviceType
 }
 
