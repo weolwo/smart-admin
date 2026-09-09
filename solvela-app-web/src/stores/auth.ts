@@ -10,6 +10,7 @@ import {
   type MemberProfile,
   type RegisterPayload,
 } from '@/api/auth'
+import { ensureDevice } from '@/api/device'
 import { ApiError } from '@/api/errors'
 import { configureHttp } from '@/api/http'
 import { clearToken, readToken, writeToken } from '@/utils/token-storage'
@@ -94,6 +95,12 @@ export const useAuthStore = defineStore('auth', () => {
   configureHttp({
     getToken: () => token.value,
     onLoginRequired: clearSession,
+    /*
+     * 🔴 设备身份【不受登录态影响】：这里注入的是一个与 token 无关的函数。
+     * 退出登录会清 token，但不碰设备令牌 —— 设备是设备，账号是账号。
+     * 清掉的话，「换个号登录 = 换一台机器」，那正是刷子最想要的效果。
+     */
+    ensureDeviceToken: async () => (await ensureDevice('H5'))?.token ?? null,
   })
 
   return { token, member, isLoggedIn, restoring, login, register, logout, restore, clearSession }

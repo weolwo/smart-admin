@@ -15,17 +15,40 @@ import { toApiError } from './errors'
 
 type TokenProvider = () => string | null
 type UnauthorizedHandler = () => void
+type DeviceTokenProvider = () => Promise<string | null>
 
 let tokenProvider: TokenProvider = () => null
 let unauthorizedHandler: UnauthorizedHandler = () => {}
+/** 默认不带设备头：注入之前（比如单测里）行为退化成「没有设备身份」，而不是报错 */
+let deviceTokenProvider: DeviceTokenProvider = () => Promise.resolve(null)
+
+/**
+ * 领设备身份的那条路由。
+ *
+ * 🔴 常量放在 http.ts 而不是 device.ts，是为了**避免循环引用**：
+ * device.ts 要用 http 发请求，http 的拦截器又要认出这条路由并跳过它。
+ * 方向做成 device → http 这一条，就没有环。
+ */
+export const DEVICE_REGISTER_URL = '/device/register'
+
+/** 设备令牌放在这个头里，名字对齐后端 DeviceContract.HEADER */
+const DEVICE_HEADER = 'X-Device-Id'
 
 /** 由 stores/auth 在初始化时注入，避免 http 反向依赖 store 造成循环引用 */
 export function configureHttp(options: {
   getToken: TokenProvider
   onLoginRequired: UnauthorizedHandler
+  /** 可选：拿设备令牌。**不传就是「不带设备头」**，不是「沿用上一次」 */
+  ensureDeviceToken?: DeviceTokenProvider
 }): void {
   tokenProvider = options.getToken
   unauthorizedHandler = options.onLoginRequired
+  /*
+   * 🔴 无条件赋值，不写成「传了才覆盖」。
+   * 后者会让第二次调用悄悄留着上一次的 provider —— 于是「我明明没配设备头」
+   * 和「实际带着上一次那个」同时成立，而这种状态没有任何办法从代码上看出来。
+   */
+  deviceTokenProvider = options.ensureDeviceToken ?? (() => Promise.resolve(null))
 }
 
 const http: AxiosInstance = axios.create({
@@ -34,12 +57,33 @@ const http: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-http.interceptors.request.use((config) => {
+http.interceptors.request.use(async (config) => {
   const token = tokenProvider()
   if (token !== null && token !== '') {
     // header 名与 scheme 对齐 solvela-app 的 solvela.app.auth 配置
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  /*
+   * 🔴 领设备身份的那条请求自己不能带设备头，也不能在这里等设备 ——
+   * 它就是那个正在被等的东西，等它等于死锁。
+   * 后端对这条路由标了 @DeviceExempt，正是同一件事在服务端的表达。
+   */
+  if (config.url !== DEVICE_REGISTER_URL) {
+    /*
+     * await 的代价只落在冷启动的头几个请求上：设备令牌一旦存进 localStorage，
+     * 之后每次都是同步读。
+     *
+     * 而不 await 的代价是永久的 —— 首屏那几个请求会一直没有设备号，
+     * 服务端那个「设备令牌覆盖率」指标就永远上不到 100%，
+     * 而它正是决定「能不能从 observe 切到 enforce」的唯一依据。
+     */
+    const deviceToken = await deviceTokenProvider()
+    if (deviceToken !== null && deviceToken !== '') {
+      config.headers[DEVICE_HEADER] = deviceToken
+    }
+  }
+
   return config
 })
 
