@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import solvela.app.auth.Anonymous;
 import solvela.app.auth.CurrentMember;
 import solvela.app.auth.MemberPrincipal;
+import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
@@ -86,6 +87,22 @@ public class MemberLoginController {
     @PostMapping("/login")
     public MemberResult login(@RequestBody @Valid MemberLoginRequest request, HttpServletRequest servletRequest) {
         return memberLoginService.login(request, ClientIp.of(servletRequest));
+    }
+
+    /**
+     * 绑定 / 更换邮箱。<b>要登录</b>（所以没有 {@link Anonymous}）。
+     *
+     * <p>绑完之后这个邮箱就能用来登录、能用来重置密码 —— 它<b>新增了一条登录身份</b>，
+     * 不是改个昵称。所以换绑时域里还会要求「当前密码」或「旧邮箱验证码」，
+     * 拦的是「会话被盗 → 换绑 → 重置密码 → 永久接管」那条链。
+     *
+     * <p>返回 204：没有要给客户端的数据。
+     */
+    @PostMapping("/email/bind")
+    public ResponseEntity<Void> bindEmail(@RequestBody @Valid EmailBindRequest request,
+                                          HttpServletRequest servletRequest) {
+        memberLoginService.bindEmail(request, ClientIp.of(servletRequest));
+        return ResponseEntity.noContent().build();
     }
 
     /**

@@ -32,6 +32,9 @@ import solvela.member.api.EmailCodeVerifyResult;
 import solvela.member.api.MemberLoginType;
 import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
+import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberEmailBindResult;
+import solvela.member.email.MemberEmailBindService;
 import solvela.member.email.MemberEmailCodeIssuer;
 import solvela.member.email.MemberEmailCodeService;
 import solvela.member.util.MemberEmailUtil;
@@ -84,6 +87,7 @@ public class MemberAuthService implements MemberAuthApi {
     private final DeviceGuard deviceGuard;
     private final MemberEmailCodeService emailCodeService;
     private final MemberEmailCodeIssuer emailCodeIssuer;
+    private final MemberEmailBindService emailBindService;
 
     /**
      * 手机号 + 密码注册。逻辑全在 {@link MemberRegisterService}，本方法只是契约的落点。
@@ -234,6 +238,14 @@ public class MemberAuthService implements MemberAuthApi {
     @Override
     public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
         return emailCodeIssuer.issue(cmd.scene(), cmd.email(), cmd.clientIp(), cmd.currentMemberId());
+    }
+
+    /**
+     * 绑定 / 更换邮箱。逻辑全在 {@link MemberEmailBindService}，本方法只是契约的落点。
+     */
+    @Override
+    public MemberEmailBindResult bindEmail(MemberEmailBindCmd cmd) {
+        return emailBindService.bind(cmd);
     }
 
     /**

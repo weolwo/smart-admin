@@ -9,6 +9,7 @@ import solvela.app.auth.MemberPrincipalLoader;
 import solvela.auth.member.MemberAccessToken;
 import solvela.auth.member.MemberTokenStore;
 import solvela.app.auth.CurrentMember;
+import solvela.app.domain.EmailBindRequest;
 import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
@@ -19,6 +20,8 @@ import solvela.member.api.EmailCodeScene;
 import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
+import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
 import solvela.member.api.MemberLogoutCmd;
@@ -152,6 +155,46 @@ public class MemberLoginService {
                     "今日验证码发送次数已用完，请明天再试");
             // 这是【我们自己】的问题，如实说「稍后再试」而不是让用户以为自己填错了
             case SEND_FAILED -> new ApiException(ApiErrors.INTERNAL, "验证码发送失败，请稍后再试");
+        };
+    }
+
+    /**
+     * 绑定 / 更换邮箱。<b>需要登录</b>。
+     *
+     * <p>会员号从 {@code CurrentMember} 取，不收客户端传的 —— 收了等于
+     * 「说自己是谁就是谁」。这条与 {@code MemberLoginService.register} 里
+     * 「register_source 由这一层推导，不收客户端的」是同一条规矩。
+     */
+    public void bindEmail(EmailBindRequest request, String ip) {
+        MemberEmailBindResult result = memberAuthApi.bindEmail(new MemberEmailBindCmd(
+                CurrentMember.require().memberId(),
+                request.email(), request.code(),
+                request.currentPassword(), request.oldEmailCode(),
+                ip, CurrentDevice.deviceIdOrNull()));
+        if (!result.success()) {
+            throw translateBind(result);
+        }
+    }
+
+    /**
+     * 绑定失败原因 → HTTP 契约。
+     *
+     * <p>{@code REBIND_VERIFICATION_REQUIRED} 用 <b>428</b> 语义最贴切，
+     * 但本仓的 {@code ApiErrors} 里没有那一档，而为一个分支新增一个错误码
+     * 会让客户端多一条分支。用 401 + 独立文案：客户端按 message 弹输入框即可，
+     * 而 code 仍然落在它已经在处理的那几个里。
+     */
+    private ApiException translateBind(MemberEmailBindResult result) {
+        return switch (result.reason()) {
+            case BAD_EMAIL_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "邮箱格式不正确");
+            case EMAIL_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
+            case EMAIL_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case EMAIL_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
+            case EMAIL_TAKEN -> new ApiException(ApiErrors.CONFLICT, "该邮箱已被其他账号绑定");
+            case REBIND_VERIFICATION_REQUIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS,
+                    "更换邮箱需要验证身份：请输入当前密码，或获取原邮箱的验证码");
+            case REBIND_VERIFICATION_FAILED -> new ApiException(ApiErrors.BAD_CREDENTIALS,
+                    "身份验证未通过，请检查密码或原邮箱验证码");
         };
     }
 

@@ -66,4 +66,40 @@ public interface MemberAuthDao {
             WHERE member_id = #{memberId}
             """)
     Member selectForAuth(@Param("memberId") Long memberId);
+
+    /**
+     * 绑定邮箱要用的三列：状态、当前密码、当前邮箱密文。
+     *
+     * <p>单独一个查询而不是复用 {@link #selectForAuth}：那个刻意不含 password
+     * （「还原登录态用不到它」），而这里两样都要 —— 换绑时要验当前密码，
+     * 也要拿旧邮箱去发验证码。
+     *
+     * <p>⚠️ 取的是 {@code email} 密文不是 {@code email_hash}：换绑那条路要把旧邮箱
+     * <b>解出来</b>才能给它发信。摘要是单向的，做不到这件事 ——
+     * 这正是 {@code t_member} 「密文 + hash 双写」的用途，见 {@code PiiHasher} 的类注释。
+     */
+    @Select("""
+            SELECT member_id, status, password, email
+            FROM t_member
+            WHERE member_id = #{memberId}
+            """)
+    Member selectForEmailBind(@Param("memberId") Long memberId);
+
+    /**
+     * 换绑邮箱。
+     *
+     * <p>🔴 {@code UNHEX} 同样不能省，理由见 {@link #selectForLogin}。
+     * 漏了的表现是「绑定说成功了，但按邮箱登录查不到人」。
+     *
+     * <p>唯一约束 {@code uk_mbr_email_hash} 会拦住「绑一个别人已经绑了的邮箱」——
+     * 查重只是提前给一句人话，真正的防线是它。
+     */
+    @org.apache.ibatis.annotations.Update("""
+            UPDATE t_member
+               SET email = #{emailCipher}, email_hash = UNHEX(#{emailHashHex}), update_time = NOW()
+             WHERE member_id = #{memberId}
+            """)
+    int updateEmail(@Param("memberId") Long memberId,
+                    @Param("emailCipher") String emailCipher,
+                    @Param("emailHashHex") String emailHashHex);
 }

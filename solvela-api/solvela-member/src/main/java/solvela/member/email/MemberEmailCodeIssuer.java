@@ -60,7 +60,7 @@ public class MemberEmailCodeIssuer {
             return EmailCodeSendResult.fail(EmailCodeFailReason.BAD_EMAIL_FORMAT);
         }
 
-        MailDelivery delivery = decideDelivery(scene, email);
+        MailDelivery delivery = decideDelivery(scene, email, currentMemberId);
         return emailCodeService.send(scene, email, clientIp, delivery);
     }
 
@@ -71,11 +71,19 @@ public class MemberEmailCodeIssuer {
      * 而这里的默认行为无论选哪个都是错的（默认寄 = 给陌生邮箱发垃圾，
      * 默认不寄 = 新功能上线后没人收得到码）。
      */
-    private MailDelivery decideDelivery(EmailCodeScene scene, String email) {
-        boolean exists = memberRegisterDao.countByEmailHash(piiHasher.hash(email)) > 0;
+    private MailDelivery decideDelivery(EmailCodeScene scene, String email, Long currentMemberId) {
+        String hash = piiHasher.hash(email);
+        boolean exists = memberRegisterDao.countByEmailHash(hash) > 0;
         MailDelivery delivery = switch (scene) {
-            case REGISTER, BIND -> exists ? MailDelivery.SUPPRESS : MailDelivery.DELIVER;
+            case REGISTER -> exists ? MailDelivery.SUPPRESS : MailDelivery.DELIVER;
             case LOGIN, RESET_PASSWORD -> exists ? MailDelivery.DELIVER : MailDelivery.SUPPRESS;
+            // 🔴 绑定看的是「被【别人】占了没有」，不是「有没有人占」。
+            //    按 exists 判的话，会员想重发一次绑到自己名下那个邮箱的码
+            //    （换绑流程里要给【旧邮箱】发码）就永远收不到 —— 而那条路
+            //    正是没设过密码的会员唯一能换绑的方式
+            case BIND -> memberRegisterDao.countByEmailHashExcludingMember(hash, currentMemberId) > 0
+                    ? MailDelivery.SUPPRESS
+                    : MailDelivery.DELIVER;
         };
         if (delivery == MailDelivery.SUPPRESS) {
             // 只打日志，不改返回值。这行日志是排查「用户说没收到码」时的唯一线索 ——

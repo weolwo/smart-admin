@@ -50,6 +50,24 @@ public interface MemberRegisterDao {
     int countByEmailHash(@Param("emailHashHex") String emailHashHex);
 
     /**
+     * 这个邮箱是否被<b>别人</b>占用（排除指定会员自己）。
+     *
+     * <p>绑定场景要的是这个，不是 {@link #countByEmailHash}：会员在换绑流程里
+     * 要给<b>自己的旧邮箱</b>发一次验证码，按「有没有人占」判的话那封信永远发不出去 ——
+     * 而那条路正是没设过密码的会员唯一能换绑的方式。
+     *
+     * <p>{@code currentMemberId} 为 null（未登录）时退化成「有没有人占」，
+     * 这正是想要的：匿名请求本来就不该知道任何账号的存在。
+     */
+    @Select("""
+            SELECT COUNT(1) FROM t_member
+             WHERE email_hash = UNHEX(#{emailHashHex})
+               AND (#{currentMemberId} IS NULL OR member_id <> #{currentMemberId})
+            """)
+    int countByEmailHashExcludingMember(@Param("emailHashHex") String emailHashHex,
+                                        @Param("currentMemberId") Long currentMemberId);
+
+    /**
      * 建会员。
      *
      * <p>{@code create_by} 不填 —— DDL 注释：「后台导入时有值，<b>自主注册为空</b>」。

@@ -8,7 +8,10 @@ import solvela.member.api.AuthFailReason;
 import solvela.member.api.EmailCodeFailReason;
 import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
+import solvela.member.api.EmailBindFailReason;
 import solvela.member.api.MemberAuthApi;
+import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
 import solvela.member.api.MemberIdentity;
@@ -84,6 +87,14 @@ public class ApiContractDownstreamStub {
                     return EmailCodeSendResult.fail(EmailCodeFailReason.SEND_FAILED);
                 }
                 return EmailCodeSendResult.ok();
+            }
+
+            @Override
+            public MemberEmailBindResult bindEmail(MemberEmailBindCmd cmd) {
+                if (cmd.newEmail() != null && cmd.newEmail().startsWith("taken@")) {
+                    return MemberEmailBindResult.fail(EmailBindFailReason.EMAIL_TAKEN);
+                }
+                return MemberEmailBindResult.ok();
             }
 
             @Override

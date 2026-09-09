@@ -5,6 +5,8 @@ import org.springframework.web.bind.annotation.RestController;
 import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
+import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
 import solvela.member.api.MemberIdentity;
@@ -48,6 +50,11 @@ public class MemberAuthInternalController implements MemberAuthApi {
     @Override
     public EmailCodeSendResult sendEmailCode(EmailCodeSendCmd cmd) {
         return memberAuthService.sendEmailCode(cmd);
+    }
+
+    @Override
+    public MemberEmailBindResult bindEmail(MemberEmailBindCmd cmd) {
+        return memberAuthService.bindEmail(cmd);
     }
 
     @Override

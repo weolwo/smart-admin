@@ -68,6 +68,19 @@ public interface MemberAuthApi {
     EmailCodeSendResult sendEmailCode(@RequestBody EmailCodeSendCmd cmd);
 
     /**
+     * 绑定 / 更换邮箱。
+     *
+     * <p>放在<b>认证契约</b>里而不是某个「会员资料」契约：绑定邮箱不是改昵称，
+     * 它<b>新增了一条登录身份</b> —— 绑完之后这个邮箱就能用来登录、能用来重置密码。
+     * 那是认证的事。
+     *
+     * <p>🔴 {@code memberId} 由网关从令牌解析后填入，<b>不接受客户端传</b>。
+     * 收客户端的 memberId 等于「说自己是谁就是谁」。
+     */
+    @PostExchange("/email/bind")
+    MemberEmailBindResult bindEmail(@RequestBody MemberEmailBindCmd cmd);
+
+    /**
      * 按会员号取<b>可用身份</b>；会员不存在或状态不正常返回 null。
      *
      * <p>网关每个请求都会（经缓存）走一次这里，把令牌解析出的会员号还原成身份。
