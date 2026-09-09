@@ -34,7 +34,10 @@ import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberEmailBindCmd;
 import solvela.member.api.MemberEmailBindResult;
+import solvela.member.api.MemberPasswordResetCmd;
+import solvela.member.api.MemberPasswordResetResult;
 import solvela.member.email.MemberEmailBindService;
+import solvela.member.email.MemberPasswordResetService;
 import solvela.member.email.MemberEmailCodeIssuer;
 import solvela.member.email.MemberEmailCodeService;
 import solvela.member.util.MemberEmailUtil;
@@ -88,6 +91,7 @@ public class MemberAuthService implements MemberAuthApi {
     private final MemberEmailCodeService emailCodeService;
     private final MemberEmailCodeIssuer emailCodeIssuer;
     private final MemberEmailBindService emailBindService;
+    private final MemberPasswordResetService passwordResetService;
 
     /**
      * 手机号 + 密码注册。逻辑全在 {@link MemberRegisterService}，本方法只是契约的落点。
@@ -246,6 +250,14 @@ public class MemberAuthService implements MemberAuthApi {
     @Override
     public MemberEmailBindResult bindEmail(MemberEmailBindCmd cmd) {
         return emailBindService.bind(cmd);
+    }
+
+    /**
+     * 重置密码。逻辑全在 {@link MemberPasswordResetService}，本方法只是契约的落点。
+     */
+    @Override
+    public MemberPasswordResetResult resetPassword(MemberPasswordResetCmd cmd) {
+        return passwordResetService.reset(cmd);
     }
 
     /**

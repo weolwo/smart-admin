@@ -102,4 +102,18 @@ public interface MemberAuthDao {
     int updateEmail(@Param("memberId") Long memberId,
                     @Param("emailCipher") String emailCipher,
                     @Param("emailHashHex") String emailHashHex);
+
+    /**
+     * 重置密码。
+     *
+     * <p>只改 password 一列。<b>不碰 status</b> —— 一个被冻结的账号不该因为
+     * 改了密码就自动解冻，那正是 {@code PasswordResetFailReason.ACCOUNT_UNAVAILABLE}
+     * 要在上游拦住的事。
+     */
+    @org.apache.ibatis.annotations.Update("""
+            UPDATE t_member
+               SET password = #{password}, update_time = NOW()
+             WHERE member_id = #{memberId}
+            """)
+    int updatePassword(@Param("memberId") Long memberId, @Param("password") String password);
 }

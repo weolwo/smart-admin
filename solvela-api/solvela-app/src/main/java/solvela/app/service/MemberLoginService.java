@@ -14,6 +14,8 @@ import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
+import solvela.app.domain.PasswordResetRequest;
+import solvela.app.domain.PasswordResetView;
 import solvela.app.web.ApiErrors;
 import solvela.app.web.ApiException;
 import solvela.member.api.EmailCodeScene;
@@ -21,6 +23,8 @@ import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberPasswordResetCmd;
+import solvela.member.api.MemberPasswordResetResult;
 import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -195,6 +199,40 @@ public class MemberLoginService {
                     "更换邮箱需要验证身份：请输入当前密码，或获取原邮箱的验证码");
             case REBIND_VERIFICATION_FAILED -> new ApiException(ApiErrors.BAD_CREDENTIALS,
                     "身份验证未通过，请检查密码或原邮箱验证码");
+        };
+    }
+
+    /**
+     * 用邮箱验证码重置密码。<b>匿名</b> —— 用户正是因为进不去才走这条路。
+     *
+     * <p>返回被吊销的会话数，客户端要展示出来：「已在 3 台设备上退出登录」
+     * 是用户判断「刚才是不是别人在动我账号」的依据。只回一句「修改成功」，
+     * 这条信息就白丢了。
+     */
+    public PasswordResetView resetPassword(PasswordResetRequest request, String ip) {
+        MemberPasswordResetResult result = memberAuthApi.resetPassword(new MemberPasswordResetCmd(
+                request.email(), request.code(), request.newPassword(),
+                ip, CurrentDevice.deviceIdOrNull()));
+        if (!result.success()) {
+            throw translateReset(result);
+        }
+        return new PasswordResetView(result.revokedSessions());
+    }
+
+    /** 重置密码失败原因 → HTTP 契约。 */
+    private ApiException translateReset(MemberPasswordResetResult result) {
+        return switch (result.reason()) {
+            case BAD_EMAIL_FORMAT -> new ApiException(ApiErrors.INVALID_ARGUMENT, "邮箱格式不正确");
+            case EMAIL_CODE_EXPIRED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码已失效，请重新获取");
+            case EMAIL_CODE_MISMATCH -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case EMAIL_CODE_LOCKED -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误次数过多，请重新获取");
+            // 文案从域里取，不在这里再写一遍规则 —— 两份措辞迟早对不上
+            case WEAK_PASSWORD -> new ApiException(ApiErrors.INVALID_ARGUMENT, MemberPasswordPolicy.HINT);
+            // 走到这一档说明码猜对了但账号不存在。含糊成「验证码错误」即可 ——
+            // 对真实用户这条路不可能出现（没账号就收不到码）
+            case ACCOUNT_NOT_FOUND -> new ApiException(ApiErrors.BAD_CREDENTIALS, "验证码错误");
+            case ACCOUNT_UNAVAILABLE -> new ApiException(ApiErrors.ACCOUNT_DISABLED,
+                    "账号状态异常，无法自助重置密码，请联系客服");
         };
     }
 

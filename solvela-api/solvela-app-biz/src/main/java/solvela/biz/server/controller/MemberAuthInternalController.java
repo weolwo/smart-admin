@@ -6,6 +6,8 @@ import solvela.member.api.EmailCodeSendCmd;
 import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberPasswordResetCmd;
+import solvela.member.api.MemberPasswordResetResult;
 import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -55,6 +57,11 @@ public class MemberAuthInternalController implements MemberAuthApi {
     @Override
     public MemberEmailBindResult bindEmail(MemberEmailBindCmd cmd) {
         return memberAuthService.bindEmail(cmd);
+    }
+
+    @Override
+    public MemberPasswordResetResult resetPassword(MemberPasswordResetCmd cmd) {
+        return memberAuthService.resetPassword(cmd);
     }
 
     @Override

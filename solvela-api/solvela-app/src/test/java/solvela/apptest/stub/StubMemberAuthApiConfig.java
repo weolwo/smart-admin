@@ -10,6 +10,8 @@ import solvela.member.api.EmailCodeSendResult;
 import solvela.member.api.EmailBindFailReason;
 import solvela.member.api.MemberAuthApi;
 import solvela.member.api.MemberEmailBindCmd;
+import solvela.member.api.MemberPasswordResetCmd;
+import solvela.member.api.MemberPasswordResetResult;
 import solvela.member.api.MemberEmailBindResult;
 import solvela.member.api.MemberAuthCmd;
 import solvela.member.api.MemberAuthResult;
@@ -105,6 +107,11 @@ public class StubMemberAuthApiConfig {
                     return MemberEmailBindResult.fail(EmailBindFailReason.EMAIL_TAKEN);
                 }
                 return MemberEmailBindResult.ok();
+            }
+
+            @Override
+            public MemberPasswordResetResult resetPassword(MemberPasswordResetCmd cmd) {
+                return MemberPasswordResetResult.ok(0);
             }
 
             @Override

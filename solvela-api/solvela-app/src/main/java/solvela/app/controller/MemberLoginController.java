@@ -17,6 +17,8 @@ import solvela.app.domain.EmailCodeRequest;
 import solvela.app.domain.MemberLoginRequest;
 import solvela.app.domain.MemberRegisterRequest;
 import solvela.app.domain.MemberResult;
+import solvela.app.domain.PasswordResetRequest;
+import solvela.app.domain.PasswordResetView;
 import solvela.app.service.MemberLoginService;
 import solvela.app.web.ClientIp;
 
@@ -103,6 +105,20 @@ public class MemberLoginController {
                                           HttpServletRequest servletRequest) {
         memberLoginService.bindEmail(request, ClientIp.of(servletRequest));
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 用邮箱验证码重置密码。<b>匿名</b> —— 用户正是因为进不去才走这条路。
+     *
+     * <p>成功之后他在<b>所有设备</b>上的会话都会被吊销。返回被吊销的数量，
+     * 客户端要展示出来：点「忘记密码」的最常见原因之一就是「我怀疑号被人动过」，
+     * 而「已在 3 台设备上退出登录」正是他要的那个答案。
+     */
+    @Anonymous
+    @PostMapping("/password/reset")
+    public PasswordResetView resetPassword(@RequestBody @Valid PasswordResetRequest request,
+                                           HttpServletRequest servletRequest) {
+        return memberLoginService.resetPassword(request, ClientIp.of(servletRequest));
     }
 
     /**
