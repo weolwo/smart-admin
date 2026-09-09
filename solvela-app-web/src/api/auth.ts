@@ -6,9 +6,32 @@ import { request, requestVoid } from './http'
 export const DEVICE_TYPES = ['APP', 'H5', 'WECHAT', 'PC'] as const
 export type DeviceType = (typeof DEVICE_TYPES)[number]
 
+/**
+ * 登录方式。对齐后端 MemberLoginType。
+ *
+ * `identity` 和 `credential` 装什么，由它决定：
+ *   PHONE_PASSWORD  手机号 + 密码
+ *   EMAIL_PASSWORD  邮箱   + 密码
+ *   EMAIL_CODE      邮箱   + 邮箱验证码
+ */
+export const LOGIN_TYPES = ['PHONE_PASSWORD', 'EMAIL_PASSWORD', 'EMAIL_CODE'] as const
+export type LoginType = (typeof LOGIN_TYPES)[number]
+
+/** 注册方式。对齐后端 MemberRegisterType */
+export const REGISTER_TYPES = ['PHONE_PASSWORD', 'EMAIL_CODE'] as const
+export type RegisterType = (typeof REGISTER_TYPES)[number]
+
+/**
+ * 登录入参。
+ *
+ * 🔴 字段叫 `identity` / `credential`，**不是** `phone` / `password`。
+ * 后端 2026-09-09 改的名，理由写在 MemberLoginRequest 的注释里：
+ * 「继续叫 phone 但有时候放的是邮箱」是一个迟早会骗到人的字段名。
+ */
 export interface LoginPayload {
-  phone: string
-  password: string
+  loginType?: LoginType
+  identity: string
+  credential: string
   deviceType?: DeviceType
 }
 
@@ -28,9 +51,25 @@ export interface MemberProfile {
   gender: number | null
 }
 
+/**
+ * 注册入参。
+ *
+ * 两条通道共用这一个形状，由 `registerType` 分派：
+ *   PHONE_PASSWORD  identity=手机号，要 smsCode 和 password
+ *   EMAIL_CODE      identity=邮箱，  要 emailCode，password 可以不填
+ *
+ * `smsCode` **一直传**就行：服务端有一个 `phone-code-required` 开关，
+ * 关掉时它不看这个字段，多传一个没有代价；而漏传会在开关打开的那天变成注册全线失败。
+ */
 export interface RegisterPayload {
-  phone: string
-  password: string
+  registerType?: RegisterType
+  identity: string
+  /** 邮箱注册的验证码 */
+  emailCode?: string
+  /** 手机号注册的短信验证码 */
+  smsCode?: string
+  /** 邮箱注册时可以不填 —— 那种会员之后走验证码登录 */
+  password?: string
   deviceType?: DeviceType
 }
 
@@ -67,23 +106,7 @@ function normalizeMember(raw: RawMemberProfile): MemberProfile {
   }
 }
 
-/**
- * 注册。**返回形状与登录完全一致**，所以调用方走同一条「存令牌 + 存会员信息」的路。
- *
- * 后端注册成功直接签令牌（见 MemberLoginController.register 的注释）——
- * 没有「注册完再登一次」这一步，那一步不产生任何信息，只多一次可能失败的调用。
- *
- * 失败时抛 ApiError，几个码各有含义，注册页据此分支：
- *   CONFLICT(409)         手机号已注册 → 引导去登录，不要只显示一行红字
- *   INVALID_ARGUMENT(400) 手机号格式错 / 密码太弱 → message 就是规则原文，直接展示
- *   OPERATION_LIMITED(429) 同一 IP 注册过于频繁 → message 里已带「还要等多久」
- */
-export async function register(payload: RegisterPayload): Promise<LoginResult> {
-  const raw = await request<RawLoginResult>({
-    url: '/auth/register',
-    method: 'POST',
-    data: { deviceType: 'H5', ...payload },
-  })
+function toLoginResult(raw: RawLoginResult): LoginResult {
   return {
     accessToken: raw.accessToken,
     expiresIn: raw.expiresIn,
@@ -91,17 +114,34 @@ export async function register(payload: RegisterPayload): Promise<LoginResult> {
   }
 }
 
+/**
+ * 注册。**返回形状与登录完全一致**，所以调用方走同一条「存令牌 + 存会员信息」的路。
+ *
+ * 后端注册成功直接签令牌（见 MemberLoginController.register 的注释）——
+ * 没有「注册完再登一次」这一步，那一步不产生任何信息，只多一次可能失败的调用。
+ *
+ * 失败时抛 ApiError，几个码各有含义，注册页据此分支：
+ *   CONFLICT(409)          手机号/邮箱已注册 → 引导去登录，不要只显示一行红字
+ *   INVALID_ARGUMENT(400)  格式错 / 密码太弱 → message 就是规则原文，直接展示
+ *   BAD_CREDENTIALS(401)   验证码错、失效、错太多次 → 挂在验证码框上
+ *   OPERATION_LIMITED(429) 注册过于频繁 → message 里已带「还要等多久」
+ */
+export async function register(payload: RegisterPayload): Promise<LoginResult> {
+  const raw = await request<RawLoginResult>({
+    url: '/auth/register',
+    method: 'POST',
+    data: { registerType: 'PHONE_PASSWORD', deviceType: 'H5', ...payload },
+  })
+  return toLoginResult(raw)
+}
+
 export async function login(payload: LoginPayload): Promise<LoginResult> {
   const raw = await request<RawLoginResult>({
     url: '/auth/login',
     method: 'POST',
-    data: { deviceType: 'H5', ...payload },
+    data: { loginType: 'PHONE_PASSWORD', deviceType: 'H5', ...payload },
   })
-  return {
-    accessToken: raw.accessToken,
-    expiresIn: raw.expiresIn,
-    member: normalizeMember(raw.member),
-  }
+  return toLoginResult(raw)
 }
 
 /** 后端返回 204，没有响应体 */

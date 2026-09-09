@@ -58,7 +58,14 @@ async function submit(): Promise<void> {
   submitting.value = true
   try {
     await auth.login(
-      { phone: phone.value.trim(), password: password.value, deviceType: 'H5' },
+      {
+        // 这一页只做手机号+密码。邮箱那两条通道有各自的入口，
+        // 把三种方式塞进同一个表单只会让每一种都别扭
+        loginType: 'PHONE_PASSWORD',
+        identity: phone.value.trim(),
+        credential: password.value,
+        deviceType: 'H5',
+      },
       remember.value,
     )
     succeeded.value = true

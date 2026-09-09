@@ -69,7 +69,12 @@ async function submit(): Promise<void> {
 
   submitting.value = true
   try {
-    await auth.register({ phone: phone.value.trim(), password: password.value, deviceType: 'H5' })
+    await auth.register({
+      registerType: 'PHONE_PASSWORD',
+      identity: phone.value.trim(),
+      password: password.value,
+      deviceType: 'H5',
+    })
     // 注册即登录：后端把令牌一起返回了，直接进目标页，不再跳一次登录
     const redirect = route.query.redirect
     await router.replace(typeof redirect === 'string' ? redirect : '/')
