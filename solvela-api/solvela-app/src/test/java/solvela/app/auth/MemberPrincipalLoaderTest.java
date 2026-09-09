@@ -11,6 +11,7 @@ import solvela.apptest.stub.StubMemberAuthApiConfig;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,21 +77,37 @@ class MemberPrincipalLoaderTest {
     }
 
     @Test
-    @DisplayName("坏缓存被读过一次之后，应当自愈：下一次不再回源")
-    void 读取后自我修复() {
-        // 纯 ASCII：这条只是要让反序列化失败，跟内容语言无关，避免这个字面量本身
-        // 被源文件编码问题连累（曾经真的因为这个多绕了一圈弯路）
-        redis.opsForValue().set(CACHE_KEY, "not-a-valid-cache-record");
+    @DisplayName("🔴 写回缓存的值必须带类型信息 —— 否则下次读它必然失败")
+    void 写回的缓存带类型信息() {
+        // 从【干净的】缓存开始：这条路径上没有任何错误恢复参与，@Cacheable 必然写回，
+        // 所以断言是确定的。而它覆盖的正是 2026-09-03 那个 bug：
+        // NON_FINAL 不给 record 写 @class，于是每一次登录写下的缓存都读不回来。
+        redis.delete(CACHE_KEY);
 
         principalLoader.load(MEMBER_ID);
-        assertEquals(1, stub.authIdentityCallCount());
 
-        // 第一次读失败 -> 回源 -> Spring Cache 用正确的序列化器把结果 PUT 回去，
-        // 坏记录被覆盖。第二次应当直接命中缓存，不再回源
-        principalLoader.load(MEMBER_ID);
-        assertEquals(1, stub.authIdentityCallCount(),
-                "第二次调用又回源了，说明坏缓存没有被自愈覆盖掉，PUT 失败也被吞掉了");
+        String written = redis.opsForValue().get(CACHE_KEY);
+        assertNotNull(written, "缓存没写回 —— @Cacheable 没生效（多半是代理没挂上）");
+        assertTrue(written.contains("@class"),
+                "写回的值没带类型信息，下次读它必然抛 InvalidTypeIdException。实际存的是：" + written);
     }
+
+    /*
+     * 🔴 这里【刻意没有】「坏缓存被读过一次之后下次不再回源」那条用例。
+     *
+     * 自愈在当前设计下是【尽力而为】的：读、写、失效的异常全被 AppCacheErrorHandler
+     * 吞掉降级为回源 —— 也就是说「读失败之后一定会把好值写回去」并不是这个类保证的性质。
+     * 断言它，就是断言一个设计上没有承诺的东西，表现是这条用例时红时绿：
+     * 2026-09 它在全量构建里红过四次，而每次单跑都是绿的。
+     *
+     * 真正要守的两条性质分别由上下两条用例守着：
+     *   · 坏缓存不影响回源      —— 读不出来不能变成用户面的 500
+     *   · 写回的缓存带类型信息  —— 写进去的东西下次读得回来
+     * 后者从干净缓存开始，不经过错误恢复路径，因此是确定的。
+     *
+     * 要把自愈变成一条【可以断言】的性质，得先让它成为一条有保证的行为
+     * （比如读失败时显式 delete 掉那个 key），那是 AppCacheErrorHandler 的改动，不是这里。
+     */
 
     @Test
     @DisplayName("会员不存在时返回 null，同样不抛异常")
