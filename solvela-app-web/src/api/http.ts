@@ -31,8 +31,23 @@ let deviceTokenProvider: DeviceTokenProvider = () => Promise.resolve(null)
  */
 export const DEVICE_REGISTER_URL = '/device/register'
 
-/** 设备令牌放在这个头里，名字对齐后端 DeviceContract.HEADER */
-const DEVICE_HEADER = 'X-Device-Id'
+/**
+ * 设备令牌放在这个头里。对齐网关的 `solvela.app.device.header`
+ * （`DeviceAuthProperties.DEFAULT_HEADER`）。
+ *
+ * 🔴 **不是 `X-Device-Id`**。那是另一个头，方向也不同：
+ * <ul>
+ *   <li>`X-Device-Token`（本项）客户端 → 网关，装的是**令牌**，网关要验签；</li>
+ *   <li>`X-Device-Id` 网关 → 内部服务，装的是**验签通过的设备号**。
+ *       令牌绝不原样透传下去 —— 那等于把凭证散给所有内部服务
+ *       （见 DownstreamClientConfig 的注释）。</li>
+ * </ul>
+ *
+ * 写错的代价是**静默的**：网关读不到这个头，就当作「没有设备身份」放行，
+ * 请求全部成功，只是 device_id 恒为 NULL、覆盖率恒为 0% —— 而那正是
+ * 整套设备方案唯一的产出。2026-09-10 第一版客户端就是这么错的。
+ */
+const DEVICE_HEADER = 'X-Device-Token'
 
 /** 由 stores/auth 在初始化时注入，避免 http 反向依赖 store 造成循环引用 */
 export function configureHttp(options: {

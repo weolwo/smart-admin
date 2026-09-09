@@ -51,7 +51,7 @@ beforeEach(() => {
 })
 
 describe('设备头', () => {
-  it('普通请求带上 X-Device-Id', async () => {
+  it('🔴 头名必须是 X-Device-Token，不是 X-Device-Id', async () => {
     const { seen, restore } = captureAdapter()
     try {
       await request({ url: '/auth/me', method: 'POST' })
@@ -59,7 +59,13 @@ describe('设备头', () => {
       restore()
     }
 
-    expect(headerOf(seen[0], 'X-Device-Id')).toBe('dv_1.payload.sig')
+    expect(headerOf(seen[0], 'X-Device-Token')).toBe('dv_1.payload.sig')
+    /*
+     * X-Device-Id 是【网关 → 内部服务】那一段的头，装的是验签后的设备号。
+     * 客户端往那个头里塞令牌，网关根本不看 —— 请求全部成功，
+     * 只是 device_id 恒为 NULL。第一版客户端就是这么错的，而且一点报错都没有。
+     */
+    expect(headerOf(seen[0], 'X-Device-Id')).toBeUndefined()
   })
 
   it('🔴 领设备身份那条请求自己不带，也不等 —— 等它就是等自己，全站永久挂起', async () => {
@@ -77,7 +83,7 @@ describe('设备头', () => {
       restore()
     }
 
-    expect(headerOf(seen[0], 'X-Device-Id')).toBeUndefined()
+    expect(headerOf(seen[0], 'X-Device-Token')).toBeUndefined()
   })
 
   it('拿不到设备令牌时照常发请求 —— 设备身份是增强，不是前置条件', async () => {
@@ -95,7 +101,7 @@ describe('设备头', () => {
     }
 
     expect(seen).toHaveLength(1)
-    expect(headerOf(seen[0], 'X-Device-Id')).toBeUndefined()
+    expect(headerOf(seen[0], 'X-Device-Token')).toBeUndefined()
   })
 
   it('🔴 不传 ensureDeviceToken = 不带设备头，而不是沿用上一次注入的', async () => {
@@ -111,6 +117,6 @@ describe('设备头', () => {
     }
 
     expect(seen).toHaveLength(1)
-    expect(headerOf(seen[0], 'X-Device-Id')).toBeUndefined()
+    expect(headerOf(seen[0], 'X-Device-Token')).toBeUndefined()
   })
 })
