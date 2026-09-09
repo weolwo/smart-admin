@@ -43,10 +43,21 @@ spring:
         smtp:
           auth: true
           ssl:
+            # 465 端口是「连上去就是 SSL」，enable: true 就够了，用 JDK 默认的
+            # SSLSocketFactory。163 / QQ / Gmail 的证书都是正常签发的，不需要自定义工厂。
+            #
+            # 🔴 2026-09-09 删掉了这两行：
+            #        socketFactory.class: com.sun.mail.util.MailSSLSocketFactory
+            #        socketFactory.fallback: false
+            #    那个类【在 classpath 上不存在】—— 本项目用的是 Angus Mail 2.0.5
+            #    （Jakarta Mail 的实现），类在 org.eclipse.angus.mail.util 下。
+            #    而 fallback: false 意味着它不会退回默认工厂，于是发信直接失败。
+            #
+            #    为什么一直没人发现：test-connection: false 让它启动时不连 SMTP，
+            #    而全仓至今没有真正发出去过一封信（管理端的双因子登录默认没开）。
+            #    改成 Angus 的类名也能跑，但那等于把类名跟邮件实现绑死 ——
+            #    换实现或升版本时又会以同样的方式坏掉，而且同样只在发信那一刻才暴露。
             enable: true
-            socketFactory:
-              class: com.sun.mail.util.MailSSLSocketFactory
-              fallback: false
         debug: false
 
   # json序列化相关配置
